@@ -1,52 +1,31 @@
 import { useState, useEffect } from 'react';
-import { io } from 'socket.io-client';
-import { PingMessage, PongMessage } from '@codelink/protocol';
+import { FileContextPayload } from '@codelink/protocol';
+import { WebSocketClient, ConnectionStatus } from './websocket/WebSocketClient';
 
 const RELAY_URL = 'http://localhost:8080';
 
 function App() {
-  const [status, setStatus] = useState<'Disconnected' | 'Connected' | 'Connecting'>('Disconnected');
-  const [lastPong, setLastPong] = useState<PongMessage | null>(null);
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [payload, setPayload] = useState<FileContextPayload | null>(null);
 
   useEffect(() => {
-    setStatus('Connecting');
-    const newSocket = io(RELAY_URL);
+    const client = new WebSocketClient({ url: RELAY_URL });
 
-    newSocket.on('connect', () => {
-      console.log('Connected to relay server');
-      setStatus('Connected');
-
-      // Send a ping message on connection
-      const ping: PingMessage = {
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        type: 'ping',
-        source: 'mobile',
-      };
-      newSocket.emit('message', JSON.stringify(ping));
-      console.log('Sent ping:', ping);
+    // Register status change callback
+    client.onStatusChange((newStatus) => {
+      setStatus(newStatus);
     });
 
-    newSocket.on('message', (data: string) => {
-      try {
-        const message = JSON.parse(data);
-        console.log('Received message:', message);
-
-        if (message.type === 'pong') {
-          setLastPong(message as PongMessage);
-        }
-      } catch (error) {
-        console.error('Error parsing message:', error);
-      }
+    // Register payload callback
+    client.onPayload((newPayload) => {
+      setPayload(newPayload);
     });
 
-    newSocket.on('disconnect', () => {
-      console.log('Disconnected from relay server');
-      setStatus('Disconnected');
-    });
+    // Connect to relay server
+    client.connect();
 
     return () => {
-      newSocket.close();
+      client.disconnect();
     };
   }, []);
 
@@ -60,27 +39,37 @@ function App() {
           style={{
             ...styles.statusValue,
             color:
-              status === 'Connected' ? '#22c55e' : status === 'Connecting' ? '#eab308' : '#ef4444',
+              status === 'connected' ? '#22c55e' : status === 'connecting' ? '#eab308' : '#ef4444',
           }}
         >
-          {status}
+          {status.charAt(0).toUpperCase() + status.slice(1)}
         </div>
       </div>
 
-      {lastPong && (
-        <div style={styles.pongContainer}>
-          <h2 style={styles.subtitle}>Last Pong Received:</h2>
+      {payload ? (
+        <div style={styles.payloadContainer}>
+          <h2 style={styles.subtitle}>File Context:</h2>
           <div style={styles.messageDetails}>
             <div>
-              <strong>ID:</strong> {lastPong.id}
+              <strong>File:</strong> {payload.fileName}
             </div>
             <div>
-              <strong>Original ID:</strong> {lastPong.originalId}
+              <strong>Dirty:</strong> {payload.isDirty ? 'Yes' : 'No'}
             </div>
             <div>
-              <strong>Timestamp:</strong> {new Date(lastPong.timestamp).toLocaleString()}
+              <strong>Timestamp:</strong> {new Date(payload.timestamp).toLocaleString()}
+            </div>
+            <div>
+              <strong>Original Length:</strong> {payload.originalFile.length} chars
+            </div>
+            <div>
+              <strong>Modified Length:</strong> {payload.modifiedFile.length} chars
             </div>
           </div>
+        </div>
+      ) : (
+        <div style={styles.welcomeContainer}>
+          <p>Waiting for file context from VS Code...</p>
         </div>
       )}
     </div>
@@ -116,12 +105,21 @@ const styles = {
     fontSize: '16px',
     fontWeight: 'bold',
   },
-  pongContainer: {
+  payloadContainer: {
     marginTop: '20px',
     padding: '15px',
     backgroundColor: '#f9fafb',
     borderRadius: '8px',
     border: '1px solid #e5e7eb',
+  },
+  welcomeContainer: {
+    marginTop: '20px',
+    padding: '15px',
+    backgroundColor: '#f9fafb',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+    textAlign: 'center' as const,
+    color: '#6b7280',
   },
   subtitle: {
     fontSize: '18px',
