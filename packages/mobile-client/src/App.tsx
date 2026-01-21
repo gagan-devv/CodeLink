@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileContextPayload } from '@codelink/protocol';
 import { WebSocketClient, ConnectionStatus } from './websocket/WebSocketClient';
+import DiffViewer from './components/DiffViewer';
 
 const RELAY_URL = 'http://localhost:8080';
 
@@ -31,45 +32,34 @@ function App() {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>CodeLink Mobile Client</h1>
-
-      <div style={styles.statusContainer}>
-        <div style={styles.statusLabel}>Status:</div>
-        <div
-          style={{
-            ...styles.statusValue,
-            color:
-              status === 'connected' ? '#22c55e' : status === 'connecting' ? '#eab308' : '#ef4444',
-          }}
-        >
-          {status.charAt(0).toUpperCase() + status.slice(1)}
+      <div style={styles.header}>
+        <h1 style={styles.title}>CodeLink</h1>
+        <div style={styles.statusContainer}>
+          <div
+            style={{
+              ...styles.statusIndicator,
+              backgroundColor:
+                status === 'connected' ? '#22c55e' : status === 'connecting' ? '#eab308' : '#ef4444',
+            }}
+          />
+          <span style={styles.statusText}>
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </span>
         </div>
       </div>
 
       {payload ? (
-        <div style={styles.payloadContainer}>
-          <h2 style={styles.subtitle}>File Context:</h2>
-          <div style={styles.messageDetails}>
-            <div>
-              <strong>File:</strong> {payload.fileName}
-            </div>
-            <div>
-              <strong>Dirty:</strong> {payload.isDirty ? 'Yes' : 'No'}
-            </div>
-            <div>
-              <strong>Timestamp:</strong> {new Date(payload.timestamp).toLocaleString()}
-            </div>
-            <div>
-              <strong>Original Length:</strong> {payload.originalFile.length} chars
-            </div>
-            <div>
-              <strong>Modified Length:</strong> {payload.modifiedFile.length} chars
-            </div>
-          </div>
-        </div>
+        <DiffViewer payload={payload} />
       ) : (
         <div style={styles.welcomeContainer}>
-          <p>Waiting for file context from VS Code...</p>
+          <div style={styles.welcomeContent}>
+            <h2 style={styles.welcomeTitle}>Welcome to CodeLink</h2>
+            <p style={styles.welcomeMessage}>
+              {status === 'connected'
+                ? 'Waiting for file changes from VS Code...'
+                : 'Connecting to relay server...'}
+            </p>
+          </div>
         </div>
       )}
     </div>
@@ -78,57 +68,61 @@ function App() {
 
 const styles = {
   container: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    height: '100vh',
+    backgroundColor: '#1e1e1e',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    maxWidth: '600px',
-    margin: '0 auto',
-    padding: '20px',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 16px',
+    backgroundColor: '#252526',
+    borderBottom: '1px solid #3e3e42',
   },
   title: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    marginBottom: '20px',
+    fontSize: '18px',
+    fontWeight: '600' as const,
+    color: '#cccccc',
+    margin: 0,
   },
   statusContainer: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
-    marginBottom: '20px',
-    padding: '15px',
-    backgroundColor: '#f3f4f6',
-    borderRadius: '8px',
+    gap: '8px',
   },
-  statusLabel: {
-    fontSize: '16px',
-    fontWeight: '600',
+  statusIndicator: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
   },
-  statusValue: {
-    fontSize: '16px',
-    fontWeight: 'bold',
-  },
-  payloadContainer: {
-    marginTop: '20px',
-    padding: '15px',
-    backgroundColor: '#f9fafb',
-    borderRadius: '8px',
-    border: '1px solid #e5e7eb',
+  statusText: {
+    fontSize: '12px',
+    color: '#cccccc',
   },
   welcomeContainer: {
-    marginTop: '20px',
-    padding: '15px',
-    backgroundColor: '#f9fafb',
-    borderRadius: '8px',
-    border: '1px solid #e5e7eb',
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px',
+  },
+  welcomeContent: {
     textAlign: 'center' as const,
-    color: '#6b7280',
+    maxWidth: '400px',
   },
-  subtitle: {
-    fontSize: '18px',
-    fontWeight: '600',
-    marginBottom: '10px',
+  welcomeTitle: {
+    fontSize: '24px',
+    fontWeight: '600' as const,
+    color: '#cccccc',
+    marginBottom: '12px',
   },
-  messageDetails: {
+  welcomeMessage: {
     fontSize: '14px',
-    lineHeight: '1.8',
+    color: '#858585',
+    lineHeight: '1.6',
   },
 };
 
