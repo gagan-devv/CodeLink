@@ -9,9 +9,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:codelink.hello"
-  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -26,7 +23,8 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@codelink/protocol": "*"
+    "@codelink/protocol": "*",
+    "simple-git": "^3.25.0"
   },
   "devDependencies": {
     "@types/vscode": "^1.80.0",
