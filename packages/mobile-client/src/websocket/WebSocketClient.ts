@@ -138,6 +138,7 @@ export class WebSocketClient {
       console.error('[WebSocketClient] Error parsing message:', error);
       console.error('[WebSocketClient] Raw data:', data);
       // Continue operation despite parse error (Requirement 6.4)
+      // User-friendly: Don't show error to user, just log it
     }
   }
 
@@ -151,6 +152,7 @@ export class WebSocketClient {
       // Validate payload structure
       if (!this.isValidPayload(payload)) {
         console.error('[WebSocketClient] Invalid payload structure:', payload);
+        console.error('[WebSocketClient] Expected fields: fileName, originalFile, modifiedFile, isDirty, timestamp');
         return;
       }
 
@@ -163,6 +165,7 @@ export class WebSocketClient {
     } catch (error) {
       console.error('[WebSocketClient] Error handling SYNC_FULL_CONTEXT:', error);
       // Continue operation despite error (Requirement 6.4)
+      // User-friendly: Don't crash the app, just log the error
     }
   }
 

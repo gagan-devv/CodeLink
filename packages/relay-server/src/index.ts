@@ -12,48 +12,47 @@ export function startServer(port: number = 8080): Server {
     },
   });
 
-  console.log(`CodeLink Relay Server listening on port ${port}`);
+  console.log(`[RelayServer] CodeLink Relay Server listening on port ${port}`);
 
   io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
+    console.log(`[RelayServer] Client connected: ${socket.id}`);
 
     socket.on('message', (data: string) => {
       try {
         const message = parseMessage(data);
-        console.log('Received message:', message);
+        console.log(`[RelayServer] Received message type: ${message.type} from ${socket.id}`);
 
         if (message.type === 'ping') {
           const pong = createPongMessage(message);
           socket.emit('message', JSON.stringify(pong));
-          console.log('Sent pong:', pong);
+          console.log(`[RelayServer] Sent pong to ${socket.id}`);
           
           // Track client type based on ping source
           if (message.source === 'extension') {
             extensionClients.add(socket);
-            console.log(`Registered extension client: ${socket.id}`);
+            console.log(`[RelayServer] Registered extension client: ${socket.id} (total: ${extensionClients.size})`);
           } else if (message.source === 'mobile') {
             mobileClients.add(socket);
-            console.log(`Registered mobile client: ${socket.id}`);
+            console.log(`[RelayServer] Registered mobile client: ${socket.id} (total: ${mobileClients.size})`);
           }
         } else if (message.type === 'SYNC_FULL_CONTEXT') {
-          console.log('Routing SYNC_FULL_CONTEXT message to mobile clients');
-          console.log(`Current mobile clients count: ${mobileClients.size}`);
-          console.log(`Current extension clients count: ${extensionClients.size}`);
+          console.log(`[RelayServer] Routing SYNC_FULL_CONTEXT message to ${mobileClients.size} mobile clients`);
           broadcastToMobileClients(message as SyncFullContextMessage);
         }
       } catch (error) {
-        console.error('Error processing message:', error);
+        console.error(`[RelayServer] Error processing message from ${socket.id}:`, error);
       }
     });
 
     socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
+      console.log(`[RelayServer] Client disconnected: ${socket.id}`);
       extensionClients.delete(socket);
       mobileClients.delete(socket);
+      console.log(`[RelayServer] Active clients - Extensions: ${extensionClients.size}, Mobile: ${mobileClients.size}`);
     });
 
     socket.on('error', (error) => {
-      console.error('Socket error:', error);
+      console.error(`[RelayServer] Socket error for ${socket.id}:`, error);
     });
   });
 
@@ -72,17 +71,18 @@ export function broadcastToMobileClients(message: SyncFullContextMessage): void 
         successCount++;
       } else {
         // Remove disconnected clients
+        console.log(`[RelayServer] Removing disconnected client: ${client.id}`);
         mobileClients.delete(client);
       }
     } catch (error) {
-      console.error(`Error broadcasting to client ${client.id}:`, error);
+      console.error(`[RelayServer] Error broadcasting to client ${client.id}:`, error);
       errorCount++;
       // Remove clients that error during broadcast
       mobileClients.delete(client);
     }
   });
 
-  console.log(`Broadcast complete: ${successCount} successful, ${errorCount} errors, ${mobileClients.size} total mobile clients`);
+  console.log(`[RelayServer] Broadcast complete: ${successCount} successful, ${errorCount} errors, ${mobileClients.size} total mobile clients`);
 }
 
 // Only start the server if this file is run directly (not imported)

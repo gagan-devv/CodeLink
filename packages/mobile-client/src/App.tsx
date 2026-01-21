@@ -3,6 +3,7 @@ import { FileContextPayload } from '@codelink/protocol';
 import { WebSocketClient, ConnectionStatus } from './websocket/WebSocketClient';
 import DiffViewer from './components/DiffViewer';
 import Dashboard from './components/Dashboard';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const RELAY_URL = 'http://localhost:8080';
 
@@ -70,27 +71,29 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#0d1117] font-sans">
-      {showDashboard ? (
-        <Dashboard
-          status={status}
-          activeFile={payload?.fileName || null}
-          lastSyncTime={lastSyncTime}
-          latency={latency}
-          onRefresh={handleRefresh}
-          onDisconnect={handleDisconnect}
-          onSettings={handleSettings}
-          onViewDiff={() => setShowDashboard(false)}
-          hasPayload={!!payload}
-        />
-      ) : payload ? (
-        <DiffViewer
-          payload={payload}
-          isLoading={isLoading}
-          onBack={handleBackToDashboard}
-        />
-      ) : null}
-    </div>
+    <ErrorBoundary>
+      <div className="flex flex-col h-screen bg-[#0d1117] font-sans">
+        {showDashboard ? (
+          <Dashboard
+            status={status}
+            activeFile={payload?.fileName || null}
+            lastSyncTime={lastSyncTime}
+            latency={latency}
+            onRefresh={handleRefresh}
+            onDisconnect={handleDisconnect}
+            onSettings={handleSettings}
+            onViewDiff={() => setShowDashboard(false)}
+            hasPayload={!!payload}
+          />
+        ) : payload ? (
+          <DiffViewer
+            payload={payload}
+            isLoading={isLoading}
+            onBack={handleBackToDashboard}
+          />
+        ) : null}
+      </div>
+    </ErrorBoundary>
   );
 }
 

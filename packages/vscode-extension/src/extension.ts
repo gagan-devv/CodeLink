@@ -88,21 +88,27 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
  */
 async function handleFileChanged(filePath: string): Promise<void> {
   try {
-    outputChannel.appendLine(`File changed: ${filePath}`);
+    outputChannel.appendLine(`[INFO] File changed: ${filePath}`);
 
     // Step 1: Fetch HEAD version from Git
-    const headContent = await gitModule.getHeadVersion(filePath);
-    outputChannel.appendLine(`HEAD content fetched (${headContent.length} bytes)`);
+    let headContent = '';
+    try {
+      headContent = await gitModule.getHeadVersion(filePath);
+      outputChannel.appendLine(`[INFO] HEAD content fetched (${headContent.length} bytes)`);
+    } catch (error) {
+      outputChannel.appendLine(`[ERROR] Failed to fetch HEAD version: ${error}`);
+      // Continue with empty HEAD content (treat as untracked file)
+    }
 
     // Step 2: Generate diff
     const payload = await diffGenerator.generateDiff(filePath, headContent);
     
     if (!payload) {
-      outputChannel.appendLine('Failed to generate diff, skipping');
+      outputChannel.appendLine('[WARN] Failed to generate diff, skipping');
       return;
     }
 
-    outputChannel.appendLine(`Diff generated for ${payload.fileName} (isDirty: ${payload.isDirty})`);
+    outputChannel.appendLine(`[INFO] Diff generated for ${payload.fileName} (isDirty: ${payload.isDirty})`);
 
     // Step 3: Create SYNC_FULL_CONTEXT message
     const message: SyncFullContextMessage = {
@@ -113,12 +119,18 @@ async function handleFileChanged(filePath: string): Promise<void> {
     };
 
     // Step 4: Send message via WebSocket
-    wsClient.send(message);
-    outputChannel.appendLine(`Message sent to relay server (id: ${message.id})`);
+    try {
+      wsClient.send(message);
+      outputChannel.appendLine(`[INFO] Message sent to relay server (id: ${message.id})`);
+    } catch (error) {
+      outputChannel.appendLine(`[ERROR] Failed to send message: ${error}`);
+      throw error;
+    }
 
   } catch (error) {
-    outputChannel.appendLine(`Error in pipeline: ${error}`);
+    outputChannel.appendLine(`[ERROR] Pipeline error: ${error}`);
     console.error('Error handling file change:', error);
+    // Don't throw - continue monitoring other files
   }
 }
 

@@ -45,9 +45,10 @@ export class GitIntegrationModuleImpl implements GitIntegrationModule {
       this.repositoryRoot = result.trim();
       this.isInitialized = true;
 
+      console.log(`[GitIntegration] Initialized successfully at ${this.repositoryRoot}`);
       return true;
     } catch (error) {
-      console.warn('Git repository not found:', error);
+      console.warn('[GitIntegration] Git repository not found:', error);
       this.isInitialized = false;
       return false;
     }
@@ -55,6 +56,7 @@ export class GitIntegrationModuleImpl implements GitIntegrationModule {
 
   async getHeadVersion(filePath: string): Promise<string> {
     if (!this.isInitialized || !this.git) {
+      console.warn('[GitIntegration] Not initialized, returning empty HEAD content');
       return '';
     }
 
@@ -68,6 +70,7 @@ export class GitIntegrationModuleImpl implements GitIntegrationModule {
     } catch (error) {
       // File is likely untracked or not in HEAD
       // Return empty string to indicate new/untracked file
+      console.debug(`[GitIntegration] File not in HEAD (${filePath}): ${error}`);
       return '';
     }
   }
