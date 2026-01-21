@@ -61,7 +61,7 @@ describe('App Component Integration', () => {
   describe('Connection Status Display', () => {
     it('should display "Disconnected" status initially', () => {
       render(<App />);
-      expect(screen.getByText('Disconnected')).toBeInTheDocument();
+      expect(screen.getByText('DISCONNECTED')).toBeInTheDocument();
     });
 
     it('should display "Connecting" status when connecting', async () => {
@@ -75,7 +75,7 @@ describe('App Component Integration', () => {
       mockClient._triggerStatusChange('connecting');
 
       await waitFor(() => {
-        expect(screen.getByText('Connecting')).toBeInTheDocument();
+        expect(screen.getByText('CONNECTING')).toBeInTheDocument();
       });
     });
 
@@ -89,7 +89,7 @@ describe('App Component Integration', () => {
       mockClient._triggerStatusChange('connected');
 
       await waitFor(() => {
-        expect(screen.getByText('Connected')).toBeInTheDocument();
+        expect(screen.getByText('CONNECTED')).toBeInTheDocument();
       });
     });
   });
@@ -97,12 +97,14 @@ describe('App Component Integration', () => {
   describe('Welcome Message', () => {
     it('should show welcome message when no payload is present', () => {
       render(<App />);
-      expect(screen.getByText('Welcome to CodeLink')).toBeInTheDocument();
+      // The new UI shows a dashboard instead of a simple welcome message
+      expect(screen.getByText('CodeLink')).toBeInTheDocument();
     });
 
     it('should show "Connecting" message when disconnected', () => {
       render(<App />);
-      expect(screen.getByText(/Disconnected from relay server/i)).toBeInTheDocument();
+      // The new UI shows status in the dashboard
+      expect(screen.getByText('DISCONNECTED')).toBeInTheDocument();
     });
 
     it('should show "Waiting for file changes" message when connected', async () => {
@@ -115,13 +117,14 @@ describe('App Component Integration', () => {
       mockClient._triggerStatusChange('connected');
 
       await waitFor(() => {
-        expect(screen.getByText(/Waiting for file changes from VS Code/i)).toBeInTheDocument();
+        // The new UI shows "No file selected" in the dashboard
+        expect(screen.getByText('No file selected')).toBeInTheDocument();
       });
     });
   });
 
   describe('DiffViewer Rendering', () => {
-    it('should render DiffViewer when payload is received', async () => {
+    it('should stay on Dashboard when payload is received', async () => {
       render(<App />);
 
       const MockedWebSocketClient = vi.mocked(WebSocketClient);
@@ -139,13 +142,13 @@ describe('App Component Integration', () => {
       mockClient._triggerPayload(testPayload);
 
       await waitFor(() => {
-        expect(screen.getByTestId('diff-viewer')).toBeInTheDocument();
-        expect(screen.getByTestId('diff-filename')).toHaveTextContent('src/test.ts');
-        expect(screen.getByTestId('diff-dirty')).toHaveTextContent('dirty');
+        // Should stay on Dashboard and show the active file
+        expect(screen.getByText('src/test.ts')).toBeInTheDocument();
+        expect(screen.getByText('REFRESH')).toBeInTheDocument();
       });
     });
 
-    it('should hide welcome message when payload is present', async () => {
+    it('should show active file in Dashboard when payload is present', async () => {
       render(<App />);
 
       const MockedWebSocketClient = vi.mocked(WebSocketClient);
@@ -163,13 +166,15 @@ describe('App Component Integration', () => {
       mockClient._triggerPayload(testPayload);
 
       await waitFor(() => {
-        expect(screen.queryByText('Welcome to CodeLink')).not.toBeInTheDocument();
+        // The new UI stays on dashboard and shows the active file
+        expect(screen.getByText('src/test.ts')).toBeInTheDocument();
+        expect(screen.getByText('REFRESH')).toBeInTheDocument();
       });
     });
   });
 
   describe('State Updates on Message Receipt', () => {
-    it('should update state when new payload is received', async () => {
+    it('should update active file when new payload is received', async () => {
       render(<App />);
 
       const MockedWebSocketClient = vi.mocked(WebSocketClient);
@@ -187,7 +192,7 @@ describe('App Component Integration', () => {
       mockClient._triggerPayload(firstPayload);
 
       await waitFor(() => {
-        expect(screen.getByTestId('diff-filename')).toHaveTextContent('src/first.ts');
+        expect(screen.getByText('src/first.ts')).toBeInTheDocument();
       });
 
       const secondPayload: FileContextPayload = {
@@ -202,8 +207,7 @@ describe('App Component Integration', () => {
       mockClient._triggerPayload(secondPayload);
 
       await waitFor(() => {
-        expect(screen.getByTestId('diff-filename')).toHaveTextContent('src/second.ts');
-        expect(screen.getByTestId('diff-dirty')).toHaveTextContent('clean');
+        expect(screen.getByText('src/second.ts')).toBeInTheDocument();
       });
     });
 
@@ -217,7 +221,7 @@ describe('App Component Integration', () => {
       mockClient._triggerStatusChange('connected');
 
       await waitFor(() => {
-        expect(screen.getByText('Connected')).toBeInTheDocument();
+        expect(screen.getByText('CONNECTED')).toBeInTheDocument();
       });
 
       // Send a payload
@@ -232,16 +236,17 @@ describe('App Component Integration', () => {
       mockClient._triggerPayload(testPayload);
 
       await waitFor(() => {
-        expect(screen.getByTestId('diff-viewer')).toBeInTheDocument();
+        // Should stay on Dashboard and show the active file
+        expect(screen.getByText('src/test.ts')).toBeInTheDocument();
+        expect(screen.getByText('CONNECTED')).toBeInTheDocument();
       });
 
       // Change status to disconnected
       mockClient._triggerStatusChange('disconnected');
 
       await waitFor(() => {
-        expect(screen.getByText('Disconnected')).toBeInTheDocument();
-        // DiffViewer should still be visible
-        expect(screen.getByTestId('diff-viewer')).toBeInTheDocument();
+        // Dashboard should show disconnected status
+        expect(screen.getByText('DISCONNECTED')).toBeInTheDocument();
       });
     });
   });
