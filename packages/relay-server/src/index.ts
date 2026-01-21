@@ -37,6 +37,8 @@ export function startServer(port: number = 8080): Server {
           }
         } else if (message.type === 'SYNC_FULL_CONTEXT') {
           console.log('Routing SYNC_FULL_CONTEXT message to mobile clients');
+          console.log(`Current mobile clients count: ${mobileClients.size}`);
+          console.log(`Current extension clients count: ${extensionClients.size}`);
           broadcastToMobileClients(message as SyncFullContextMessage);
         }
       } catch (error) {

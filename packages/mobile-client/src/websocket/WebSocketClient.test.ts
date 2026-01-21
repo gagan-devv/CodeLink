@@ -20,7 +20,9 @@ describe('WebSocketClient', () => {
       on: vi.fn((event: string, handler: Function) => {
         eventHandlers[event] = handler;
       }),
+      emit: vi.fn(),
       close: vi.fn(),
+      connected: true,
     };
 
     (io as any).mockReturnValue(mockSocket);

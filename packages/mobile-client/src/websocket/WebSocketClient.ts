@@ -45,6 +45,9 @@ export class WebSocketClient {
     this.socket.on('connect', () => {
       console.log('[WebSocketClient] Connected to relay server');
       this.updateStatus('connected');
+      
+      // Send ping to register as mobile client
+      this.sendPing();
     });
 
     this.socket.on('disconnect', () => {
@@ -99,6 +102,25 @@ export class WebSocketClient {
    */
   isConnected(): boolean {
     return this.currentStatus === 'connected';
+  }
+
+  /**
+   * Send ping to register as mobile client
+   */
+  private sendPing(): void {
+    if (!this.socket) {
+      return;
+    }
+
+    const ping = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'ping',
+      source: 'mobile',
+    };
+
+    console.log('[WebSocketClient] Sending ping to register as mobile client');
+    this.socket.emit('message', JSON.stringify(ping));
   }
 
   /**
