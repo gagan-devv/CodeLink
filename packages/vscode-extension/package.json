@@ -1,0 +1,31 @@
+{
+  "name": "codelink-extension",
+  "displayName": "CodeLink",
+  "version": "0.1.0",
+  "publisher": "codelink",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onCommand:codelink.hello"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codelink.hello",
+        "title": "CodeLink: Hello World"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@codelink/protocol": "*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  }
+}
