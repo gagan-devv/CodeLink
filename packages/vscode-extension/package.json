@@ -9,9 +9,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:codelink.hello"
-  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
