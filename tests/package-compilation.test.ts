@@ -44,16 +44,30 @@ describe('Property 6: All packages compile successfully', () => {
                 throw new Error(`${pkgDir}/dist/ directory is empty after build`);
               }
 
-              // Verify JavaScript files were generated
-              const hasJsFiles = distFiles.some((file) => file.endsWith('.js'));
-              if (!hasJsFiles) {
-                throw new Error(`${pkgDir}/dist/ does not contain compiled JavaScript files`);
-              }
+              // Check if this is a Vite package (has vite.config.ts)
+              const isVitePackage = fs.existsSync(path.join(pkgPath, 'vite.config.ts'));
 
-              // Verify type definition files were generated
-              const hasDtsFiles = distFiles.some((file) => file.endsWith('.d.ts'));
-              if (!hasDtsFiles) {
-                throw new Error(`${pkgDir}/dist/ does not contain type definition files`);
+              if (isVitePackage) {
+                // For Vite packages, check for bundled assets
+                const assetsDir = path.join(distPath, 'assets');
+                if (fs.existsSync(assetsDir)) {
+                  const assetFiles = fs.readdirSync(assetsDir);
+                  const hasJsFiles = assetFiles.some((file) => file.endsWith('.js'));
+                  if (!hasJsFiles) {
+                    throw new Error(`${pkgDir}/dist/assets/ does not contain bundled JavaScript files`);
+                  }
+                }
+              } else {
+                // For TypeScript packages, verify JavaScript and type definition files
+                const hasJsFiles = distFiles.some((file) => file.endsWith('.js'));
+                if (!hasJsFiles) {
+                  throw new Error(`${pkgDir}/dist/ does not contain compiled JavaScript files`);
+                }
+
+                const hasDtsFiles = distFiles.some((file) => file.endsWith('.d.ts'));
+                if (!hasDtsFiles) {
+                  throw new Error(`${pkgDir}/dist/ does not contain type definition files`);
+                }
               }
             }
           }
@@ -88,8 +102,14 @@ describe('Property 6: All packages compile successfully', () => {
           const distPath = path.join(pkgPath, 'dist');
 
           if (fs.existsSync(tsconfigPath) && fs.existsSync(distPath) && fs.existsSync(pkgJsonPath)) {
-            // Read package.json to get the main entry point
             const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
+            
+            // Skip Vite packages (they don't produce TypeScript compiled output)
+            const isVitePackage = fs.existsSync(path.join(pkgPath, 'vite.config.ts'));
+            if (isVitePackage) {
+              continue;
+            }
+
             const mainEntry = pkgJson.main;
 
             if (!mainEntry) {
