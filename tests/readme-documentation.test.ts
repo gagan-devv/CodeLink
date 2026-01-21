@@ -151,7 +151,7 @@ describe('Property 8: README contains required documentation sections', () => {
 
         // Check for key principles
         const lowerContent = content.toLowerCase();
-        
+
         if (!lowerContent.includes('cloud') && !lowerContent.includes('ide')) {
           throw new Error('README.md missing explanation of "no cloud IDE" principle');
         }

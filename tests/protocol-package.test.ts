@@ -22,7 +22,7 @@ describe('Property 2: All package.json files contain required fields', () => {
 
         for (const pkgDir of packageDirs) {
           const pkgJsonPath = path.join(packagesDir, pkgDir, 'package.json');
-          
+
           if (fs.existsSync(pkgJsonPath)) {
             const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
 
@@ -56,7 +56,9 @@ describe('Property 2: All package.json files contain required fields', () => {
             // Mobile client specific requirements
             if (pkgDir === 'mobile-client') {
               if (pkgJson.type !== 'module') {
-                throw new Error(`${pkgDir}/package.json missing or incorrect field: type (should be "module")`);
+                throw new Error(
+                  `${pkgDir}/package.json missing or incorrect field: type (should be "module")`
+                );
               }
             }
           }
@@ -89,7 +91,7 @@ describe('Property 3: All TypeScript configurations extend base configuration', 
 
         for (const pkgDir of packageDirs) {
           const tsconfigPath = path.join(packagesDir, pkgDir, 'tsconfig.json');
-          
+
           if (fs.existsSync(tsconfigPath)) {
             const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf-8'));
 
@@ -134,7 +136,7 @@ describe('Property 5: All packages have appropriate entry points', () => {
 
         for (const pkgDir of packageDirs) {
           const pkgJsonPath = path.join(packagesDir, pkgDir, 'package.json');
-          
+
           if (fs.existsSync(pkgJsonPath)) {
             const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
 

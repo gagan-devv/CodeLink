@@ -1,7 +1,6 @@
 import * as fc from 'fast-check';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
 
 // Feature: codelink-initialization, Property 6: All packages compile successfully
 describe('Property 6: All packages compile successfully', () => {
@@ -54,7 +53,9 @@ describe('Property 6: All packages compile successfully', () => {
                   const assetFiles = fs.readdirSync(assetsDir);
                   const hasJsFiles = assetFiles.some((file) => file.endsWith('.js'));
                   if (!hasJsFiles) {
-                    throw new Error(`${pkgDir}/dist/assets/ does not contain bundled JavaScript files`);
+                    throw new Error(
+                      `${pkgDir}/dist/assets/ does not contain bundled JavaScript files`
+                    );
                   }
                 }
               } else {
@@ -101,9 +102,13 @@ describe('Property 6: All packages compile successfully', () => {
           const tsconfigPath = path.join(pkgPath, 'tsconfig.json');
           const distPath = path.join(pkgPath, 'dist');
 
-          if (fs.existsSync(tsconfigPath) && fs.existsSync(distPath) && fs.existsSync(pkgJsonPath)) {
+          if (
+            fs.existsSync(tsconfigPath) &&
+            fs.existsSync(distPath) &&
+            fs.existsSync(pkgJsonPath)
+          ) {
             const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
-            
+
             // Skip Vite packages (they don't produce TypeScript compiled output)
             const isVitePackage = fs.existsSync(path.join(pkgPath, 'vite.config.ts'));
             if (isVitePackage) {
@@ -116,8 +121,6 @@ describe('Property 6: All packages compile successfully', () => {
               throw new Error(`${pkgDir}/package.json does not specify a main entry point`);
             }
 
-            // Extract the filename from the main entry (e.g., "./dist/index.js" -> "index")
-            const mainFileName = path.basename(mainEntry, '.js');
             const mainJsPath = path.join(pkgPath, mainEntry);
             const mainDtsPath = path.join(pkgPath, mainEntry.replace('.js', '.d.ts'));
 
@@ -126,7 +129,9 @@ describe('Property 6: All packages compile successfully', () => {
             }
 
             if (!fs.existsSync(mainDtsPath)) {
-              throw new Error(`${pkgDir} type definition file does not exist: ${mainEntry.replace('.js', '.d.ts')}`);
+              throw new Error(
+                `${pkgDir} type definition file does not exist: ${mainEntry.replace('.js', '.d.ts')}`
+              );
             }
 
             // Verify the files are not empty
@@ -137,7 +142,9 @@ describe('Property 6: All packages compile successfully', () => {
 
             const dtsContent = fs.readFileSync(mainDtsPath, 'utf-8');
             if (dtsContent.trim().length === 0) {
-              throw new Error(`${pkgDir} type definition file is empty: ${mainEntry.replace('.js', '.d.ts')}`);
+              throw new Error(
+                `${pkgDir} type definition file is empty: ${mainEntry.replace('.js', '.d.ts')}`
+              );
             }
           }
         }

@@ -11,9 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
       source: 'extension',
     };
 
-    vscode.window.showInformationMessage(
-      `CodeLink Extension Active! Message ID: ${message.id}`
-    );
+    vscode.window.showInformationMessage(`CodeLink Extension Active! Message ID: ${message.id}`);
   });
 
   context.subscriptions.push(disposable);

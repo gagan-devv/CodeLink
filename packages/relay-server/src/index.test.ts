@@ -54,7 +54,9 @@ describe('Message Parsing', () => {
         source: 'extension',
       });
 
-      expect(() => parseMessage(missingId)).toThrow('Invalid message format: missing required fields');
+      expect(() => parseMessage(missingId)).toThrow(
+        'Invalid message format: missing required fields'
+      );
     });
 
     it('should throw error for message missing type field', () => {
@@ -64,7 +66,9 @@ describe('Message Parsing', () => {
         source: 'extension',
       });
 
-      expect(() => parseMessage(missingType)).toThrow('Invalid message format: missing required fields');
+      expect(() => parseMessage(missingType)).toThrow(
+        'Invalid message format: missing required fields'
+      );
     });
 
     it('should throw error for message missing timestamp field', () => {
@@ -74,7 +78,9 @@ describe('Message Parsing', () => {
         source: 'extension',
       });
 
-      expect(() => parseMessage(missingTimestamp)).toThrow('Invalid message format: missing required fields');
+      expect(() => parseMessage(missingTimestamp)).toThrow(
+        'Invalid message format: missing required fields'
+      );
     });
   });
 

@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { PingMessage, PongMessage } from '@codelink/protocol';
 
 const RELAY_URL = 'http://localhost:8080';
 
 function App() {
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [status, setStatus] = useState<'Disconnected' | 'Connected' | 'Connecting'>('Disconnected');
   const [lastPong, setLastPong] = useState<PongMessage | null>(null);
 
@@ -16,7 +15,6 @@ function App() {
     newSocket.on('connect', () => {
       console.log('Connected to relay server');
       setStatus('Connected');
-      setSocket(newSocket);
 
       // Send a ping message on connection
       const ping: PingMessage = {
@@ -33,7 +31,7 @@ function App() {
       try {
         const message = JSON.parse(data);
         console.log('Received message:', message);
-        
+
         if (message.type === 'pong') {
           setLastPong(message as PongMessage);
         }
@@ -55,13 +53,16 @@ function App() {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>CodeLink Mobile Client</h1>
-      
+
       <div style={styles.statusContainer}>
         <div style={styles.statusLabel}>Status:</div>
-        <div style={{
-          ...styles.statusValue,
-          color: status === 'Connected' ? '#22c55e' : status === 'Connecting' ? '#eab308' : '#ef4444'
-        }}>
+        <div
+          style={{
+            ...styles.statusValue,
+            color:
+              status === 'Connected' ? '#22c55e' : status === 'Connecting' ? '#eab308' : '#ef4444',
+          }}
+        >
           {status}
         </div>
       </div>
@@ -70,9 +71,15 @@ function App() {
         <div style={styles.pongContainer}>
           <h2 style={styles.subtitle}>Last Pong Received:</h2>
           <div style={styles.messageDetails}>
-            <div><strong>ID:</strong> {lastPong.id}</div>
-            <div><strong>Original ID:</strong> {lastPong.originalId}</div>
-            <div><strong>Timestamp:</strong> {new Date(lastPong.timestamp).toLocaleString()}</div>
+            <div>
+              <strong>ID:</strong> {lastPong.id}
+            </div>
+            <div>
+              <strong>Original ID:</strong> {lastPong.originalId}
+            </div>
+            <div>
+              <strong>Timestamp:</strong> {new Date(lastPong.timestamp).toLocaleString()}
+            </div>
           </div>
         </div>
       )}

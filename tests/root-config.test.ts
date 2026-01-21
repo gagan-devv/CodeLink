@@ -8,7 +8,7 @@ describe('Property 1: Required project structure exists', () => {
     fc.assert(
       fc.property(fc.constant(null), () => {
         const rootDir = path.resolve(__dirname, '..');
-        
+
         // Required root files
         const requiredFiles = [
           'package.json',
@@ -62,7 +62,7 @@ describe('Property 4: Configuration files contain no placeholder content', () =>
     fc.assert(
       fc.property(fc.constant(null), () => {
         const rootDir = path.resolve(__dirname, '..');
-        
+
         const configFiles = [
           'package.json',
           'tsconfig.base.json',
@@ -70,18 +70,13 @@ describe('Property 4: Configuration files contain no placeholder content', () =>
           '.prettierrc.json',
         ];
 
-        const placeholderPatterns = [
-          /TODO/i,
-          /FIXME/i,
-          /PLACEHOLDER/i,
-          /CHANGEME/i,
-        ];
+        const placeholderPatterns = [/TODO/i, /FIXME/i, /PLACEHOLDER/i, /CHANGEME/i];
 
         for (const file of configFiles) {
           const filePath = path.join(rootDir, file);
           if (fs.existsSync(filePath)) {
             const content = fs.readFileSync(filePath, 'utf-8');
-            
+
             for (const pattern of placeholderPatterns) {
               if (pattern.test(content)) {
                 throw new Error(
