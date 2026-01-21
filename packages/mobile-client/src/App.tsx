@@ -1,137 +1,100 @@
 import { useState, useEffect } from 'react';
-import { io } from 'socket.io-client';
-import { PingMessage, PongMessage } from '@codelink/protocol';
+import { FileContextPayload } from '@codelink/protocol';
+import { WebSocketClient, ConnectionStatus } from './websocket/WebSocketClient';
+import DiffViewer from './components/DiffViewer';
 
 const RELAY_URL = 'http://localhost:8080';
 
 function App() {
-  const [status, setStatus] = useState<'Disconnected' | 'Connected' | 'Connecting'>('Disconnected');
-  const [lastPong, setLastPong] = useState<PongMessage | null>(null);
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [payload, setPayload] = useState<FileContextPayload | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    setStatus('Connecting');
-    const newSocket = io(RELAY_URL);
+    const client = new WebSocketClient({ url: RELAY_URL });
 
-    newSocket.on('connect', () => {
-      console.log('Connected to relay server');
-      setStatus('Connected');
-
-      // Send a ping message on connection
-      const ping: PingMessage = {
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        type: 'ping',
-        source: 'mobile',
-      };
-      newSocket.emit('message', JSON.stringify(ping));
-      console.log('Sent ping:', ping);
-    });
-
-    newSocket.on('message', (data: string) => {
-      try {
-        const message = JSON.parse(data);
-        console.log('Received message:', message);
-
-        if (message.type === 'pong') {
-          setLastPong(message as PongMessage);
-        }
-      } catch (error) {
-        console.error('Error parsing message:', error);
+    // Register status change callback
+    client.onStatusChange((newStatus) => {
+      setStatus(newStatus);
+      if (newStatus === 'connecting') {
+        setIsLoading(true);
+      } else {
+        setIsLoading(false);
       }
     });
 
-    newSocket.on('disconnect', () => {
-      console.log('Disconnected from relay server');
-      setStatus('Disconnected');
+    // Register payload callback
+    client.onPayload((newPayload) => {
+      setIsLoading(true);
+      // Simulate brief loading state for smooth transition
+      setTimeout(() => {
+        setPayload(newPayload);
+        setIsLoading(false);
+      }, 100);
     });
 
+    // Connect to relay server
+    client.connect();
+
     return () => {
-      newSocket.close();
+      client.disconnect();
     };
   }, []);
 
+  const getStatusColor = () => {
+    switch (status) {
+      case 'connected':
+        return 'bg-green-500';
+      case 'connecting':
+        return 'bg-yellow-500';
+      default:
+        return 'bg-red-500';
+    }
+  };
+
+  const getStatusText = () => {
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>CodeLink Mobile Client</h1>
-
-      <div style={styles.statusContainer}>
-        <div style={styles.statusLabel}>Status:</div>
-        <div
-          style={{
-            ...styles.statusValue,
-            color:
-              status === 'Connected' ? '#22c55e' : status === 'Connecting' ? '#eab308' : '#ef4444',
-          }}
-        >
-          {status}
+    <div className="flex flex-col h-screen bg-vscode-bg font-sans">
+      {/* Header */}
+      <header className="flex justify-between items-center px-4 py-3 bg-vscode-sidebar border-b border-vscode-border">
+        <h1 className="text-lg font-semibold text-vscode-text m-0">CodeLink</h1>
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${getStatusColor()} transition-colors duration-300`} />
+          <span className="text-xs text-vscode-text">{getStatusText()}</span>
         </div>
-      </div>
+      </header>
 
-      {lastPong && (
-        <div style={styles.pongContainer}>
-          <h2 style={styles.subtitle}>Last Pong Received:</h2>
-          <div style={styles.messageDetails}>
-            <div>
-              <strong>ID:</strong> {lastPong.id}
-            </div>
-            <div>
-              <strong>Original ID:</strong> {lastPong.originalId}
-            </div>
-            <div>
-              <strong>Timestamp:</strong> {new Date(lastPong.timestamp).toLocaleString()}
+      {/* Main Content */}
+      <main className="flex-1 overflow-hidden">
+        {payload ? (
+          <DiffViewer payload={payload} isLoading={isLoading} />
+        ) : (
+          <div className="flex items-center justify-center h-full p-5">
+            <div className="text-center max-w-md">
+              <h2 className="text-2xl font-semibold text-vscode-text mb-3">
+                Welcome to CodeLink
+              </h2>
+              <p className="text-sm text-vscode-text-muted leading-relaxed">
+                {status === 'connected'
+                  ? 'Waiting for file changes from VS Code...'
+                  : status === 'connecting'
+                  ? 'Connecting to relay server...'
+                  : 'Disconnected from relay server. Attempting to reconnect...'}
+              </p>
+              {status === 'connecting' && (
+                <div className="mt-6 flex justify-center">
+                  <div className="w-8 h-8 border-4 border-vscode-border border-t-vscode-text rounded-full animate-spin" />
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </main>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    maxWidth: '600px',
-    margin: '0 auto',
-    padding: '20px',
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    marginBottom: '20px',
-  },
-  statusContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    marginBottom: '20px',
-    padding: '15px',
-    backgroundColor: '#f3f4f6',
-    borderRadius: '8px',
-  },
-  statusLabel: {
-    fontSize: '16px',
-    fontWeight: '600',
-  },
-  statusValue: {
-    fontSize: '16px',
-    fontWeight: 'bold',
-  },
-  pongContainer: {
-    marginTop: '20px',
-    padding: '15px',
-    backgroundColor: '#f9fafb',
-    borderRadius: '8px',
-    border: '1px solid #e5e7eb',
-  },
-  subtitle: {
-    fontSize: '18px',
-    fontWeight: '600',
-    marginBottom: '10px',
-  },
-  messageDetails: {
-    fontSize: '14px',
-    lineHeight: '1.8',
-  },
-};
 
 export default App;

@@ -1,0 +1,144 @@
+/* DiffViewer Custom Styles */
+
+.diff-viewer-container {
+  @apply flex flex-col h-full bg-vscode-bg;
+}
+
+.diff-header {
+  @apply px-4 py-3 bg-vscode-sidebar border-b border-vscode-border;
+  @apply transition-all duration-200;
+}
+
+.diff-header-top {
+  @apply flex items-center gap-2 mb-1 flex-wrap;
+}
+
+.diff-file-name {
+  @apply text-sm font-semibold text-vscode-text;
+  @apply break-all;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.diff-dirty-indicator {
+  @apply text-base leading-none text-vscode-dirty;
+  @apply animate-pulse;
+  font-size: 16px;
+}
+
+.diff-timestamp {
+  @apply text-xs text-vscode-text-muted;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.diff-content-wrapper {
+  @apply flex-1 overflow-auto bg-vscode-bg;
+  @apply transition-opacity duration-300;
+  -webkit-overflow-scrolling: touch;
+}
+
+.diff-no-changes {
+  @apply flex items-center justify-center h-48 text-vscode-text-muted text-sm;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Loading state */
+.diff-loading {
+  @apply flex items-center justify-center h-48;
+}
+
+.diff-loading-spinner {
+  @apply w-8 h-8 border-4 border-vscode-border border-t-vscode-text rounded-full;
+  @apply animate-spin;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .diff-header {
+    @apply px-3 py-2;
+  }
+  
+  .diff-file-name {
+    @apply text-xs;
+  }
+  
+  .diff-timestamp {
+    @apply text-[10px];
+  }
+  
+  .diff-dirty-indicator {
+    font-size: 14px;
+  }
+}
+
+/* Landscape orientation optimizations */
+@media (orientation: landscape) and (max-height: 500px) {
+  .diff-header {
+    @apply py-2;
+  }
+  
+  .diff-header-top {
+    @apply mb-0;
+  }
+}
+
+/* Custom scrollbar for webkit browsers */
+.diff-content-wrapper::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.diff-content-wrapper::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.diff-content-wrapper::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+}
+
+.diff-content-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+/* React Diff Viewer overrides for mobile */
+.diff-content-wrapper pre {
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  font-family: Consolas, Monaco, 'Courier New', monospace !important;
+}
+
+@media (max-width: 768px) {
+  .diff-content-wrapper pre {
+    font-size: 11px !important;
+  }
+}
+
+/* Ensure diff lines wrap on small screens */
+@media (max-width: 480px) {
+  .diff-content-wrapper pre {
+    font-size: 10px !important;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
+/* Touch-friendly tap targets */
+@media (hover: none) and (pointer: coarse) {
+  .diff-header {
+    min-height: 44px;
+  }
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.diff-fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
