@@ -69,9 +69,15 @@ describe('DiffViewer Component', () => {
       timestamp: testTimestamp,
     };
 
-    render(<DiffViewer payload={payload} />);
-    const expectedFormat = new Date(testTimestamp).toLocaleString();
-    expect(screen.getByText(expectedFormat)).toBeTruthy();
+    const { container } = render(<DiffViewer payload={payload} />);
+    // Check that timestamp is formatted and displayed (using the new shorter format)
+    const expectedFormat = new Date(testTimestamp).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    expect(container.textContent).toContain(expectedFormat);
   });
 
   it('should show "No changes" message for identical files', () => {
@@ -99,8 +105,8 @@ describe('DiffViewer Component', () => {
     const { container } = render(<DiffViewer payload={payload} />);
     // Should not show "No changes" message
     expect(screen.queryByText('No changes')).toBeFalsy();
-    // Should render the diff viewer (check for content instead of specific class)
-    const diffContainer = container.querySelector('[style*="overflow"]');
+    // Should render the diff viewer (check for the diff-content-wrapper class)
+    const diffContainer = container.querySelector('.diff-content-wrapper');
     expect(diffContainer).toBeTruthy();
   });
 
@@ -116,8 +122,8 @@ describe('DiffViewer Component', () => {
     const { container } = render(<DiffViewer payload={payload} />);
     // Should not show "No changes" since files are different
     expect(screen.queryByText('No changes')).toBeFalsy();
-    // Verify the component renders (check for the diff container)
-    const diffContainer = container.querySelector('[style*="overflow"]');
+    // Verify the component renders (check for the diff-content-wrapper class)
+    const diffContainer = container.querySelector('.diff-content-wrapper');
     expect(diffContainer).toBeTruthy();
   });
 });

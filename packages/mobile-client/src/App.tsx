@@ -8,6 +8,7 @@ const RELAY_URL = 'http://localhost:8080';
 function App() {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [payload, setPayload] = useState<FileContextPayload | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const client = new WebSocketClient({ url: RELAY_URL });
@@ -15,11 +16,21 @@ function App() {
     // Register status change callback
     client.onStatusChange((newStatus) => {
       setStatus(newStatus);
+      if (newStatus === 'connecting') {
+        setIsLoading(true);
+      } else {
+        setIsLoading(false);
+      }
     });
 
     // Register payload callback
     client.onPayload((newPayload) => {
-      setPayload(newPayload);
+      setIsLoading(true);
+      // Simulate brief loading state for smooth transition
+      setTimeout(() => {
+        setPayload(newPayload);
+        setIsLoading(false);
+      }, 100);
     });
 
     // Connect to relay server
@@ -30,100 +41,60 @@ function App() {
     };
   }, []);
 
-  return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>CodeLink</h1>
-        <div style={styles.statusContainer}>
-          <div
-            style={{
-              ...styles.statusIndicator,
-              backgroundColor:
-                status === 'connected' ? '#22c55e' : status === 'connecting' ? '#eab308' : '#ef4444',
-            }}
-          />
-          <span style={styles.statusText}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </span>
-        </div>
-      </div>
+  const getStatusColor = () => {
+    switch (status) {
+      case 'connected':
+        return 'bg-green-500';
+      case 'connecting':
+        return 'bg-yellow-500';
+      default:
+        return 'bg-red-500';
+    }
+  };
 
-      {payload ? (
-        <DiffViewer payload={payload} />
-      ) : (
-        <div style={styles.welcomeContainer}>
-          <div style={styles.welcomeContent}>
-            <h2 style={styles.welcomeTitle}>Welcome to CodeLink</h2>
-            <p style={styles.welcomeMessage}>
-              {status === 'connected'
-                ? 'Waiting for file changes from VS Code...'
-                : 'Connecting to relay server...'}
-            </p>
-          </div>
+  const getStatusText = () => {
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-vscode-bg font-sans">
+      {/* Header */}
+      <header className="flex justify-between items-center px-4 py-3 bg-vscode-sidebar border-b border-vscode-border">
+        <h1 className="text-lg font-semibold text-vscode-text m-0">CodeLink</h1>
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${getStatusColor()} transition-colors duration-300`} />
+          <span className="text-xs text-vscode-text">{getStatusText()}</span>
         </div>
-      )}
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-hidden">
+        {payload ? (
+          <DiffViewer payload={payload} isLoading={isLoading} />
+        ) : (
+          <div className="flex items-center justify-center h-full p-5">
+            <div className="text-center max-w-md">
+              <h2 className="text-2xl font-semibold text-vscode-text mb-3">
+                Welcome to CodeLink
+              </h2>
+              <p className="text-sm text-vscode-text-muted leading-relaxed">
+                {status === 'connected'
+                  ? 'Waiting for file changes from VS Code...'
+                  : status === 'connecting'
+                  ? 'Connecting to relay server...'
+                  : 'Disconnected from relay server. Attempting to reconnect...'}
+              </p>
+              {status === 'connecting' && (
+                <div className="mt-6 flex justify-center">
+                  <div className="w-8 h-8 border-4 border-vscode-border border-t-vscode-text rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    height: '100vh',
-    backgroundColor: '#1e1e1e',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    backgroundColor: '#252526',
-    borderBottom: '1px solid #3e3e42',
-  },
-  title: {
-    fontSize: '18px',
-    fontWeight: '600' as const,
-    color: '#cccccc',
-    margin: 0,
-  },
-  statusContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  statusIndicator: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-  },
-  statusText: {
-    fontSize: '12px',
-    color: '#cccccc',
-  },
-  welcomeContainer: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '20px',
-  },
-  welcomeContent: {
-    textAlign: 'center' as const,
-    maxWidth: '400px',
-  },
-  welcomeTitle: {
-    fontSize: '24px',
-    fontWeight: '600' as const,
-    color: '#cccccc',
-    marginBottom: '12px',
-  },
-  welcomeMessage: {
-    fontSize: '14px',
-    color: '#858585',
-    lineHeight: '1.6',
-  },
-};
 
 export default App;

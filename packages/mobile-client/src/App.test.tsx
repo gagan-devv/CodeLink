@@ -102,7 +102,7 @@ describe('App Component Integration', () => {
 
     it('should show "Connecting" message when disconnected', () => {
       render(<App />);
-      expect(screen.getByText(/Connecting to relay server/i)).toBeInTheDocument();
+      expect(screen.getByText(/Disconnected from relay server/i)).toBeInTheDocument();
     });
 
     it('should show "Waiting for file changes" message when connected', async () => {

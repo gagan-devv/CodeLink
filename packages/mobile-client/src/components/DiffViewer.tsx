@@ -1,12 +1,15 @@
+import { useState, useEffect } from 'react';
 import { FileContextPayload } from '@codelink/protocol';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 
 interface DiffViewerProps {
   payload: FileContextPayload;
+  isLoading?: boolean;
 }
 
-function DiffViewer({ payload }: DiffViewerProps) {
+function DiffViewer({ payload, isLoading = false }: DiffViewerProps) {
   const { fileName, originalFile, modifiedFile, isDirty, timestamp } = payload;
+  const [isRendering, setIsRendering] = useState(true);
 
   // Check if this is a new file (no original content)
   const isNewFile = originalFile === '';
@@ -17,28 +20,50 @@ function DiffViewer({ payload }: DiffViewerProps) {
   // Format timestamp
   const formatTimestamp = (ts: number): string => {
     const date = new Date(ts);
-    return date.toLocaleString();
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
+  // Handle loading state transition
+  useEffect(() => {
+    setIsRendering(true);
+    const timer = setTimeout(() => setIsRendering(false), 100);
+    return () => clearTimeout(timer);
+  }, [payload]);
+
+  if (isLoading) {
+    return (
+      <div className="diff-viewer-container">
+        <div className="diff-loading">
+          <div className="diff-loading-spinner" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={styles.container}>
+    <div className="diff-viewer-container diff-fade-in">
       {/* Diff Header */}
-      <div style={styles.header}>
-        <div style={styles.headerTop}>
-          <span style={styles.fileName}>{fileName}</span>
+      <div className="diff-header">
+        <div className="diff-header-top">
+          <span className="diff-file-name">{fileName}</span>
           {isDirty && (
-            <span style={styles.dirtyIndicator} title="Unsaved changes">
+            <span className="diff-dirty-indicator" title="Unsaved changes">
               ●
             </span>
           )}
         </div>
-        <div style={styles.timestamp}>{formatTimestamp(timestamp)}</div>
+        <div className="diff-timestamp">{formatTimestamp(timestamp)}</div>
       </div>
 
       {/* Diff Content */}
-      <div style={styles.diffContainer}>
+      <div className={`diff-content-wrapper ${isRendering ? 'opacity-0' : 'opacity-100'}`}>
         {noChanges && !isNewFile ? (
-          <div style={styles.noChanges}>No changes</div>
+          <div className="diff-no-changes">No changes</div>
         ) : (
           <ReactDiffViewer
             oldValue={originalFile}
@@ -80,55 +105,5 @@ function DiffViewer({ payload }: DiffViewerProps) {
     </div>
   );
 }
-
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    height: '100%',
-    backgroundColor: '#1e1e1e',
-  },
-  header: {
-    padding: '12px 16px',
-    backgroundColor: '#252526',
-    borderBottom: '1px solid #3e3e42',
-  },
-  headerTop: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginBottom: '4px',
-  },
-  fileName: {
-    fontSize: '14px',
-    fontWeight: '600' as const,
-    color: '#cccccc',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  dirtyIndicator: {
-    fontSize: '16px',
-    color: '#ff9800',
-    lineHeight: '1',
-  },
-  timestamp: {
-    fontSize: '11px',
-    color: '#858585',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  diffContainer: {
-    flex: 1,
-    overflow: 'auto',
-    backgroundColor: '#1e1e1e',
-  },
-  noChanges: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '200px',
-    color: '#858585',
-    fontSize: '14px',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-};
 
 export default DiffViewer;

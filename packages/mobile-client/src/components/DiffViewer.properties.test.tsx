@@ -32,8 +32,13 @@ describe('DiffViewer Property Tests', () => {
             expect(dirtyIndicator).toBeTruthy();
           }
           
-          // The timestamp should be formatted and displayed
-          const formattedTimestamp = new Date(payload.timestamp).toLocaleString();
+          // The timestamp should be formatted and displayed (using the new shorter format)
+          const formattedTimestamp = new Date(payload.timestamp).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
           expect(container.textContent).toContain(formattedTimestamp);
           
           // If files are identical, "No changes" should be shown
