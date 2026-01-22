@@ -22,6 +22,7 @@ vi.mock('vscode', () => ({
 // Mock fs/promises module
 vi.mock('fs/promises', () => ({
   readFile: vi.fn(),
+  stat: vi.fn(),
 }));
 
 describe('DiffGenerator', () => {
@@ -38,7 +39,8 @@ describe('DiffGenerator', () => {
       const headContent = 'const x = 1;';
       const currentContent = 'const x = 2;';
 
-      // Mock file read
+      // Mock file stat and read
+      (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
       const result = await diffGenerator.generateDiff(filePath, headContent);
@@ -53,7 +55,8 @@ describe('DiffGenerator', () => {
       const headContent = 'old content';
       const currentContent = 'new content';
 
-      // Mock file read
+      // Mock file stat and read
+      (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
       // Mock open document with isDirty = true
@@ -74,7 +77,8 @@ describe('DiffGenerator', () => {
       const headContent = 'content';
       const currentContent = 'content';
 
-      // Mock file read
+      // Mock file stat and read
+      (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
       // Mock open document with isDirty = false
@@ -95,7 +99,8 @@ describe('DiffGenerator', () => {
       const headContent = 'original';
       const currentContent = 'modified';
 
-      // Mock file read
+      // Mock file stat and read
+      (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
       const result = await diffGenerator.generateDiff(filePath, headContent);
@@ -114,7 +119,8 @@ describe('DiffGenerator', () => {
       const headContent = '';
       const currentContent = 'button code';
 
-      // Mock file read
+      // Mock file stat and read
+      (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
       // Mock asRelativePath to return proper relative path
@@ -130,8 +136,8 @@ describe('DiffGenerator', () => {
       const filePath = '/home/user/project/src/missing.ts';
       const headContent = 'content';
 
-      // Mock file read to throw error
-      (fs.readFile as any).mockRejectedValue(new Error('File not found'));
+      // Mock file stat to throw error
+      (fs.stat as any).mockRejectedValue(new Error('File not found'));
 
       const result = await diffGenerator.generateDiff(filePath, headContent);
 
@@ -143,7 +149,8 @@ describe('DiffGenerator', () => {
       const headContent = 'content';
       const currentContent = 'content';
 
-      // Mock file read
+      // Mock file stat and read
+      (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
       const beforeTime = Date.now();
@@ -160,7 +167,8 @@ describe('DiffGenerator', () => {
       const headContent = '';
       const currentContent = 'new file content';
 
-      // Mock file read
+      // Mock file stat and read
+      (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
       const result = await diffGenerator.generateDiff(filePath, headContent);
@@ -174,7 +182,8 @@ describe('DiffGenerator', () => {
       const filePath = '/home/user/project/src/unchanged.ts';
       const content = 'unchanged content';
 
-      // Mock file read
+      // Mock file stat and read
+      (fs.stat as any).mockResolvedValue({ size: content.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(content));
 
       const result = await diffGenerator.generateDiff(filePath, content);
@@ -189,7 +198,8 @@ describe('DiffGenerator', () => {
       const headContent = 'content';
       const currentContent = 'content';
 
-      // Mock file read
+      // Mock file stat and read
+      (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
       // No documents open
