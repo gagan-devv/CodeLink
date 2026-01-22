@@ -140,7 +140,7 @@ async function handleFileChanged(filePath: string): Promise<void> {
 
     // Step 4: Create SYNC_FULL_CONTEXT message
     const message: SyncFullContextMessage = {
-      id: crypto.randomUUID(),
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
       timestamp: Date.now(),
       type: 'SYNC_FULL_CONTEXT',
       payload: compressedPayload.payload,

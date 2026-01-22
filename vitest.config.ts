@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path';
 
 export default defineConfig({
   test: {
@@ -9,7 +10,7 @@ export default defineConfig({
       ['packages/mobile-client/**', 'jsdom'],
     ],
     alias: {
-      vscode: new URL('./test-mocks/vscode.ts', import.meta.url).pathname,
+      vscode: path.resolve(__dirname, './test-mocks/vscode.ts'),
     },
     setupFiles: ['./packages/mobile-client/src/test-setup.ts'],
   },
