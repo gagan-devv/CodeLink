@@ -40,9 +40,10 @@ export class DiffGeneratorImpl implements DiffGenerator {
         timestamp,
       };
       
+      console.log(`[DiffGenerator] Generated diff for ${fileName} (${modifiedFile.length} bytes, isDirty: ${isDirty})`);
       return payload;
     } catch (error) {
-      console.error('Error generating diff:', error);
+      console.error(`[DiffGenerator] Error generating diff for ${filePath}:`, error);
       return null;
     }
   }
@@ -57,7 +58,7 @@ export class DiffGeneratorImpl implements DiffGenerator {
       const buffer = await fs.readFile(filePath);
       return buffer.toString('utf-8');
     } catch (error) {
-      console.error(`Error reading file ${filePath}:`, error);
+      console.error(`[DiffGenerator] Error reading file ${filePath}:`, error);
       throw error;
     }
   }
