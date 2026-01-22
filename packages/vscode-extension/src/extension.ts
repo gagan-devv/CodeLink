@@ -70,7 +70,7 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
 
   // Initialize WebSocket Client
   // TODO: Make relay server URL configurable via settings
-  const relayServerUrl = 'http://localhost:3000';
+  const relayServerUrl = 'http://localhost:8080';
   wsClient = new WebSocketClient();
   wsClient.connect(relayServerUrl);
   outputChannel.appendLine(`WebSocket client connecting to ${relayServerUrl}`);

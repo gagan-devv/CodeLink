@@ -47,8 +47,8 @@ export class DiffGeneratorImpl implements DiffGenerator {
         );
       }
       
-      // Read current file content from disk
-      const modifiedFile = await this.readFileContent(filePath);
+      // Read current file content - prefer editor content over disk
+      const modifiedFile = await this.getCurrentFileContent(filePath);
       
       // Get workspace-relative path for fileName
       const fileName = vscode.workspace.asRelativePath(filePath, false);
@@ -112,6 +112,27 @@ export class DiffGeneratorImpl implements DiffGenerator {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  /**
+   * Get current file content - prefer editor content over disk
+   * This ensures we get unsaved changes from the editor
+   * @param filePath - Absolute path to the file
+   * @returns File content as string
+   */
+  private async getCurrentFileContent(filePath: string): Promise<string> {
+    // First, try to get content from open editor
+    const document = vscode.workspace.textDocuments.find(
+      doc => doc.uri.fsPath === filePath
+    );
+    
+    if (document) {
+      // Return editor content (includes unsaved changes)
+      return document.getText();
+    }
+    
+    // Fall back to reading from disk if not open in editor
+    return this.readFileContent(filePath);
   }
 
   /**

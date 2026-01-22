@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { FileContextPayload } from '@codelink/protocol';
 
 interface DiffViewerProps {
@@ -53,78 +53,80 @@ function DiffViewer({ payload, isLoading = false, onBack }: DiffViewerProps) {
 
   const stats = calculateStats();
 
-  // Generate simple line-by-line diff
-  const generateDiff = (): DiffLine[] => {
-    if (noChanges && !isNewFile) return [];
-    
-    const oldLines = originalFile.split('\n');
-    const newLines = modifiedFile.split('\n');
-    const diff: DiffLine[] = [];
-    
-    if (isNewFile) {
-      // All lines are additions
-      newLines.forEach((line, idx) => {
-        diff.push({
-          type: 'added',
-          lineNumber: idx + 1,
-          content: line,
-          newLineNumber: idx + 1,
-        });
-      });
-    } else {
-      // Simple line-by-line comparison
-      const maxLines = Math.max(oldLines.length, newLines.length);
-      let oldLineNum = 1;
-      let newLineNum = 1;
+  // Generate simple line-by-line diff (memoized to recalculate when payload changes)
+  const diffLines = useMemo(() => {
+    const generateDiff = (): DiffLine[] => {
+      if (noChanges && !isNewFile) return [];
       
-      for (let i = 0; i < maxLines; i++) {
-        if (i >= oldLines.length) {
-          // Addition
+      const oldLines = originalFile.split('\n');
+      const newLines = modifiedFile.split('\n');
+      const diff: DiffLine[] = [];
+      
+      if (isNewFile) {
+        // All lines are additions
+        newLines.forEach((line, idx) => {
           diff.push({
             type: 'added',
-            lineNumber: i + 1,
-            content: newLines[i],
-            newLineNumber: newLineNum++,
+            lineNumber: idx + 1,
+            content: line,
+            newLineNumber: idx + 1,
           });
-        } else if (i >= newLines.length) {
-          // Deletion
-          diff.push({
-            type: 'removed',
-            lineNumber: i + 1,
-            content: oldLines[i],
-            oldLineNumber: oldLineNum++,
-          });
-        } else if (oldLines[i] !== newLines[i]) {
-          // Changed line - show as removal then addition
-          diff.push({
-            type: 'removed',
-            lineNumber: i + 1,
-            content: oldLines[i],
-            oldLineNumber: oldLineNum++,
-          });
-          diff.push({
-            type: 'added',
-            lineNumber: i + 1,
-            content: newLines[i],
-            newLineNumber: newLineNum++,
-          });
-        } else {
-          // Unchanged
-          diff.push({
-            type: 'unchanged',
-            lineNumber: i + 1,
-            content: oldLines[i],
-            oldLineNumber: oldLineNum++,
-            newLineNumber: newLineNum++,
-          });
+        });
+      } else {
+        // Simple line-by-line comparison
+        const maxLines = Math.max(oldLines.length, newLines.length);
+        let oldLineNum = 1;
+        let newLineNum = 1;
+        
+        for (let i = 0; i < maxLines; i++) {
+          if (i >= oldLines.length) {
+            // Addition
+            diff.push({
+              type: 'added',
+              lineNumber: i + 1,
+              content: newLines[i],
+              newLineNumber: newLineNum++,
+            });
+          } else if (i >= newLines.length) {
+            // Deletion
+            diff.push({
+              type: 'removed',
+              lineNumber: i + 1,
+              content: oldLines[i],
+              oldLineNumber: oldLineNum++,
+            });
+          } else if (oldLines[i] !== newLines[i]) {
+            // Changed line - show as removal then addition
+            diff.push({
+              type: 'removed',
+              lineNumber: i + 1,
+              content: oldLines[i],
+              oldLineNumber: oldLineNum++,
+            });
+            diff.push({
+              type: 'added',
+              lineNumber: i + 1,
+              content: newLines[i],
+              newLineNumber: newLineNum++,
+            });
+          } else {
+            // Unchanged
+            diff.push({
+              type: 'unchanged',
+              lineNumber: i + 1,
+              content: oldLines[i],
+              oldLineNumber: oldLineNum++,
+              newLineNumber: newLineNum++,
+            });
+          }
         }
       }
-    }
-    
-    return diff;
-  };
+      
+      return diff;
+    };
 
-  const diffLines = generateDiff();
+    return generateDiff();
+  }, [originalFile, modifiedFile, noChanges, isNewFile]);
 
   // Get file path parts
   const getFilePath = () => {

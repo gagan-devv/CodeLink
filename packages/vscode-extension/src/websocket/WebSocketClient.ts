@@ -85,7 +85,7 @@ export class WebSocketClient {
    */
   public send(message: ProtocolMessage): void {
     if (this.isConnected()) {
-      this.socket!.emit('message', message);
+      this.socket!.emit('message', JSON.stringify(message));
     } else {
       this.queueMessage(message);
     }
@@ -126,7 +126,7 @@ export class WebSocketClient {
       const batch = this.messageQueue.splice(0, messagesPerBatch);
       batch.forEach(msg => {
         if (this.isConnected()) {
-          this.socket!.emit('message', msg);
+          this.socket!.emit('message', JSON.stringify(msg));
         }
       });
 
