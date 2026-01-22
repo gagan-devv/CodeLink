@@ -1,9 +1,17 @@
 import * as vscode from 'vscode';
+import * as zlib from 'zlib';
+import { promisify } from 'util';
 import { SyncFullContextMessage, FileContextPayload } from '@codelink/protocol';
 import { FileWatcher } from './watcher/FileWatcher';
 import { GitIntegrationModuleImpl } from './git/GitIntegrationModule';
 import { DiffGeneratorImpl } from './diff/DiffGenerator';
 import { WebSocketClient } from './websocket/WebSocketClient';
+
+// Promisify zlib functions
+const gzip = promisify(zlib.gzip);
+
+// Compression threshold: 50KB
+const COMPRESSION_THRESHOLD = 50 * 1024;
 
 // Global instances
 let fileWatcher: FileWatcher;
@@ -62,7 +70,7 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
 
   // Initialize WebSocket Client
   // TODO: Make relay server URL configurable via settings
-  const relayServerUrl = 'http://localhost:3000';
+  const relayServerUrl = 'http://localhost:8080';
   wsClient = new WebSocketClient();
   wsClient.connect(relayServerUrl);
   outputChannel.appendLine(`WebSocket client connecting to ${relayServerUrl}`);
@@ -87,48 +95,83 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
  * This is the main pipeline: File Watcher → Git → Diff Generator → WebSocket
  */
 async function handleFileChanged(filePath: string): Promise<void> {
+  const pipelineStartTime = Date.now();
+  
   try {
     outputChannel.appendLine(`[INFO] File changed: ${filePath}`);
 
     // Step 1: Fetch HEAD version from Git
+    const gitStartTime = Date.now();
     let headContent = '';
     try {
       headContent = await gitModule.getHeadVersion(filePath);
-      outputChannel.appendLine(`[INFO] HEAD content fetched (${headContent.length} bytes)`);
+      const gitElapsed = Date.now() - gitStartTime;
+      outputChannel.appendLine(`[PERF] Git operation: ${gitElapsed}ms (HEAD content: ${headContent.length} bytes)`);
     } catch (error) {
-      outputChannel.appendLine(`[ERROR] Failed to fetch HEAD version: ${error}`);
+      const gitElapsed = Date.now() - gitStartTime;
+      outputChannel.appendLine(`[ERROR] Failed to fetch HEAD version (${gitElapsed}ms): ${error}`);
       // Continue with empty HEAD content (treat as untracked file)
     }
 
     // Step 2: Generate diff
+    const diffStartTime = Date.now();
     const payload = await diffGenerator.generateDiff(filePath, headContent);
+    const diffElapsed = Date.now() - diffStartTime;
     
     if (!payload) {
-      outputChannel.appendLine('[WARN] Failed to generate diff, skipping');
+      outputChannel.appendLine(`[WARN] Failed to generate diff (${diffElapsed}ms), skipping`);
       return;
     }
 
-    outputChannel.appendLine(`[INFO] Diff generated for ${payload.fileName} (isDirty: ${payload.isDirty})`);
+    outputChannel.appendLine(
+      `[PERF] Diff generation: ${diffElapsed}ms (${payload.fileName}, isDirty: ${payload.isDirty})`
+    );
 
-    // Step 3: Create SYNC_FULL_CONTEXT message
+    // Step 3: Apply compression if payload is large
+    const compressionStartTime = Date.now();
+    const compressedPayload = await compressPayloadIfNeeded(payload);
+    const compressionElapsed = Date.now() - compressionStartTime;
+    
+    if (compressedPayload.compressed) {
+      outputChannel.appendLine(
+        `[PERF] Compression: ${compressionElapsed}ms (${compressedPayload.originalSize} → ${compressedPayload.compressedSize} bytes, ${compressedPayload.compressionRatio}% reduction)`
+      );
+    }
+
+    // Step 4: Create SYNC_FULL_CONTEXT message
     const message: SyncFullContextMessage = {
-      id: crypto.randomUUID(),
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
       timestamp: Date.now(),
       type: 'SYNC_FULL_CONTEXT',
-      payload,
+      payload: compressedPayload.payload,
     };
 
-    // Step 4: Send message via WebSocket
+    // Step 5: Send message via WebSocket
+    const wsStartTime = Date.now();
     try {
       wsClient.send(message);
-      outputChannel.appendLine(`[INFO] Message sent to relay server (id: ${message.id})`);
+      const wsElapsed = Date.now() - wsStartTime;
+      outputChannel.appendLine(`[PERF] WebSocket send: ${wsElapsed}ms (message id: ${message.id})`);
     } catch (error) {
-      outputChannel.appendLine(`[ERROR] Failed to send message: ${error}`);
+      const wsElapsed = Date.now() - wsStartTime;
+      outputChannel.appendLine(`[ERROR] Failed to send message (${wsElapsed}ms): ${error}`);
       throw error;
     }
 
+    // Log total pipeline time
+    const totalElapsed = Date.now() - pipelineStartTime;
+    outputChannel.appendLine(`[PERF] Total pipeline: ${totalElapsed}ms`);
+    
+    // Performance warning if total time exceeds 2000ms
+    if (totalElapsed > 2000) {
+      outputChannel.appendLine(
+        `[WARN] Pipeline exceeded 2000ms threshold: ${totalElapsed}ms for ${payload.fileName}`
+      );
+    }
+
   } catch (error) {
-    outputChannel.appendLine(`[ERROR] Pipeline error: ${error}`);
+    const totalElapsed = Date.now() - pipelineStartTime;
+    outputChannel.appendLine(`[ERROR] Pipeline error (${totalElapsed}ms): ${error}`);
     console.error('Error handling file change:', error);
     // Don't throw - continue monitoring other files
   }
@@ -143,5 +186,73 @@ export function deactivate() {
   }
   if (outputChannel) {
     outputChannel.appendLine('CodeLink extension deactivated');
+  }
+}
+
+/**
+ * Compress payload if it exceeds the threshold
+ * @param payload - The FileContextPayload to potentially compress
+ * @returns Compressed payload info with metadata
+ */
+async function compressPayloadIfNeeded(payload: FileContextPayload): Promise<{
+  payload: FileContextPayload;
+  compressed: boolean;
+  originalSize: number;
+  compressedSize: number;
+  compressionRatio: number;
+}> {
+  // Calculate payload size
+  const payloadString = JSON.stringify(payload);
+  const originalSize = Buffer.byteLength(payloadString, 'utf-8');
+
+  // Only compress if payload exceeds threshold
+  if (originalSize < COMPRESSION_THRESHOLD) {
+    return {
+      payload,
+      compressed: false,
+      originalSize,
+      compressedSize: originalSize,
+      compressionRatio: 0,
+    };
+  }
+
+  try {
+    // Compress originalFile and modifiedFile separately
+    const originalFileBuffer = Buffer.from(payload.originalFile, 'utf-8');
+    const modifiedFileBuffer = Buffer.from(payload.modifiedFile, 'utf-8');
+
+    const [compressedOriginal, compressedModified] = await Promise.all([
+      gzip(originalFileBuffer),
+      gzip(modifiedFileBuffer),
+    ]);
+
+    // Create compressed payload with base64-encoded compressed data
+    const compressedPayload: FileContextPayload = {
+      ...payload,
+      originalFile: compressedOriginal.toString('base64'),
+      modifiedFile: compressedModified.toString('base64'),
+      // Add metadata to indicate compression (extend interface if needed)
+    };
+
+    const compressedString = JSON.stringify(compressedPayload);
+    const compressedSize = Buffer.byteLength(compressedString, 'utf-8');
+    const compressionRatio = Math.round(((originalSize - compressedSize) / originalSize) * 100);
+
+    return {
+      payload: compressedPayload,
+      compressed: true,
+      originalSize,
+      compressedSize,
+      compressionRatio,
+    };
+  } catch (error) {
+    outputChannel.appendLine(`[WARN] Compression failed, sending uncompressed: ${error}`);
+    return {
+      payload,
+      compressed: false,
+      originalSize,
+      compressedSize: originalSize,
+      compressionRatio: 0,
+    };
   }
 }

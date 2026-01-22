@@ -29,10 +29,10 @@ describe('Property 7: Protocol package exports are importable', () => {
           throw new Error('vscode-extension does not import from @codelink/protocol');
         }
 
-        // Verify PingMessage is imported or used
-        const usesPingMessage = extensionSrc.includes('PingMessage');
-        if (!usesPingMessage) {
-          throw new Error('vscode-extension does not use PingMessage type');
+        // Verify SyncFullContextMessage is imported or used (actual type used by extension)
+        const usesSyncFullContextMessage = extensionSrc.includes('SyncFullContextMessage');
+        if (!usesSyncFullContextMessage) {
+          throw new Error('vscode-extension does not use SyncFullContextMessage type');
         }
 
         // Verify the package.json has the dependency
@@ -115,10 +115,10 @@ describe('Property 7: Protocol package exports are importable', () => {
           throw new Error('mobile-client does not import from @codelink/protocol');
         }
 
-        // Verify PongMessage is imported or used
-        const usesPongMessage = clientSrc.includes('PongMessage');
-        if (!usesPongMessage) {
-          throw new Error('mobile-client does not use PongMessage type');
+        // Verify FileContextPayload is imported or used (actual type used by mobile client)
+        const usesFileContextPayload = clientSrc.includes('FileContextPayload');
+        if (!usesFileContextPayload) {
+          throw new Error('mobile-client does not use FileContextPayload type');
         }
 
         // Verify the package.json has the dependency

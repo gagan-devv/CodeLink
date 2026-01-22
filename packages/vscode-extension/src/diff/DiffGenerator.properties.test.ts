@@ -22,6 +22,7 @@ vi.mock('vscode', () => ({
 // Mock fs/promises module
 vi.mock('fs/promises', () => ({
   readFile: vi.fn(),
+  stat: vi.fn(),
 }));
 
 describe('DiffGenerator - Property Tests', () => {
@@ -33,14 +34,15 @@ describe('DiffGenerator - Property Tests', () => {
   it('Property 7: For any file path, DiffGenerator reads current file content or handles errors gracefully', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1, maxLength: 50 }), // file name
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0), // file name (non-whitespace)
         fc.string({ minLength: 0, maxLength: 200 }), // file content
         fc.string({ minLength: 0, maxLength: 200 }), // head content
         async (fileName, fileContent, headContent) => {
           const diffGenerator = new DiffGeneratorImpl();
           const filePath = `/home/user/project/${fileName}`;
           
-          // Mock successful file read
+          // Mock successful file stat and read
+          (fs.stat as any).mockResolvedValue({ size: fileContent.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(fileContent));
           (vscode.workspace as any).textDocuments = [];
           
@@ -59,14 +61,15 @@ describe('DiffGenerator - Property Tests', () => {
   it('Property 8: For any file with HEAD and current versions, DiffGenerator produces FileContextPayload', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1, maxLength: 50 }), // file name
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0), // file name (non-whitespace)
         fc.string({ minLength: 0, maxLength: 200 }), // original content
         fc.string({ minLength: 0, maxLength: 200 }), // modified content
         async (fileName, originalFile, modifiedFile) => {
           const diffGenerator = new DiffGeneratorImpl();
           const filePath = `/home/user/project/${fileName}`;
           
-          // Mock file read
+          // Mock file stat and read
+          (fs.stat as any).mockResolvedValue({ size: modifiedFile.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(modifiedFile));
           (vscode.workspace as any).textDocuments = [];
           
@@ -86,13 +89,14 @@ describe('DiffGenerator - Property Tests', () => {
   it('Property 9: For any untracked file (empty originalFile), payload contains full current content', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1, maxLength: 50 }), // file name
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0), // file name (non-whitespace)
         fc.string({ minLength: 1, maxLength: 200 }), // modified content
         async (fileName, modifiedFile) => {
           const diffGenerator = new DiffGeneratorImpl();
           const filePath = `/home/user/project/${fileName}`;
           
-          // Mock file read
+          // Mock file stat and read
+          (fs.stat as any).mockResolvedValue({ size: modifiedFile.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(modifiedFile));
           (vscode.workspace as any).textDocuments = [];
           
@@ -113,13 +117,14 @@ describe('DiffGenerator - Property Tests', () => {
   it('Property 10: For any file where HEAD equals current, originalFile equals modifiedFile', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1, maxLength: 50 }), // file name
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0), // file name (non-whitespace)
         fc.string({ minLength: 0, maxLength: 200 }), // content
         async (fileName, content) => {
           const diffGenerator = new DiffGeneratorImpl();
           const filePath = `/home/user/project/${fileName}`;
           
-          // Mock file read with same content
+          // Mock file stat and read with same content
+          (fs.stat as any).mockResolvedValue({ size: content.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(content));
           (vscode.workspace as any).textDocuments = [];
           
@@ -139,14 +144,15 @@ describe('DiffGenerator - Property Tests', () => {
   it('Property 11: For any file, payload contains exact original and modified content without mutations', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1, maxLength: 50 }), // file name
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0), // file name (non-whitespace)
         fc.string({ minLength: 0, maxLength: 200 }), // original content
         fc.string({ minLength: 0, maxLength: 200 }), // modified content
         async (fileName, originalFile, modifiedFile) => {
           const diffGenerator = new DiffGeneratorImpl();
           const filePath = `/home/user/project/${fileName}`;
           
-          // Mock file read
+          // Mock file stat and read
+          (fs.stat as any).mockResolvedValue({ size: modifiedFile.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(modifiedFile));
           (vscode.workspace as any).textDocuments = [];
           
@@ -170,13 +176,14 @@ describe('DiffGenerator - Property Tests', () => {
   it('Property 19: For any file with unsaved changes, isDirty is true', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1, maxLength: 50 }), // file name
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0), // file name (non-whitespace)
         fc.string({ minLength: 0, maxLength: 200 }), // content
         async (fileName, content) => {
           const diffGenerator = new DiffGeneratorImpl();
           const filePath = `/home/user/project/${fileName}`;
           
-          // Mock file read
+          // Mock file stat and read
+          (fs.stat as any).mockResolvedValue({ size: content.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(content));
           
           // Mock document with isDirty = true
@@ -201,13 +208,14 @@ describe('DiffGenerator - Property Tests', () => {
   it('Property 20: For any file that is saved, isDirty is false', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1, maxLength: 50 }), // file name
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0), // file name (non-whitespace)
         fc.string({ minLength: 0, maxLength: 200 }), // content
         async (fileName, content) => {
           const diffGenerator = new DiffGeneratorImpl();
           const filePath = `/home/user/project/${fileName}`;
           
-          // Mock file read
+          // Mock file stat and read
+          (fs.stat as any).mockResolvedValue({ size: content.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(content));
           
           // Mock document with isDirty = false
@@ -232,13 +240,14 @@ describe('DiffGenerator - Property Tests', () => {
   it('Property 21: For any generated payload, timestamp reflects generation time', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1, maxLength: 50 }), // file name
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0), // file name (non-whitespace)
         fc.string({ minLength: 0, maxLength: 200 }), // content
         async (fileName, content) => {
           const diffGenerator = new DiffGeneratorImpl();
           const filePath = `/home/user/project/${fileName}`;
           
-          // Mock file read
+          // Mock file stat and read
+          (fs.stat as any).mockResolvedValue({ size: content.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(content));
           (vscode.workspace as any).textDocuments = [];
           
@@ -260,14 +269,14 @@ describe('DiffGenerator - Property Tests', () => {
   it('Property: For any file read error, generateDiff returns null without throwing', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1, maxLength: 50 }), // file name
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0), // file name (non-whitespace)
         fc.string({ minLength: 0, maxLength: 200 }), // head content
         async (fileName, headContent) => {
           const diffGenerator = new DiffGeneratorImpl();
           const filePath = `/home/user/project/${fileName}`;
           
-          // Mock file read to throw error
-          (fs.readFile as any).mockRejectedValue(new Error('File read error'));
+          // Mock file stat to throw error
+          (fs.stat as any).mockRejectedValue(new Error('File read error'));
           
           // Should not throw, should return null
           const result = await diffGenerator.generateDiff(filePath, headContent);

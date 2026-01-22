@@ -10,6 +10,7 @@ export class FileWatcher {
   private activeFilePath: string | null = null;
   private disposables: vscode.Disposable[] = [];
   private readonly debounceDelay: number = 1000; // 1000ms as per requirements
+  private lastChangeTime: number = 0; // Track last change for timing verification
 
   /**
    * Callback invoked after debounce period expires
@@ -86,11 +87,24 @@ export class FileWatcher {
    * Debounce file change events
    */
   private debounceFileChange(filePath: string): void {
+    // Track when the change occurred
+    this.lastChangeTime = Date.now();
+    
     // Clear existing timer
     this.clearDebounceTimer();
 
     // Set new timer
     this.debounceTimer = setTimeout(() => {
+      // Verify debounce timing (1000ms ± 50ms tolerance)
+      const actualDelay = Date.now() - this.lastChangeTime;
+      const tolerance = 50;
+      
+      if (Math.abs(actualDelay - this.debounceDelay) > tolerance) {
+        console.warn(
+          `[FileWatcher] Debounce timing outside tolerance: ${actualDelay}ms (expected ${this.debounceDelay}ms ± ${tolerance}ms)`
+        );
+      }
+      
       this.triggerFileChanged(filePath);
     }, this.debounceDelay);
   }

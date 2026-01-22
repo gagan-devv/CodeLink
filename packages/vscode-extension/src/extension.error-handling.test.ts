@@ -42,6 +42,7 @@ vi.mock('simple-git', () => {
 // Mock fs/promises
 vi.mock('fs/promises', () => ({
   readFile: vi.fn(),
+  stat: vi.fn(),
 }));
 
 describe('VS Code Extension Error Handling', () => {
@@ -174,12 +175,14 @@ describe('VS Code Extension Error Handling', () => {
     });
 
     it('should continue operation after file read error', async () => {
-      // First call fails
+      // First call fails - stat succeeds but read fails
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
       mockFs.readFile.mockRejectedValueOnce(new Error('Read error'));
       const payload1 = await diffGenerator.generateDiff('/error/file1.ts', '');
       expect(payload1).toBeNull();
 
       // Second call succeeds
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
       mockFs.readFile.mockResolvedValueOnce(Buffer.from('file content'));
       const payload2 = await diffGenerator.generateDiff('/success/file2.ts', '');
       expect(payload2).not.toBeNull();

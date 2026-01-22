@@ -60,17 +60,33 @@ export class GitIntegrationModuleImpl implements GitIntegrationModule {
       return '';
     }
 
+    const startTime = Date.now();
+    
     try {
       // Convert absolute path to repository-relative path
       const relativePath = this.getRelativePath(filePath);
       
       // Fetch HEAD version using git show
       const content = await this.git.show([`HEAD:${relativePath}`]);
+      
+      const elapsed = Date.now() - startTime;
+      console.log(
+        `[GitIntegration] Fetched HEAD version for ${relativePath} (${content.length} bytes, took ${elapsed}ms)`
+      );
+      
+      // Performance warning if Git operation took too long
+      if (elapsed > 500) {
+        console.warn(
+          `[GitIntegration] Git operation exceeded 500ms threshold: ${elapsed}ms for ${relativePath}`
+        );
+      }
+      
       return content;
     } catch (error) {
+      const elapsed = Date.now() - startTime;
       // File is likely untracked or not in HEAD
       // Return empty string to indicate new/untracked file
-      console.debug(`[GitIntegration] File not in HEAD (${filePath}): ${error}`);
+      console.debug(`[GitIntegration] File not in HEAD (${filePath}, took ${elapsed}ms): ${error}`);
       return '';
     }
   }

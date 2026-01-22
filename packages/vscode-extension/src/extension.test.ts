@@ -9,6 +9,7 @@ import { SyncFullContextMessage } from '@codelink/protocol';
 // Mock fs/promises module
 vi.mock('fs/promises', () => ({
   readFile: vi.fn(),
+  stat: vi.fn(),
 }));
 
 // Mock vscode module
@@ -88,6 +89,7 @@ describe('VS Code Extension Integration', () => {
       // Mock file system
       const mockFs = await import('fs/promises');
       vi.mocked(mockFs.readFile).mockResolvedValue(Buffer.from('modified content'));
+      vi.mocked(mockFs.stat).mockResolvedValue({ size: 100 } as any);
 
       // Mock WebSocket
       const sendSpy = vi.spyOn(wsClient, 'send');
@@ -137,6 +139,7 @@ describe('VS Code Extension Integration', () => {
       // Mock file system
       const mockFs = await import('fs/promises');
       vi.mocked(mockFs.readFile).mockResolvedValue(Buffer.from('new file content'));
+      vi.mocked(mockFs.stat).mockResolvedValue({ size: 100 } as any);
 
       // Mock WebSocket
       const sendSpy = vi.spyOn(wsClient, 'send');
@@ -233,6 +236,7 @@ describe('VS Code Extension Integration', () => {
       // Mock file system to throw error
       const mockFs = await import('fs/promises');
       vi.mocked(mockFs.readFile).mockRejectedValue(new Error('File read error'));
+      vi.mocked(mockFs.stat).mockResolvedValue({ size: 100 } as any);
 
       // Mock WebSocket
       const sendSpy = vi.spyOn(wsClient, 'send');
@@ -280,6 +284,7 @@ describe('VS Code Extension Integration', () => {
       vi.spyOn(gitModule, 'getHeadVersion').mockResolvedValue('original');
       const mockFs = await import('fs/promises');
       vi.mocked(mockFs.readFile).mockResolvedValue(Buffer.from('modified'));
+      vi.mocked(mockFs.stat).mockResolvedValue({ size: 100 } as any);
 
       // Mock WebSocket
       const sendSpy = vi.spyOn(wsClient, 'send');
@@ -319,7 +324,8 @@ describe('VS Code Extension Integration', () => {
           uri: { fsPath: '/workspace/test.ts' },
         },
         contentChanges: [],
-      } as vscode.TextDocumentChangeEvent;
+        reason: undefined,
+      } as unknown as vscode.TextDocumentChangeEvent;
 
       mockDocumentChangeCallback(mockEvent);
       vi.advanceTimersByTime(500);

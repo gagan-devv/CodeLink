@@ -96,7 +96,8 @@ describe('FileWatcher - Property-Based Tests', () => {
               uri: { fsPath: filePath },
             },
             contentChanges: [],
-          } as vscode.TextDocumentChangeEvent;
+        reason: undefined,
+          } as unknown as vscode.TextDocumentChangeEvent;
 
           for (let i = 0; i < numChanges; i++) {
             mockDocumentChangeCallback(mockEvent);
@@ -144,7 +145,8 @@ describe('FileWatcher - Property-Based Tests', () => {
               uri: { fsPath: filePath },
             },
             contentChanges: [],
-          } as vscode.TextDocumentChangeEvent;
+        reason: undefined,
+          } as unknown as vscode.TextDocumentChangeEvent;
 
           mockDocumentChangeCallback(mockEvent);
           vi.advanceTimersByTime(1000);

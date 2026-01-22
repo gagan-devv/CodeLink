@@ -88,7 +88,8 @@ describe('FileWatcher', () => {
           uri: { fsPath: '/workspace/test.ts' },
         },
         contentChanges: [],
-      } as vscode.TextDocumentChangeEvent;
+        reason: undefined,
+      } as unknown as vscode.TextDocumentChangeEvent;
 
       mockDocumentChangeCallback(mockEvent);
 
@@ -140,7 +141,8 @@ describe('FileWatcher', () => {
           uri: { fsPath: '/workspace/test.ts' },
         },
         contentChanges: [],
-      } as vscode.TextDocumentChangeEvent;
+        reason: undefined,
+      } as unknown as vscode.TextDocumentChangeEvent;
 
       mockDocumentChangeCallback(mockEvent);
 
@@ -169,7 +171,8 @@ describe('FileWatcher', () => {
           uri: { fsPath: '/workspace/test.ts' },
         },
         contentChanges: [],
-      } as vscode.TextDocumentChangeEvent;
+        reason: undefined,
+      } as unknown as vscode.TextDocumentChangeEvent;
 
       mockDocumentChangeCallback(mockEvent);
       vi.advanceTimersByTime(500);
@@ -205,7 +208,8 @@ describe('FileWatcher', () => {
           uri: { fsPath: '/workspace/other.ts' },
         },
         contentChanges: [],
-      } as vscode.TextDocumentChangeEvent;
+        reason: undefined,
+      } as unknown as vscode.TextDocumentChangeEvent;
 
       mockDocumentChangeCallback(mockEvent);
       vi.advanceTimersByTime(1000);
@@ -305,7 +309,8 @@ describe('FileWatcher', () => {
           uri: { fsPath: '/workspace/test.ts' },
         },
         contentChanges: [],
-      } as vscode.TextDocumentChangeEvent;
+        reason: undefined,
+      } as unknown as vscode.TextDocumentChangeEvent;
 
       mockDocumentChangeCallback(mockEvent);
       fileWatcher.dispose();
@@ -334,7 +339,8 @@ describe('FileWatcher', () => {
           uri: { fsPath: '/workspace/test.ts' },
         },
         contentChanges: [],
-      } as vscode.TextDocumentChangeEvent;
+        reason: undefined,
+      } as unknown as vscode.TextDocumentChangeEvent;
 
       mockDocumentChangeCallback(mockEvent);
       vi.advanceTimersByTime(1000);
