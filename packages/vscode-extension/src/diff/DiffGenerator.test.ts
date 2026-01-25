@@ -59,10 +59,11 @@ describe('DiffGenerator', () => {
       (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
-      // Mock open document with isDirty = true
+      // Mock open document with isDirty = true and getText()
       const mockDocument = {
         uri: { fsPath: filePath },
         isDirty: true,
+        getText: () => currentContent,
       };
       (vscode.workspace as any).textDocuments = [mockDocument];
 
@@ -81,10 +82,11 @@ describe('DiffGenerator', () => {
       (fs.stat as any).mockResolvedValue({ size: currentContent.length });
       (fs.readFile as any).mockResolvedValue(Buffer.from(currentContent));
 
-      // Mock open document with isDirty = false
+      // Mock open document with isDirty = false and getText()
       const mockDocument = {
         uri: { fsPath: filePath },
         isDirty: false,
+        getText: () => currentContent,
       };
       (vscode.workspace as any).textDocuments = [mockDocument];
 

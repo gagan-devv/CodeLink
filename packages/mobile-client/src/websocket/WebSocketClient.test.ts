@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { WebSocketClient, ConnectionStatus } from './WebSocketClient';
+import { WebSocketClient } from './WebSocketClient';
 import { FileContextPayload, SyncFullContextMessage } from '@codelink/protocol';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 
 // Mock socket.io-client
 vi.mock('socket.io-client', () => ({

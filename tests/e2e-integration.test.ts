@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { Server as SocketIOServer } from 'socket.io';
 import { io as ioClient, Socket as ClientSocket } from 'socket.io-client';
 import { startServer, mobileClients, extensionClients } from '../packages/relay-server/src/index';
@@ -100,7 +100,7 @@ describe('End-to-End Integration Test', () => {
 
   it('should complete end-to-end flow from file edit to mobile display within 2000ms', async () => {
     const startTime = Date.now();
-    let receivedPayload: FileContextPayload | null = null;
+    let _receivedPayload: FileContextPayload | null = null;
 
     // Step 1: Connect mobile client and register
     mobileClient = ioClient(RELAY_URL, {

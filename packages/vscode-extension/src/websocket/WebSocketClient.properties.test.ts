@@ -69,7 +69,7 @@ describe('WebSocketClient - Property-Based Tests', () => {
 
           client.send(message);
 
-          expect(mockSocket.emit).toHaveBeenCalledWith('message', message);
+          expect(mockSocket.emit).toHaveBeenCalledWith('message', JSON.stringify(message));
           expect(mockSocket.emit).toHaveBeenCalledTimes(1);
         }
       ),
@@ -125,7 +125,7 @@ describe('WebSocketClient - Property-Based Tests', () => {
           expect(mockSocket.emit).toHaveBeenCalledTimes(messages.length);
 
           messages.forEach(msg => {
-            expect(mockSocket.emit).toHaveBeenCalledWith('message', msg);
+            expect(mockSocket.emit).toHaveBeenCalledWith('message', JSON.stringify(msg));
           });
         }
       ),
