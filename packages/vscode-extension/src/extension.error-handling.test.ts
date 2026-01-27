@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import * as vscode from 'vscode';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { GitIntegrationModuleImpl } from './git/GitIntegrationModule';
 import { DiffGeneratorImpl } from './diff/DiffGenerator';
 

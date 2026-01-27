@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { parseMessage, createPongMessage, broadcastToMobileClients, startServer, mobileClients } from './index';
+import { describe, it, expect, vi } from 'vitest';
+import { parseMessage, createPongMessage, broadcastToMobileClients, mobileClients } from './index';
 import { PingMessage, SyncFullContextMessage, FileContextPayload } from '@codelink/protocol';
-import { Server, Socket } from 'socket.io';
+import { Socket } from 'socket.io';
 
 describe('Message Parsing', () => {
   describe('parseMessage', () => {

@@ -121,7 +121,6 @@ export class WebSocketClient {
     const messagesPerBatch = 10;
     const batchDelay = 1000;
 
-    let index = 0;
     const sendBatch = () => {
       const batch = this.messageQueue.splice(0, messagesPerBatch);
       batch.forEach(msg => {
@@ -130,7 +129,6 @@ export class WebSocketClient {
         }
       });
 
-      index += batch.length;
       if (this.messageQueue.length > 0 && this.isConnected()) {
         setTimeout(sendBatch, batchDelay);
       }

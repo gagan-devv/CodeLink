@@ -28,12 +28,8 @@ describe('FileWatcher Performance Tests', () => {
         fc.integer({ min: 1, max: 10 }), // Number of rapid changes
         fc.integer({ min: 0, max: 100 }), // Delay between changes (ms)
         (numChanges, delayBetweenChanges) => {
-          const callbacks: number[] = [];
-          let lastChangeTime = 0;
-
           // Simulate rapid changes
           for (let i = 0; i < numChanges; i++) {
-            lastChangeTime = Date.now();
             vi.advanceTimersByTime(delayBetweenChanges);
           }
 

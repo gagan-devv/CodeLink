@@ -186,10 +186,11 @@ describe('DiffGenerator - Property Tests', () => {
           (fs.stat as any).mockResolvedValue({ size: content.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(content));
           
-          // Mock document with isDirty = true
+          // Mock document with isDirty = true and getText()
           const mockDocument = {
             uri: { fsPath: filePath },
             isDirty: true,
+            getText: () => content,
           };
           (vscode.workspace as any).textDocuments = [mockDocument];
           
@@ -218,10 +219,11 @@ describe('DiffGenerator - Property Tests', () => {
           (fs.stat as any).mockResolvedValue({ size: content.length });
           (fs.readFile as any).mockResolvedValue(Buffer.from(content));
           
-          // Mock document with isDirty = false
+          // Mock document with isDirty = false and getText()
           const mockDocument = {
             uri: { fsPath: filePath },
             isDirty: false,
+            getText: () => content,
           };
           (vscode.workspace as any).textDocuments = [mockDocument];
           

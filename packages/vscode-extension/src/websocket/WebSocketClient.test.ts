@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ProtocolMessage, MessageType } from '@codelink/protocol';
+import { ProtocolMessage } from '@codelink/protocol';
 
 // Mock socket.io-client - must be defined before vi.mock
 const mockSocket = {
@@ -100,7 +100,7 @@ describe('WebSocketClient', () => {
 
       client.send(message);
 
-      expect(mockSocket.emit).toHaveBeenCalledWith('message', message);
+      expect(mockSocket.emit).toHaveBeenCalledWith('message', JSON.stringify(message));
     });
 
     it('should queue message when disconnected', () => {

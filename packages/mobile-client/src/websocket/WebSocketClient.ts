@@ -172,7 +172,7 @@ export class WebSocketClient {
   /**
    * Validate FileContextPayload structure
    */
-  private isValidPayload(payload: any): payload is FileContextPayload {
+  private isValidPayload(payload: unknown): payload is FileContextPayload {
     return (
       payload &&
       typeof payload === 'object' &&
