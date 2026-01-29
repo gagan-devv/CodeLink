@@ -16,6 +16,12 @@ A Visual Studio Code extension that integrates with your local development envir
 - **Diff Generator**: Compares HEAD vs current file state and generates FileContextPayload
 - **WebSocket Client**: Transmits SYNC_FULL_CONTEXT messages to relay server
 
+**Editor Adapter System**:
+- **Editor Registry**: Manages and detects available AI code editors (Continue, Kiro, Cursor, Antigravity)
+- **Capability-Driven Architecture**: Adapts behavior based on what each editor supports
+- **Prompt Injection**: Sends prompts from mobile to AI editor chat panels using public VS Code commands
+- **Safe Integration**: Uses only public VS Code APIs, no UI scraping or private APIs
+
 ### 2. Relay Server (`packages/relay-server`)
 
 A WebSocket relay server built with Socket.IO that facilitates real-time communication between the VS Code extension and the mobile client. It runs locally on your machine and handles message routing.
@@ -112,6 +118,125 @@ External Dependencies:
 - **Unified Diff as Primary UI**: Code changes are presented as unified diffs for easy review
 
 ## Features
+
+### Editor Adapter System
+
+CodeLink integrates with multiple AI code editors through a capability-driven adapter system. This allows you to send prompts from your mobile device to any supported AI editor running in VS Code.
+
+#### Supported Editors
+
+| Editor | Prompt Injection | Chat History | Token Streaming | Diff Artifacts | Sync Level |
+|--------|-----------------|--------------|-----------------|----------------|------------|
+| **Continue** | ✅ | ✅ | ✅ | ✅ | Full |
+| **Kiro** | ✅ | ✅ | ✅ | ✅ | Partial |
+| **Cursor** | ✅ | ❌ | ❌ | ❌ | Control-Only |
+| **Antigravity** | ✅ | ❌ | ❌ | ❌ | Control-Only |
+
+#### How It Works
+
+The Editor Adapter System automatically detects which AI editors are installed in your VS Code environment and selects the best available option based on capabilities:
+
+```
+Mobile Client (send prompt)
+    ↓
+Relay Server (route message)
+    ↓
+VS Code Extension (receive INJECT_PROMPT)
+    ↓
+Editor Registry (select best adapter)
+    ↓
+Editor Adapter (inject via VS Code command)
+    ↓
+AI Editor (display prompt in chat panel)
+```
+
+#### Key Capabilities
+
+- **Automatic Detection**: Discovers installed editors by querying VS Code commands
+- **Capability-Driven**: Adapts behavior based on what each editor supports
+- **Safe Integration**: Uses only public VS Code APIs (`vscode.commands.executeCommand`)
+- **Graceful Degradation**: Falls back to control-only mode for closed-source editors
+- **Error Handling**: Provides clear error messages when operations fail
+- **No UI Scraping**: Never uses webview DOM access, keystroke replay, or private APIs
+
+#### Sync Levels Explained
+
+- **Full Sync**: Complete access to chat history, token streaming, and diff artifacts (Continue only)
+- **Partial Sync**: Access to own internal state but limited external API (Kiro)
+- **Control-Only**: Can inject prompts but cannot read chat history or stream tokens (Cursor, Antigravity)
+
+#### Using Prompt Injection from Mobile
+
+1. **Ensure an AI editor is installed**: Install Continue, Kiro, Cursor, or Antigravity in VS Code
+2. **Connect mobile client**: Open the mobile client and verify connection status
+3. **Send a prompt**: Type your prompt in the mobile interface and send
+4. **View in editor**: The prompt appears in your AI editor's chat panel as if you typed it
+
+#### Message Protocol
+
+Prompt injection uses the `INJECT_PROMPT` message type:
+
+```typescript
+interface InjectPromptMessage {
+  type: 'INJECT_PROMPT';
+  payload: {
+    prompt: string;
+  };
+  timestamp: number;
+}
+
+interface InjectPromptResponse {
+  type: 'INJECT_PROMPT_RESPONSE';
+  payload: {
+    success: boolean;
+    error?: string;
+    editorUsed?: string;
+  };
+  timestamp: number;
+}
+```
+
+**Message Flow**:
+1. Mobile client sends `INJECT_PROMPT` message to relay server
+2. Relay server routes message to VS Code extension
+3. Extension queries Editor Registry for best available adapter
+4. Adapter executes VS Code command to inject prompt into editor
+5. Extension sends `INJECT_PROMPT_RESPONSE` back to mobile client
+
+#### Architecture Principles
+
+The Editor Adapter System follows these design principles:
+
+- **Editor-Agnostic Core**: No editor-specific logic outside adapter implementations
+- **Capability Honesty**: Adapters only claim capabilities they can actually provide
+- **Fail-Safe Operations**: All operations return error results instead of throwing exceptions
+- **Extensible Design**: New editors can be added without modifying core modules
+- **Transparent Limitations**: Clearly documents what is and isn't possible per editor
+
+#### Troubleshooting
+
+**Prompt injection not working**:
+- Verify an AI editor is installed in VS Code
+- Check VS Code Output panel for CodeLink extension logs
+- Ensure the editor's extension is activated (open its chat panel once)
+- Review the error message in the mobile client response
+
+**No editor detected**:
+- Install at least one supported AI editor (Continue, Kiro, Cursor, or Antigravity)
+- Restart VS Code after installing an editor
+- Check that the editor extension is enabled in VS Code
+- Run "Developer: Show Running Extensions" to verify the editor is active
+
+**Wrong editor selected**:
+- The system automatically selects the editor with the highest sync level
+- Preference order: Continue (full) > Kiro (partial) > Cursor/Antigravity (control-only)
+- To force a specific editor, disable other AI editor extensions
+
+**Command execution fails**:
+- Ensure the AI editor is fully initialized (may take a few seconds after VS Code starts)
+- Check that the editor's chat panel can be opened manually
+- Review VS Code extension logs for detailed error messages
+- Try reloading VS Code window (Ctrl+R / Cmd+R in Extension Development Host)
 
 ### Git Integration & File Diffing
 
