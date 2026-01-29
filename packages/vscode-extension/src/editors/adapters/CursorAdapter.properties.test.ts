@@ -95,12 +95,12 @@ describe('CursorAdapter - Property-Based Tests', () => {
 
         // Property: If canReadChatHistory is false, readChatHistory should not be implemented
         if (!cursorAdapter.capabilities.canReadChatHistory) {
-          expect(cursorAdapter.readChatHistory).toBeUndefined();
+          expect((cursorAdapter as any).readChatHistory).toBeUndefined();
         }
 
         // Property: If canReadDiffArtifacts is false, readDiffArtifacts should not be implemented
         if (!cursorAdapter.capabilities.canReadDiffArtifacts) {
-          expect(cursorAdapter.readDiffArtifacts).toBeUndefined();
+          expect((cursorAdapter as any).readDiffArtifacts).toBeUndefined();
         }
 
         // Property: injectPrompt should always be implemented when canInjectPrompt is true

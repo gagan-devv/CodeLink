@@ -134,7 +134,7 @@ describe('End-to-End Integration Test', () => {
         
         if (message.type === 'SYNC_FULL_CONTEXT') {
           console.log('[E2E] Mobile client received SYNC_FULL_CONTEXT');
-          receivedPayload = message.payload;
+          _receivedPayload = message.payload;
           resolve(message.payload);
         }
       });
@@ -576,5 +576,526 @@ describe('End-to-End Integration Test', () => {
     expect(receivedMessage?.payload.modifiedFile).toBeDefined();
     expect(receivedMessage?.payload.isDirty).toBeDefined();
     expect(receivedMessage?.payload.timestamp).toBeDefined();
+  });
+});
+
+/**
+ * End-to-End Integration Test for WebSocket Prompt Injection
+ * 
+ * This test verifies the complete prompt injection pipeline:
+ * 1. Mobile client sends INJECT_PROMPT message
+ * 2. Relay server routes message to extension client
+ * 3. Extension client processes prompt injection
+ * 4. Extension client sends INJECT_PROMPT_RESPONSE back
+ * 5. Mobile client receives response
+ * 
+ * Requirements: 2.1, 2.4, 2.5
+ */
+describe('WebSocket Prompt Injection Integration Test', () => {
+  let relayServer: SocketIOServer;
+  let extensionClient: ClientSocket;
+  let mobileClient: ClientSocket;
+  const RELAY_PORT = 8082; // Use different port to avoid conflicts
+  const RELAY_URL = `http://localhost:${RELAY_PORT}`;
+
+  beforeAll(async () => {
+    // Start relay server
+    relayServer = startServer(RELAY_PORT);
+    console.log('[E2E-Prompt] Relay server started on port', RELAY_PORT);
+
+    // Wait for server to be ready
+    await new Promise(resolve => setTimeout(resolve, 500));
+  });
+
+  afterAll(async () => {
+    // Clean up relay server
+    if (relayServer) {
+      await new Promise<void>((resolve) => {
+        relayServer.close(() => {
+          console.log('[E2E-Prompt] Relay server closed');
+          resolve();
+        });
+      });
+    }
+  });
+
+  beforeEach(async () => {
+    // Clear client sets
+    mobileClients.clear();
+    extensionClients.clear();
+  });
+
+  afterEach(async () => {
+    // Disconnect clients
+    if (extensionClient?.connected) {
+      extensionClient.disconnect();
+    }
+    if (mobileClient?.connected) {
+      mobileClient.disconnect();
+    }
+
+    // Wait for cleanup
+    await new Promise(resolve => setTimeout(resolve, 100));
+  });
+
+  it('should complete end-to-end prompt injection flow: mobile → relay → extension → mobile', async () => {
+    // Step 1: Connect extension client and register
+    extensionClient = ioClient(RELAY_URL, {
+      reconnectionDelay: 100,
+      reconnectionDelayMax: 500,
+    });
+
+    await new Promise<void>((resolve) => {
+      extensionClient.on('connect', () => {
+        console.log('[E2E-Prompt] Extension client connected');
+        
+        // Send ping to register as extension client
+        const ping = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'ping',
+          source: 'extension',
+        };
+        extensionClient.emit('message', JSON.stringify(ping));
+        
+        // Wait for registration
+        setTimeout(resolve, 100);
+      });
+    });
+
+    // Step 2: Set up extension client to handle INJECT_PROMPT messages
+    // Simulate extension behavior: receive prompt, send response
+    extensionClient.on('message', (data: string) => {
+      const message = JSON.parse(data);
+      console.log('[E2E-Prompt] Extension received message type:', message.type);
+      
+      if (message.type === 'INJECT_PROMPT') {
+        console.log('[E2E-Prompt] Extension processing prompt injection');
+        
+        // Simulate successful prompt injection
+        const response = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'INJECT_PROMPT_RESPONSE',
+          success: true,
+          editorUsed: 'TestEditor',
+          commandUsed: 'test.injectPrompt',
+          originalRequestId: message.id, // Include original request ID
+        };
+        
+        extensionClient.emit('message', JSON.stringify(response));
+        console.log('[E2E-Prompt] Extension sent response');
+      }
+    });
+
+    // Step 3: Connect mobile client and register
+    mobileClient = ioClient(RELAY_URL, {
+      reconnectionDelay: 100,
+      reconnectionDelayMax: 500,
+    });
+
+    await new Promise<void>((resolve) => {
+      mobileClient.on('connect', () => {
+        console.log('[E2E-Prompt] Mobile client connected');
+        
+        // Send ping to register as mobile client
+        const ping = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'ping',
+          source: 'mobile',
+        };
+        mobileClient.emit('message', JSON.stringify(ping));
+        
+        // Wait for registration
+        setTimeout(resolve, 100);
+      });
+    });
+
+    // Step 4: Set up mobile client message listener for response
+    const mobileResponsePromise = new Promise<any>((resolve) => {
+      mobileClient.on('message', (data: string) => {
+        const message = JSON.parse(data);
+        console.log('[E2E-Prompt] Mobile received message type:', message.type);
+        
+        if (message.type === 'INJECT_PROMPT_RESPONSE') {
+          console.log('[E2E-Prompt] Mobile received INJECT_PROMPT_RESPONSE');
+          resolve(message);
+        }
+      });
+    });
+
+    // Step 5: Send INJECT_PROMPT message from mobile
+    const promptMessage = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'INJECT_PROMPT',
+      prompt: 'Test prompt from mobile client',
+    };
+
+    mobileClient.emit('message', JSON.stringify(promptMessage));
+    console.log('[E2E-Prompt] Mobile sent INJECT_PROMPT message');
+
+    // Step 6: Wait for response
+    const response = await Promise.race([
+      mobileResponsePromise,
+      new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout waiting for response')), 3000)
+      ),
+    ]);
+
+    // Step 7: Verify response
+    expect(response).not.toBeNull();
+    expect(response.type).toBe('INJECT_PROMPT_RESPONSE');
+    expect(response.success).toBe(true);
+    expect(response.editorUsed).toBe('TestEditor');
+    expect(response.commandUsed).toBe('test.injectPrompt');
+    expect(response.id).toBeDefined();
+    expect(response.timestamp).toBeGreaterThan(0);
+  });
+
+  it('should handle error when no extension client is connected', async () => {
+    // Step 1: Connect mobile client only (no extension)
+    mobileClient = ioClient(RELAY_URL, {
+      reconnectionDelay: 100,
+      reconnectionDelayMax: 500,
+    });
+
+    await new Promise<void>((resolve) => {
+      mobileClient.on('connect', () => {
+        console.log('[E2E-Prompt] Mobile client connected');
+        
+        // Send ping to register as mobile client
+        const ping = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'ping',
+          source: 'mobile',
+        };
+        mobileClient.emit('message', JSON.stringify(ping));
+        
+        // Wait for registration
+        setTimeout(resolve, 100);
+      });
+    });
+
+    // Step 2: Set up mobile client message listener for error response
+    const mobileResponsePromise = new Promise<any>((resolve) => {
+      mobileClient.on('message', (data: string) => {
+        const message = JSON.parse(data);
+        
+        if (message.type === 'INJECT_PROMPT_RESPONSE') {
+          resolve(message);
+        }
+      });
+    });
+
+    // Step 3: Send INJECT_PROMPT message from mobile
+    const promptMessage = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'INJECT_PROMPT',
+      prompt: 'Test prompt with no extension',
+    };
+
+    mobileClient.emit('message', JSON.stringify(promptMessage));
+    console.log('[E2E-Prompt] Mobile sent INJECT_PROMPT with no extension available');
+
+    // Step 4: Wait for error response
+    const response = await Promise.race([
+      mobileResponsePromise,
+      new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout waiting for error response')), 3000)
+      ),
+    ]);
+
+    // Step 5: Verify error response
+    expect(response).not.toBeNull();
+    expect(response.type).toBe('INJECT_PROMPT_RESPONSE');
+    expect(response.success).toBe(false);
+    expect(response.error).toBeDefined();
+    expect(response.error).toContain('No extension client');
+  });
+
+  it('should handle prompt injection failure from extension', async () => {
+    // Step 1: Connect extension client and register
+    extensionClient = ioClient(RELAY_URL, {
+      reconnectionDelay: 100,
+      reconnectionDelayMax: 500,
+    });
+
+    await new Promise<void>((resolve) => {
+      extensionClient.on('connect', () => {
+        console.log('[E2E-Prompt] Extension client connected');
+        
+        const ping = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'ping',
+          source: 'extension',
+        };
+        extensionClient.emit('message', JSON.stringify(ping));
+        
+        setTimeout(resolve, 100);
+      });
+    });
+
+    // Step 2: Set up extension client to simulate injection failure
+    extensionClient.on('message', (data: string) => {
+      const message = JSON.parse(data);
+      
+      if (message.type === 'INJECT_PROMPT') {
+        console.log('[E2E-Prompt] Extension simulating injection failure');
+        
+        // Simulate failed prompt injection
+        const response = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'INJECT_PROMPT_RESPONSE',
+          success: false,
+          error: 'Command execution failed: editor not responding',
+          editorUsed: 'TestEditor',
+          commandUsed: 'test.injectPrompt',
+          originalRequestId: message.id,
+        };
+        
+        extensionClient.emit('message', JSON.stringify(response));
+      }
+    });
+
+    // Step 3: Connect mobile client and register
+    mobileClient = ioClient(RELAY_URL, {
+      reconnectionDelay: 100,
+      reconnectionDelayMax: 500,
+    });
+
+    await new Promise<void>((resolve) => {
+      mobileClient.on('connect', () => {
+        console.log('[E2E-Prompt] Mobile client connected');
+        
+        const ping = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'ping',
+          source: 'mobile',
+        };
+        mobileClient.emit('message', JSON.stringify(ping));
+        
+        setTimeout(resolve, 100);
+      });
+    });
+
+    // Step 4: Set up mobile client message listener
+    const mobileResponsePromise = new Promise<any>((resolve) => {
+      mobileClient.on('message', (data: string) => {
+        const message = JSON.parse(data);
+        
+        if (message.type === 'INJECT_PROMPT_RESPONSE') {
+          resolve(message);
+        }
+      });
+    });
+
+    // Step 5: Send INJECT_PROMPT message from mobile
+    const promptMessage = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'INJECT_PROMPT',
+      prompt: 'Test prompt that will fail',
+    };
+
+    mobileClient.emit('message', JSON.stringify(promptMessage));
+
+    // Step 6: Wait for failure response
+    const response = await Promise.race([
+      mobileResponsePromise,
+      new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout waiting for response')), 3000)
+      ),
+    ]);
+
+    // Step 7: Verify failure response
+    expect(response).not.toBeNull();
+    expect(response.type).toBe('INJECT_PROMPT_RESPONSE');
+    expect(response.success).toBe(false);
+    expect(response.error).toBeDefined();
+    expect(response.error).toContain('Command execution failed');
+    expect(response.editorUsed).toBe('TestEditor');
+    expect(response.commandUsed).toBe('test.injectPrompt');
+  });
+
+  it('should handle multiple prompt injections sequentially', async () => {
+    // Step 1: Connect extension client
+    extensionClient = ioClient(RELAY_URL);
+
+    await new Promise<void>((resolve) => {
+      extensionClient.on('connect', () => {
+        const ping = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'ping',
+          source: 'extension',
+        };
+        extensionClient.emit('message', JSON.stringify(ping));
+        setTimeout(resolve, 100);
+      });
+    });
+
+    // Set up extension to handle prompts
+    let promptCount = 0;
+    extensionClient.on('message', (data: string) => {
+      const message = JSON.parse(data);
+      
+      if (message.type === 'INJECT_PROMPT') {
+        promptCount++;
+        const response = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'INJECT_PROMPT_RESPONSE',
+          success: true,
+          editorUsed: 'TestEditor',
+          commandUsed: `test.injectPrompt.${promptCount}`,
+          originalRequestId: message.id,
+        };
+        
+        extensionClient.emit('message', JSON.stringify(response));
+      }
+    });
+
+    // Step 2: Connect mobile client
+    mobileClient = ioClient(RELAY_URL);
+
+    await new Promise<void>((resolve) => {
+      mobileClient.on('connect', () => {
+        const ping = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'ping',
+          source: 'mobile',
+        };
+        mobileClient.emit('message', JSON.stringify(ping));
+        setTimeout(resolve, 100);
+      });
+    });
+
+    // Step 3: Send multiple prompts and collect responses
+    const responses: any[] = [];
+    const responsePromises: Promise<any>[] = [];
+
+    for (let i = 0; i < 3; i++) {
+      const responsePromise = new Promise<any>((resolve) => {
+        const handler = (data: string) => {
+          const message = JSON.parse(data);
+          if (message.type === 'INJECT_PROMPT_RESPONSE' && responses.length === i) {
+            responses.push(message);
+            resolve(message);
+          }
+        };
+        mobileClient.on('message', handler);
+      });
+
+      responsePromises.push(responsePromise);
+
+      const promptMessage = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: 'INJECT_PROMPT',
+        prompt: `Test prompt ${i + 1}`,
+      };
+
+      mobileClient.emit('message', JSON.stringify(promptMessage));
+      
+      // Wait a bit between prompts
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Wait for all responses
+    await Promise.all(responsePromises);
+
+    // Verify all responses
+    expect(responses).toHaveLength(3);
+    responses.forEach((response, index) => {
+      expect(response.success).toBe(true);
+      expect(response.editorUsed).toBe('TestEditor');
+    });
+  });
+
+  it('should verify prompt injection message structure', async () => {
+    // Connect clients
+    extensionClient = ioClient(RELAY_URL);
+    mobileClient = ioClient(RELAY_URL);
+
+    await Promise.all([
+      new Promise<void>((resolve) => {
+        extensionClient.on('connect', () => {
+          const ping = {
+            id: crypto.randomUUID(),
+            timestamp: Date.now(),
+            type: 'ping',
+            source: 'extension',
+          };
+          extensionClient.emit('message', JSON.stringify(ping));
+          setTimeout(resolve, 100);
+        });
+      }),
+      new Promise<void>((resolve) => {
+        mobileClient.on('connect', () => {
+          const ping = {
+            id: crypto.randomUUID(),
+            timestamp: Date.now(),
+            type: 'ping',
+            source: 'mobile',
+          };
+          mobileClient.emit('message', JSON.stringify(ping));
+          setTimeout(resolve, 100);
+        });
+      }),
+    ]);
+
+    // Capture the message received by extension
+    const extensionMessagePromise = new Promise<any>((resolve) => {
+      extensionClient.on('message', (data: string) => {
+        const message = JSON.parse(data);
+        if (message.type === 'INJECT_PROMPT') {
+          resolve(message);
+          
+          // Send response
+          const response = {
+            id: crypto.randomUUID(),
+            timestamp: Date.now(),
+            type: 'INJECT_PROMPT_RESPONSE',
+            success: true,
+            editorUsed: 'TestEditor',
+            commandUsed: 'test.command',
+            originalRequestId: message.id,
+          };
+          extensionClient.emit('message', JSON.stringify(response));
+        }
+      });
+    });
+
+    // Send prompt from mobile
+    const promptMessage = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'INJECT_PROMPT',
+      prompt: 'Verify message structure',
+    };
+
+    mobileClient.emit('message', JSON.stringify(promptMessage));
+
+    // Verify message structure received by extension
+    const receivedMessage = await Promise.race([
+      extensionMessagePromise,
+      new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 2000)
+      ),
+    ]);
+
+    expect(receivedMessage).not.toBeNull();
+    expect(receivedMessage.id).toBeDefined();
+    expect(receivedMessage.timestamp).toBeDefined();
+    expect(receivedMessage.type).toBe('INJECT_PROMPT');
+    expect(receivedMessage.prompt).toBe('Verify message structure');
   });
 });

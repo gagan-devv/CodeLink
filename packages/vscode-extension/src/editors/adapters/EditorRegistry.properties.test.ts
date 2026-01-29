@@ -76,15 +76,15 @@ describe('EditorRegistry - Property-Based Tests', () => {
       .array(
         fc
           .tuple(fc.string({ minLength: 1, maxLength: 10 }), syncLevelArb)
-          .map(([id, syncLevel], index) =>
-            createAdapter(`adapter-${id}-${index}`, syncLevel, true)
+          .map(([id, syncLevel]: [string, EditorCapabilities['syncLevel']]) =>
+            createAdapter(`adapter-${id}`, syncLevel, true)
           ),
         { minLength: 1, maxLength: 10 }
       )
-      .map((adapters) => {
+      .map((adapters: IEditorAdapter[]) => {
         // Ensure unique IDs
         const seen = new Set<string>();
-        return adapters.filter((adapter) => {
+        return adapters.filter((adapter: IEditorAdapter) => {
           if (seen.has(adapter.editorId)) {
             return false;
           }
@@ -92,14 +92,14 @@ describe('EditorRegistry - Property-Based Tests', () => {
           return true;
         });
       })
-      .filter((adapters) => adapters.length > 0);
+      .filter((adapters: IEditorAdapter[]) => adapters.length > 0);
 
     await fc.assert(
-      fc.asyncProperty(adaptersArb, async (adapters) => {
+      fc.asyncProperty(adaptersArb, async (adapters: IEditorAdapter[]) => {
         const testRegistry = new EditorRegistry();
 
         // Register all adapters
-        adapters.forEach((adapter) => testRegistry.register(adapter));
+        adapters.forEach((adapter: IEditorAdapter) => testRegistry.register(adapter));
 
         // Get best adapter
         const best = await testRegistry.getBestAdapter();
@@ -120,7 +120,7 @@ describe('EditorRegistry - Property-Based Tests', () => {
 
           const bestPriority = syncLevelPriority[best.capabilities.syncLevel];
 
-          adapters.forEach((adapter) => {
+          adapters.forEach((adapter: IEditorAdapter) => {
             const adapterPriority =
               syncLevelPriority[adapter.capabilities.syncLevel];
             expect(bestPriority).toBeGreaterThanOrEqual(adapterPriority);

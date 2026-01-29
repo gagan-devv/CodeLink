@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as zlib from 'zlib';
+import * as crypto from 'crypto';
 import { promisify } from 'util';
-import { SyncFullContextMessage, FileContextPayload } from '@codelink/protocol';
+import { SyncFullContextMessage, FileContextPayload, InjectPromptMessage, InjectPromptResponseMessage, ProtocolMessage } from '@codelink/protocol';
 import { FileWatcher } from './watcher/FileWatcher';
 import { GitIntegrationModuleImpl } from './git/GitIntegrationModule';
 import { DiffGeneratorImpl } from './diff/DiffGenerator';
@@ -119,6 +120,9 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
   wsClient.connect(relayServerUrl);
   outputChannel.appendLine(`WebSocket client connecting to ${relayServerUrl}`);
 
+  // Register handler for incoming messages (e.g., INJECT_PROMPT from mobile)
+  wsClient.onMessage(handleIncomingMessage);
+
   // Initialize File Watcher
   fileWatcher = new FileWatcher();
   fileWatcher.onFileChanged = handleFileChanged;
@@ -136,6 +140,110 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
       }
     },
   });
+}
+
+/**
+ * Handle incoming messages from the WebSocket (e.g., from mobile client)
+ */
+async function handleIncomingMessage(message: ProtocolMessage): Promise<void> {
+  try {
+    outputChannel.appendLine(`[INFO] Received message type: ${message.type}`);
+
+    if (message.type === 'INJECT_PROMPT') {
+      await handlePromptInjection(message as InjectPromptMessage);
+    }
+    // Add handlers for other message types as needed
+  } catch (error) {
+    outputChannel.appendLine(`[ERROR] Error handling incoming message: ${error}`);
+    console.error('Error handling incoming message:', error);
+  }
+}
+
+/**
+ * Handle prompt injection request from mobile client
+ */
+async function handlePromptInjection(message: InjectPromptMessage): Promise<void> {
+  const startTime = Date.now();
+  outputChannel.appendLine(`[INFO] Handling prompt injection: "${message.prompt.substring(0, 50)}..."`);
+
+  try {
+    // Get the best available editor adapter
+    const adapter = await editorRegistry.getBestAdapter();
+
+    if (!adapter) {
+      // No editor available - send error response
+      const errorResponse: InjectPromptResponseMessage = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: 'INJECT_PROMPT_RESPONSE',
+        success: false,
+        error: 'No AI editor is installed. Please install Continue, Kiro, Cursor, or Antigravity.',
+        originalRequestId: message.id,
+      };
+
+      wsClient.send(errorResponse);
+      outputChannel.appendLine(`[ERROR] No AI editor available for prompt injection`);
+      return;
+    }
+
+    outputChannel.appendLine(`[INFO] Using editor: ${adapter.editorName} (${adapter.capabilities.syncLevel} sync)`);
+
+    // Check if the adapter supports prompt injection
+    if (!adapter.capabilities.canInjectPrompt) {
+      const errorResponse: InjectPromptResponseMessage = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: 'INJECT_PROMPT_RESPONSE',
+        success: false,
+        error: `Editor ${adapter.editorName} does not support prompt injection`,
+        editorUsed: adapter.editorName,
+        originalRequestId: message.id,
+      };
+
+      wsClient.send(errorResponse);
+      outputChannel.appendLine(`[ERROR] Editor ${adapter.editorName} does not support prompt injection`);
+      return;
+    }
+
+    // Inject the prompt
+    const result = await adapter.injectPrompt(message.prompt);
+    const elapsed = Date.now() - startTime;
+
+    // Send response back to mobile client
+    const response: InjectPromptResponseMessage = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'INJECT_PROMPT_RESPONSE',
+      success: result.success,
+      error: result.error,
+      editorUsed: adapter.editorName,
+      commandUsed: result.commandUsed,
+      originalRequestId: message.id,
+    };
+
+    wsClient.send(response);
+
+    if (result.success) {
+      outputChannel.appendLine(`[INFO] Prompt injection successful (${elapsed}ms) using ${result.commandUsed}`);
+    } else {
+      outputChannel.appendLine(`[ERROR] Prompt injection failed (${elapsed}ms): ${result.error}`);
+    }
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    
+    // Send error response
+    const errorResponse: InjectPromptResponseMessage = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'INJECT_PROMPT_RESPONSE',
+      success: false,
+      error: `Unexpected error during prompt injection: ${error}`,
+      originalRequestId: message.id,
+    };
+
+    wsClient.send(errorResponse);
+    outputChannel.appendLine(`[ERROR] Unexpected error during prompt injection (${elapsed}ms): ${error}`);
+  }
 }
 
 /**

@@ -1,5 +1,10 @@
 import { io, Socket } from 'socket.io-client';
-import { ProtocolMessage } from '@codelink/protocol';
+import { ProtocolMessage, InjectPromptMessage } from '@codelink/protocol';
+
+/**
+ * Message handler callback type for incoming messages
+ */
+export type MessageHandler = (message: ProtocolMessage) => void | Promise<void>;
 
 /**
  * WebSocketClient manages the connection to the relay server and handles
@@ -13,6 +18,7 @@ export class WebSocketClient {
   private readonly maxReconnectAttempts = 10;
   private readonly baseRetryDelay = 1000; // 1 second
   private isConnecting = false;
+  private messageHandlers: MessageHandler[] = [];
 
   /**
    * Initialize and connect to the relay server
@@ -68,6 +74,46 @@ export class WebSocketClient {
     this.socket.on('error', (error) => {
       console.error('WebSocket error:', error);
     });
+
+    // Handle incoming messages
+    this.socket.on('message', (data: string) => {
+      try {
+        const message = JSON.parse(data) as ProtocolMessage;
+        this.handleIncomingMessage(message);
+      } catch (error) {
+        console.error('Error parsing incoming message:', error);
+      }
+    });
+  }
+
+  /**
+   * Handle incoming messages by notifying all registered handlers
+   */
+  private handleIncomingMessage(message: ProtocolMessage): void {
+    this.messageHandlers.forEach(handler => {
+      try {
+        handler(message);
+      } catch (error) {
+        console.error('Error in message handler:', error);
+      }
+    });
+  }
+
+  /**
+   * Register a message handler for incoming messages
+   */
+  public onMessage(handler: MessageHandler): void {
+    this.messageHandlers.push(handler);
+  }
+
+  /**
+   * Remove a message handler
+   */
+  public offMessage(handler: MessageHandler): void {
+    const index = this.messageHandlers.indexOf(handler);
+    if (index !== -1) {
+      this.messageHandlers.splice(index, 1);
+    }
   }
 
   /**

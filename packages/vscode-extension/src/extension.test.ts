@@ -364,13 +364,13 @@ describe('Extension Activation with Editor Registry', () => {
     mockContext = {
       subscriptions: [],
       globalState: {
-        get: vi.fn(),
+        get: vi.fn() as any,
         update: vi.fn(),
         keys: vi.fn(() => []),
         setKeysForSync: vi.fn(),
       },
       workspaceState: {
-        get: vi.fn(),
+        get: vi.fn() as any,
         update: vi.fn(),
         keys: vi.fn(() => []),
       },
