@@ -10,6 +10,8 @@ export enum MessageType {
   PING = 'PING',
   PONG = 'PONG',
   SYNC_FULL_CONTEXT = 'SYNC_FULL_CONTEXT',
+  INJECT_PROMPT = 'INJECT_PROMPT',
+  INJECT_PROMPT_RESPONSE = 'INJECT_PROMPT_RESPONSE',
 }
 
 // Example: Ping message from extension to relay
@@ -39,5 +41,21 @@ export interface SyncFullContextMessage extends Message {
   payload: FileContextPayload;
 }
 
+// Inject prompt message from mobile to extension
+export interface InjectPromptMessage extends Message {
+  type: 'INJECT_PROMPT';
+  prompt: string;
+}
+
+// Inject prompt response from extension to mobile
+export interface InjectPromptResponseMessage extends Message {
+  type: 'INJECT_PROMPT_RESPONSE';
+  success: boolean;
+  error?: string;
+  editorUsed?: string;
+  commandUsed?: string;
+  originalRequestId?: string; // ID of the original INJECT_PROMPT message
+}
+
 // Union type for all messages
-export type ProtocolMessage = PingMessage | PongMessage | SyncFullContextMessage;
+export type ProtocolMessage = PingMessage | PongMessage | SyncFullContextMessage | InjectPromptMessage | InjectPromptResponseMessage;
