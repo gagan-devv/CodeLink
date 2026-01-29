@@ -6,6 +6,11 @@ import { FileWatcher } from './watcher/FileWatcher';
 import { GitIntegrationModuleImpl } from './git/GitIntegrationModule';
 import { DiffGeneratorImpl } from './diff/DiffGenerator';
 import { WebSocketClient } from './websocket/WebSocketClient';
+import { EditorRegistry } from './editors/adapters/EditorRegistry';
+import { ContinueAdapter } from './editors/adapters/ContinueAdapter';
+import { KiroAdapter } from './editors/adapters/KiroAdapter';
+import { CursorAdapter } from './editors/adapters/CursorAdapter';
+import { AntigravityAdapter } from './editors/adapters/AntigravityAdapter';
 
 // Promisify zlib functions
 const gzip = promisify(zlib.gzip);
@@ -18,6 +23,7 @@ let fileWatcher: FileWatcher;
 let gitModule: GitIntegrationModuleImpl;
 let diffGenerator: DiffGeneratorImpl;
 let wsClient: WebSocketClient;
+let editorRegistry: EditorRegistry;
 let outputChannel: vscode.OutputChannel;
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -54,6 +60,44 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
   outputChannel.appendLine(`Workspace root: ${workspaceRoot}`);
 
+  // Initialize Editor Registry
+  editorRegistry = new EditorRegistry();
+  
+  // Register all editor adapters
+  editorRegistry.register(new ContinueAdapter());
+  editorRegistry.register(new KiroAdapter());
+  editorRegistry.register(new CursorAdapter());
+  editorRegistry.register(new AntigravityAdapter());
+  
+  outputChannel.appendLine('Editor registry initialized with 4 adapters');
+  
+  // Run initial editor detection
+  try {
+    const detectionResults = await editorRegistry.detectAll();
+    outputChannel.appendLine('Editor detection completed:');
+    
+    for (const [editorId, result] of detectionResults) {
+      if (result.isInstalled) {
+        outputChannel.appendLine(`  - ${editorId}: installed (${result.availableCommands?.length || 0} commands)`);
+      } else {
+        outputChannel.appendLine(`  - ${editorId}: not installed`);
+      }
+    }
+    
+    // Log the best available adapter
+    const bestAdapter = await editorRegistry.getBestAdapter();
+    if (bestAdapter) {
+      outputChannel.appendLine(`Best available editor: ${bestAdapter.editorName} (${bestAdapter.capabilities.syncLevel} sync)`);
+    } else {
+      outputChannel.appendLine('No AI editor detected');
+    }
+  } catch (error) {
+    outputChannel.appendLine(`Error during editor detection: ${error}`);
+  }
+  
+  // Store registry in extension context for access by other modules
+  context.globalState.update('editorRegistry', editorRegistry);
+
   // Initialize Git Integration Module
   gitModule = new GitIntegrationModuleImpl();
   const gitInitialized = await gitModule.initialize(workspaceRoot);
@@ -86,6 +130,10 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
     dispose: () => {
       fileWatcher.dispose();
       wsClient.disconnect();
+      // Clear editor registry cache on disposal
+      if (editorRegistry) {
+        editorRegistry.clearCache();
+      }
     },
   });
 }
@@ -184,9 +232,34 @@ export function deactivate() {
   if (wsClient) {
     wsClient.disconnect();
   }
+  if (editorRegistry) {
+    editorRegistry.clearCache();
+  }
   if (outputChannel) {
     outputChannel.appendLine('CodeLink extension deactivated');
   }
+}
+
+/**
+ * Get the editor registry instance.
+ * 
+ * This function provides access to the editor registry for other modules
+ * that need to interact with AI editors (e.g., WebSocket handlers for
+ * mobile prompt injection).
+ * 
+ * @returns The editor registry instance, or undefined if not initialized
+ */
+export function getEditorRegistry(): EditorRegistry | undefined {
+  return editorRegistry;
+}
+
+/**
+ * Reset the editor registry (for testing purposes only).
+ * 
+ * @internal
+ */
+export function resetEditorRegistry(): void {
+  editorRegistry = undefined as any;
 }
 
 /**
