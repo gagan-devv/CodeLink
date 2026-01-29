@@ -56,8 +56,23 @@ export class ContinueAdapter implements IEditorAdapter {
       };
     } catch (error) {
       // Safety: Never throw, always return error result with context
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      // Handle any type of error safely, including objects with malformed toString
+      let errorMessage: string;
+      try {
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        } else if (error && typeof error === 'object') {
+          // Safely handle objects that might have broken toString
+          errorMessage = JSON.stringify(error);
+        } else {
+          errorMessage = String(error);
+        }
+      } catch {
+        // If even JSON.stringify fails, use a fallback
+        errorMessage = 'Unknown error occurred';
+      }
 
       return {
         success: false,
