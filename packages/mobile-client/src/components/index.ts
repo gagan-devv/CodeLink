@@ -7,3 +7,5 @@ export { DiffViewer } from './DiffViewer';
 export type { DiffViewerProps } from './DiffViewer';
 export { PromptComposer } from './PromptComposer';
 export type { PromptComposerProps } from './PromptComposer';
+export { PromptResponseDisplay } from './PromptResponseDisplay';
+export type { PromptResponseDisplayProps } from './PromptResponseDisplay';
