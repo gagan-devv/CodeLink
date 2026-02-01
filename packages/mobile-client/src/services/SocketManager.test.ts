@@ -294,7 +294,8 @@ describe('SocketManager Unit Tests', () => {
       
       socketManager.sendMessage(message);
       
-      expect(mockSocket.emit).toHaveBeenCalledWith('message', message);
+      // Messages are now sent as JSON strings
+      expect(mockSocket.emit).toHaveBeenCalledWith('message', JSON.stringify(message));
     });
 
     it('should receive and handle incoming messages', () => {
@@ -319,7 +320,8 @@ describe('SocketManager Unit Tests', () => {
       };
       
       if (socketMessageHandler) {
-        socketMessageHandler(testMessage);
+        // Messages are now received as JSON strings
+        socketMessageHandler(JSON.stringify(testMessage));
       }
       
       expect(messageHandler).toHaveBeenCalledWith(testMessage);
@@ -345,7 +347,8 @@ describe('SocketManager Unit Tests', () => {
       };
       
       if (socketMessageHandler) {
-        socketMessageHandler(testMessage);
+        // Messages are now received as JSON strings
+        socketMessageHandler(JSON.stringify(testMessage));
       }
       
       expect(handler1).toHaveBeenCalledWith(testMessage);

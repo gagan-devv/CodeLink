@@ -9,3 +9,4 @@ export { PromptComposer } from './PromptComposer';
 export type { PromptComposerProps } from './PromptComposer';
 export { PromptResponseDisplay } from './PromptResponseDisplay';
 export type { PromptResponseDisplayProps } from './PromptResponseDisplay';
+export { ErrorBoundary } from './ErrorBoundary';

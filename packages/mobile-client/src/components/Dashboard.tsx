@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Button, Card } from 'react-native-paper';
 import { ConnectionStatus } from '../hooks/useConnection';
+import { useOrientation } from '../hooks';
 
 /**
  * Dashboard component props
@@ -14,17 +15,16 @@ export interface DashboardProps {
 
 /**
  * Dashboard component displays connection status and navigation buttons
- * Supports both portrait and landscape orientations
+ * Supports both portrait and landscape orientations with responsive layout
  * 
- * Requirements: 6.2, 6.5, 8.2, 8.3, 10.1, 10.2
+ * Requirements: 6.2, 6.5, 8.2, 8.3, 10.1, 10.2, 10.3, 10.4
  */
 export const Dashboard: React.FC<DashboardProps> = ({
   connectionStatus,
   onNavigateToPrompts,
   onNavigateToDiffs
 }) => {
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
+  const { isLandscape } = useOrientation();
 
   /**
    * Get status indicator color based on connection status

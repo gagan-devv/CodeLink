@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { FileContextPayload } from '@codelink/protocol';
+import { useOrientation } from '../hooks';
 
 /**
  * DiffViewer component props
@@ -25,8 +26,9 @@ interface DiffLine {
 /**
  * DiffViewer component displays unified file diffs in React Native
  * Supports both portrait and landscape orientations with responsive layout
+ * Provides horizontal and vertical scrolling for long content
  * 
- * Requirements: 6.1, 7.2, 7.4, 7.5, 10.1, 10.2
+ * Requirements: 6.1, 7.2, 7.4, 7.5, 10.1, 10.2, 10.3, 10.4, 10.5
  */
 export const DiffViewer: React.FC<DiffViewerProps> = ({
   payload,
@@ -35,8 +37,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 }) => {
   const { fileName, originalFile, modifiedFile } = payload;
   const [isRendering, setIsRendering] = useState(true);
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
+  const { isLandscape } = useOrientation();
 
   // Check if this is a new file (no original content)
   const isNewFile = originalFile === '';

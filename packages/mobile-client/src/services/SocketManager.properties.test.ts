@@ -82,8 +82,8 @@ describe('SocketManager Property-Based Tests', () => {
             // Send message should not throw
             expect(() => socketManager.sendMessage(message)).not.toThrow();
 
-            // Verify emit was called with the message
-            expect(mockSocket.emit).toHaveBeenCalledWith('message', message);
+            // Verify emit was called with the message as JSON string
+            expect(mockSocket.emit).toHaveBeenCalledWith('message', JSON.stringify(message));
           }
         ),
         { numRuns: 100 }
@@ -114,12 +114,12 @@ describe('SocketManager Property-Based Tests', () => {
             // Verify all messages were sent
             expect(mockSocket.emit).toHaveBeenCalledTimes(messages.length);
 
-            // Verify each message was sent correctly
+            // Verify each message was sent correctly as JSON string
             messages.forEach((msg, index) => {
               expect(mockSocket.emit).toHaveBeenNthCalledWith(
                 index + 1,
                 'message',
-                msg
+                JSON.stringify(msg)
               );
             });
           }

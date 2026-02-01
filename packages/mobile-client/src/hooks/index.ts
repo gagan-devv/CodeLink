@@ -8,3 +8,9 @@ export {
   type ConnectionContextValue,
   type ConnectionStatusProviderProps
 } from './useConnection';
+
+export {
+  useOrientation,
+  type Orientation,
+  type UseOrientationResult
+} from './useOrientation';

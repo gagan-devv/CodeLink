@@ -70,7 +70,8 @@ export class SocketManagerImpl implements SocketManager {
 
         this.socket.on('message', (data: unknown) => {
           try {
-            const message = data as ProtocolMessage;
+            // Parse JSON string from relay server
+            const message = JSON.parse(data as string) as ProtocolMessage;
             this.notifyMessageHandlers(message);
           } catch (error) {
             const err = error instanceof Error ? error : new Error('Message parsing failed');
@@ -180,7 +181,7 @@ export class SocketManagerImpl implements SocketManager {
     }
 
     try {
-      this.socket!.emit('message', message);
+      this.socket!.emit('message', JSON.stringify(message));
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Failed to send message');
       this.notifyErrorHandlers(err);
