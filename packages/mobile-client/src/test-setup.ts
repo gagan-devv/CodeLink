@@ -63,5 +63,13 @@ vi.mock('react-native-paper', () => {
       return React.createElement('div', rest, children);
     },
     TextInput: (props: any) => React.createElement('input', props),
+    Text: (props: any) => {
+      const { children, ...rest } = props;
+      return React.createElement('span', rest, children);
+    },
+    HelperText: (props: any) => {
+      const { children, ...rest } = props;
+      return React.createElement('span', rest, children);
+    },
   };
 });
