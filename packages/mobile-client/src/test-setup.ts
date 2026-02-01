@@ -2,7 +2,7 @@
 // This file is executed before running tests
 
 import { vi } from 'vitest';
-import React from 'react';
+import * as React from 'react';
 
 // Mock React Native modules with proper JSX components
 vi.mock('react-native', () => {
@@ -10,19 +10,23 @@ vi.mock('react-native', () => {
     StyleSheet: {
       create: (styles: any) => styles,
     },
-    View: ({ children, style, ...props }: any) => (
-      React.createElement('div', { ...props, style }, children)
-    ),
-    Text: ({ children, style, numberOfLines, onPress, ...props }: any) => (
-      React.createElement(onPress ? 'button' : 'span', { ...props, style, onClick: onPress }, children)
-    ),
-    ScrollView: ({ children, horizontal, style, contentContainerStyle, ...props }: any) => (
-      React.createElement('div', { ...props, style: { ...style, ...contentContainerStyle } }, children)
-    ),
+    View: (props: any) => {
+      const { children, ...rest } = props;
+      return React.createElement('div', rest, children);
+    },
+    Text: (props: any) => {
+      const { children, onPress, ...rest } = props;
+      return React.createElement(onPress ? 'button' : 'span', { ...rest, onClick: onPress }, children);
+    },
+    ScrollView: (props: any) => {
+      const { children, style, contentContainerStyle, ...rest } = props;
+      return React.createElement('div', { ...rest, style: { ...style, ...contentContainerStyle } }, children);
+    },
     TextInput: (props: any) => React.createElement('input', props),
-    Pressable: ({ children, onPress, style, ...props }: any) => (
-      React.createElement('button', { ...props, style, onClick: onPress }, children)
-    ),
+    Pressable: (props: any) => {
+      const { children, onPress, ...rest } = props;
+      return React.createElement('button', { ...rest, onClick: onPress }, children);
+    },
     useWindowDimensions: vi.fn(() => ({ width: 375, height: 667 })),
     Platform: {
       OS: 'ios',
@@ -34,25 +38,30 @@ vi.mock('react-native', () => {
 // Mock React Native Paper
 vi.mock('react-native-paper', () => {
   return {
-    Button: ({ children, onPress, ...props }: any) => (
-      React.createElement('button', { ...props, onClick: onPress }, children)
-    ),
+    Button: (props: any) => {
+      const { children, onPress, ...rest } = props;
+      return React.createElement('button', { ...rest, onClick: onPress }, children);
+    },
     Card: Object.assign(
-      ({ children, ...props }: any) => (
-        React.createElement('div', { ...props, className: 'card' }, children)
-      ),
+      (props: any) => {
+        const { children, ...rest } = props;
+        return React.createElement('div', { ...rest, className: 'card' }, children);
+      },
       {
-        Content: ({ children, ...props }: any) => (
-          React.createElement('div', props, children)
-        ),
+        Content: (props: any) => {
+          const { children, ...rest } = props;
+          return React.createElement('div', rest, children);
+        },
       }
     ),
-    IconButton: ({ icon, onPress, ...props }: any) => (
-      React.createElement('button', { ...props, onClick: onPress, 'data-icon': icon })
-    ),
-    Snackbar: ({ children, ...props }: any) => (
-      React.createElement('div', props, children)
-    ),
+    IconButton: (props: any) => {
+      const { icon, onPress, ...rest } = props;
+      return React.createElement('button', { ...rest, onClick: onPress, 'data-icon': icon });
+    },
+    Snackbar: (props: any) => {
+      const { children, ...rest } = props;
+      return React.createElement('div', rest, children);
+    },
     TextInput: (props: any) => React.createElement('input', props),
   };
 });
