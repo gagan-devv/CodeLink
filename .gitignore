@@ -6,3 +6,7 @@ dist/
 *.vsix
 .kiro
 .vscode
+
+docs/
+MANUAL_TESTING_EDITOR_ADAPTERS.md
+QUICK_START_TESTING.md
