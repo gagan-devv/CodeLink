@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, renderHook, waitFor } from '@testing-library/react';
+import React from 'react';
 import { SocketManagerImpl } from '../services/SocketManager';
 import { ConnectionStatusProvider, useConnection } from './useConnection';
 
@@ -40,28 +42,31 @@ describe('ConnectionStatusProvider Unit Tests', () => {
     });
 
     it('should accept children and serverUrl props', () => {
-      const provider = ConnectionStatusProvider({
-        children: null,
-        serverUrl: 'ws://localhost:3000'
-      });
+      const { container } = render(
+        <ConnectionStatusProvider serverUrl="ws://localhost:3000">
+          <div>Test Child</div>
+        </ConnectionStatusProvider>
+      );
       
-      expect(provider).toBeDefined();
+      expect(container).toBeDefined();
+      expect(container.textContent).toBe('Test Child');
     });
 
     it('should use default server URL when not provided', () => {
-      const provider = ConnectionStatusProvider({
-        children: null
-      });
+      const { container } = render(
+        <ConnectionStatusProvider>
+          <div>Test Child</div>
+        </ConnectionStatusProvider>
+      );
       
-      expect(provider).toBeDefined();
+      expect(container).toBeDefined();
     });
   });
 
   describe('useConnection hook', () => {
     it('should throw error when used outside provider', () => {
       expect(() => {
-        // Simulate calling the hook outside of provider context
-        useConnection();
+        renderHook(() => useConnection());
       }).toThrow('useConnection must be used within ConnectionStatusProvider');
     });
   });
@@ -70,35 +75,47 @@ describe('ConnectionStatusProvider Unit Tests', () => {
     it('should initialize SocketManager on mount', async () => {
       const { io } = await import('socket.io-client');
       
-      // Create provider (simulates mounting)
-      ConnectionStatusProvider({
-        children: null,
-        serverUrl: 'ws://test:3000'
-      });
+      // Render provider (simulates mounting)
+      render(
+        <ConnectionStatusProvider serverUrl="ws://test:3000">
+          <div>Test</div>
+        </ConnectionStatusProvider>
+      );
       
       // Verify io was called to create socket
-      expect(io).toHaveBeenCalled();
+      await waitFor(() => {
+        expect(io).toHaveBeenCalled();
+      });
     });
 
     it('should register event handlers on SocketManager', async () => {
-      // Create provider
-      ConnectionStatusProvider({
-        children: null,
-        serverUrl: 'ws://test:3000'
-      });
+      // Render provider
+      render(
+        <ConnectionStatusProvider serverUrl="ws://test:3000">
+          <div>Test</div>
+        </ConnectionStatusProvider>
+      );
       
       // Verify event handlers were registered
-      expect(mockSocket.on).toHaveBeenCalledWith('connect', expect.any(Function));
-      expect(mockSocket.on).toHaveBeenCalledWith('disconnect', expect.any(Function));
-      expect(mockSocket.on).toHaveBeenCalledWith('connect_error', expect.any(Function));
-      expect(mockSocket.on).toHaveBeenCalledWith('error', expect.any(Function));
+      await waitFor(() => {
+        expect(mockSocket.on).toHaveBeenCalledWith('connect', expect.any(Function));
+        expect(mockSocket.on).toHaveBeenCalledWith('disconnect', expect.any(Function));
+        expect(mockSocket.on).toHaveBeenCalledWith('connect_error', expect.any(Function));
+        expect(mockSocket.on).toHaveBeenCalledWith('error', expect.any(Function));
+      });
     });
 
     it('should handle connect event', async () => {
-      // Create provider
-      ConnectionStatusProvider({
-        children: null,
-        serverUrl: 'ws://test:3000'
+      // Render provider
+      render(
+        <ConnectionStatusProvider serverUrl="ws://test:3000">
+          <div>Test</div>
+        </ConnectionStatusProvider>
+      );
+      
+      // Wait for handlers to be registered
+      await waitFor(() => {
+        expect(mockSocket.on).toHaveBeenCalled();
       });
       
       // Get the connect handler
@@ -119,10 +136,16 @@ describe('ConnectionStatusProvider Unit Tests', () => {
     });
 
     it('should handle disconnect event', async () => {
-      // Create provider
-      ConnectionStatusProvider({
-        children: null,
-        serverUrl: 'ws://test:3000'
+      // Render provider
+      render(
+        <ConnectionStatusProvider serverUrl="ws://test:3000">
+          <div>Test</div>
+        </ConnectionStatusProvider>
+      );
+      
+      // Wait for handlers to be registered
+      await waitFor(() => {
+        expect(mockSocket.on).toHaveBeenCalled();
       });
       
       // Get the disconnect handler
@@ -143,10 +166,16 @@ describe('ConnectionStatusProvider Unit Tests', () => {
     });
 
     it('should handle error event', async () => {
-      // Create provider
-      ConnectionStatusProvider({
-        children: null,
-        serverUrl: 'ws://test:3000'
+      // Render provider
+      render(
+        <ConnectionStatusProvider serverUrl="ws://test:3000">
+          <div>Test</div>
+        </ConnectionStatusProvider>
+      );
+      
+      // Wait for handlers to be registered
+      await waitFor(() => {
+        expect(mockSocket.on).toHaveBeenCalled();
       });
       
       // Get the error handler
@@ -171,30 +200,36 @@ describe('ConnectionStatusProvider Unit Tests', () => {
     it('should attempt initial connection on mount', async () => {
       const { io } = await import('socket.io-client');
       
-      // Create provider
-      ConnectionStatusProvider({
-        children: null,
-        serverUrl: 'ws://test:3000'
-      });
+      // Render provider
+      render(
+        <ConnectionStatusProvider serverUrl="ws://test:3000">
+          <div>Test</div>
+        </ConnectionStatusProvider>
+      );
       
       // Verify connection was attempted
-      expect(io).toHaveBeenCalledWith('ws://test:3000', expect.any(Object));
+      await waitFor(() => {
+        expect(io).toHaveBeenCalledWith('ws://test:3000', expect.any(Object));
+      });
     });
 
     it('should pass correct socket options', async () => {
       const { io } = await import('socket.io-client');
       
-      // Create provider
-      ConnectionStatusProvider({
-        children: null,
-        serverUrl: 'ws://test:3000'
-      });
+      // Render provider
+      render(
+        <ConnectionStatusProvider serverUrl="ws://test:3000">
+          <div>Test</div>
+        </ConnectionStatusProvider>
+      );
       
       // Verify socket options
-      expect(io).toHaveBeenCalledWith('ws://test:3000', {
-        reconnection: false,
-        timeout: 20000,
-        transports: ['websocket'],
+      await waitFor(() => {
+        expect(io).toHaveBeenCalledWith('ws://test:3000', {
+          reconnection: false,
+          timeout: 20000,
+          transports: ['websocket'],
+        });
       });
     });
   });

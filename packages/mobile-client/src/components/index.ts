@@ -3,3 +3,5 @@
 
 export { Dashboard } from './Dashboard';
 export type { DashboardProps } from './Dashboard';
+export { DiffViewer } from './DiffViewer';
+export type { DiffViewerProps } from './DiffViewer';
