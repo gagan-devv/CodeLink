@@ -26,7 +26,7 @@ export function startServer(port: number = 8080): Server {
           const pong = createPongMessage(message);
           socket.emit('message', JSON.stringify(pong));
           console.log(`[RelayServer] Sent pong to ${socket.id}`);
-          
+
           // Track client type based on ping source
           if (message.source === 'extension') {
             extensionClients.add(socket);

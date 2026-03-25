@@ -1,0 +1,103 @@
+name: Test Suite
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run unit tests
+        run: npm run test:unit
+      
+      - name: Run integration tests
+        run: npm run test:integration
+      
+      - name: Run property-based tests
+        run: npm run test:property
+      
+      - name: Run performance tests
+        run: npm run test:performance
+      
+      - name: Generate coverage report
+        run: npm run test:coverage
+      
+      - name: Verify coverage report formats
+        run: npm run verify:coverage
+      
+      - name: Check coverage thresholds
+        run: |
+          echo "Verifying coverage meets 80% threshold for lines, functions, branches, and statements"
+          npm run test:coverage -- --reporter=json --reporter=text
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      
+      - name: Upload coverage reports as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports-node-${{ matrix.node-version }}
+          path: |
+            coverage/
+          retention-days: 30
+      
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        with:
+          lcov-file: ./coverage/lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  branch-protection-check:
+    name: Branch Protection Requirements
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Verify all tests passed
+        run: |
+          echo "✓ All test suites passed"
+          echo "✓ Coverage thresholds met (80% minimum)"
+          echo ""
+          echo "Branch Protection Requirements:"
+          echo "- Status checks must pass before merging"
+          echo "- Test workflow must succeed"
+          echo "- Coverage thresholds must be met (80% for lines, functions, branches, statements)"
+          echo "- At least one approval required"
+          echo ""
+          echo "To configure branch protection rules:"
+          echo "1. Go to repository Settings > Branches"
+          echo "2. Add rule for 'main' branch"
+          echo "3. Enable 'Require status checks to pass before merging'"
+          echo "4. Select 'Run Tests' as required status check"
+          echo "5. Enable 'Require branches to be up to date before merging'"

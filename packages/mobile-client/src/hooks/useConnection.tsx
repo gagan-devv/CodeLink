@@ -32,7 +32,8 @@ export interface ConnectionStatusProviderProps {
 /**
  * Default relay server URL
  */
-const DEFAULT_SERVER_URL = process.env.RELAY_SERVER_URL || 'http://localhost:8080';
+// const DEFAULT_SERVER_URL = process.env.RELAY_SERVER_URL || 'http://localhost:8080';
+const DEFAULT_SERVER_URL = 'http://localhost:8080';
 
 /**
  * ConnectionStatusProvider manages global connection state and provides

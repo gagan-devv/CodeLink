@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import type { ProtocolMessage } from '@codelink/protocol';
+import { getConfig } from '../config';
 
 /**
  * SocketManager interface defines the contract for WebSocket connection management
@@ -31,10 +32,17 @@ export class SocketManagerImpl implements SocketManager {
   private disconnectHandlers: Array<() => void> = [];
   private errorHandlers: Array<(error: Error) => void> = [];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private baseReconnectDelay = 1000; // 1 second
+  private maxReconnectAttempts: number;
+  private baseReconnectDelay: number;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isManualDisconnect = false;
+
+  constructor() {
+    // Load configuration values
+    const config = getConfig();
+    this.maxReconnectAttempts = config.socketOptions.reconnectionAttempts;
+    this.baseReconnectDelay = config.socketOptions.reconnectionDelay;
+  }
 
   /**
    * Establishes connection to the relay server
@@ -45,10 +53,13 @@ export class SocketManagerImpl implements SocketManager {
       try {
         this.isManualDisconnect = false;
         
+        // Get configuration
+        const config = getConfig();
+        
         // Initialize Socket.IO connection with configuration
         this.socket = io(serverUrl, {
           reconnection: false, // We handle reconnection manually for exponential backoff
-          timeout: 20000,
+          timeout: config.socketOptions.timeout,
           transports: ['websocket'],
         });
 

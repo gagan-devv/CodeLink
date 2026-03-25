@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, SafeAreaView } from 'react-native';
 import { Provider as PaperProvider, BottomNavigation, Badge } from 'react-native-paper';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { InjectPromptResponse } from '@codelink/protocol';
 
@@ -206,13 +205,13 @@ const AppContent: React.FC = () => {
     if (route.key === 'diff' && diffState.history.length > 0) {
       return (
         <View>
-          <MaterialCommunityIcons name={icon} size={24} color={color} />
+          <BottomNavigation.Icon icon={icon} color={color} />
           <Badge size={8} style={styles.badge} />
         </View>
       );
     }
     
-    return <MaterialCommunityIcons name={icon} size={24} color={color} />;
+    return <BottomNavigation.Icon icon={icon} color={color} />;
   };
 
   return (

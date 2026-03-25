@@ -8,13 +8,23 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "vitest --run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "clean": "rm -rf node_modules .expo && npm install"
   },
   "dependencies": {
+    "@callstack/react-theme-provider": "^3.0.9",
     "@codelink/protocol": "*",
-    "expo": "~54.0.32",
+    "@expo/vector-icons": "^15.0.3",
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "color": "^3.2.1",
+    "expo": "~54.0.33",
+    "expo-asset": "^12.0.12",
+    "expo-constants": "^18.0.13",
+    "expo-haptics": "~15.0.8",
+    "expo-modules-core": "^3.0.29",
     "expo-status-bar": "~3.0.9",
-    "react": "18.3.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-paper": "^5.14.5",
     "react-native-safe-area-context": "^5.6.2",
@@ -22,16 +32,19 @@
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/react": "^16.3.2",
     "@testing-library/react-native": "^13.3.3",
-    "@types/react": "~18.3.0",
+    "@types/react": "~19.1.0",
+    "babel-plugin-react-native-web": "^0.19.12",
+    "babel-preset-expo": "^54.0.10",
     "fast-check": "^3.15.0",
     "jsdom": "^25.0.1",
-    "react-dom": "18.3.1",
-    "react-test-renderer": "^18.3.1",
+    "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2",
-    "vitest": "^1.0.0"
+    "vitest": "^4.1.0"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   },
   "private": true
 }

@@ -6,6 +6,7 @@ import { FileWatcher } from './watcher/FileWatcher';
 import { GitIntegrationModuleImpl } from './git/GitIntegrationModule';
 import { DiffGeneratorImpl } from './diff/DiffGenerator';
 import { WebSocketClient } from './websocket/WebSocketClient';
+import { EditorRegistry } from './editor-adapters/EditorRegistry';
 
 // Promisify zlib functions
 const gzip = promisify(zlib.gzip);
@@ -57,7 +58,7 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
   // Initialize Git Integration Module
   gitModule = new GitIntegrationModuleImpl();
   const gitInitialized = await gitModule.initialize(workspaceRoot);
-  
+
   if (gitInitialized) {
     outputChannel.appendLine('Git integration initialized successfully');
   } else {
@@ -70,7 +71,9 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
 
   // Initialize WebSocket Client
   // TODO: Make relay server URL configurable via settings
-  const relayServerUrl = 'http://localhost:8080';
+  // Get relay server URL from configuration
+  const config = vscode.workspace.getConfiguration('codelink');
+  const relayServerUrl = config.get<string>('relayServerUrl') || 'http://localhost:8080';
   wsClient = new WebSocketClient();
   wsClient.connect(relayServerUrl);
   outputChannel.appendLine(`WebSocket client connecting to ${relayServerUrl}`);
@@ -80,6 +83,52 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
   fileWatcher.onFileChanged = handleFileChanged;
   fileWatcher.initialize();
   outputChannel.appendLine('File watcher initialized');
+
+  // Initialize Editor Registry
+  const editorRegistry = new EditorRegistry();
+  outputChannel.appendLine('Editor registry initialized');
+
+  // Register message handler
+  wsClient.onMessage(async (message: any) => {
+    if (message.type === 'INJECT_PROMPT') {
+      outputChannel.appendLine(`[INFO] Received INJECT_PROMPT: ${message.payload.prompt.substring(0, 50)}...`);
+
+      const payload = message.payload;
+      let success = false;
+      let usedEditor = 'none';
+      let errorMsg: string | undefined;
+
+      try {
+        const adapter = await editorRegistry.getBestAvailableAdapter();
+        if (adapter) {
+          outputChannel.appendLine(`[INFO] Using editor adapter: ${adapter.displayName}`);
+          success = await adapter.injectPrompt(payload.prompt);
+          usedEditor = adapter.id;
+        } else {
+          errorMsg = 'No supported AI editor found';
+          outputChannel.appendLine('[WARN] No supported AI editor found');
+        }
+      } catch (err: any) {
+        errorMsg = err.message || 'Unknown error during prompt injection';
+        outputChannel.appendLine(`[ERROR] Prompt injection failed: ${errorMsg}`);
+      }
+
+      // Send response
+      const response = {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
+        type: 'INJECT_PROMPT_RESPONSE',
+        originalId: message.id,
+        timestamp: Date.now(),
+        payload: {
+          success,
+          error: errorMsg,
+          editorUsed: usedEditor
+        }
+      } as any; // Cast to any to satisfy ProtocolMessage union until types are perfectly aligned
+
+      wsClient.send(response);
+    }
+  });
 
   // Register for cleanup
   context.subscriptions.push({
@@ -96,7 +145,7 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
  */
 async function handleFileChanged(filePath: string): Promise<void> {
   const pipelineStartTime = Date.now();
-  
+
   try {
     outputChannel.appendLine(`[INFO] File changed: ${filePath}`);
 
@@ -117,7 +166,7 @@ async function handleFileChanged(filePath: string): Promise<void> {
     const diffStartTime = Date.now();
     const payload = await diffGenerator.generateDiff(filePath, headContent);
     const diffElapsed = Date.now() - diffStartTime;
-    
+
     if (!payload) {
       outputChannel.appendLine(`[WARN] Failed to generate diff (${diffElapsed}ms), skipping`);
       return;
@@ -131,7 +180,7 @@ async function handleFileChanged(filePath: string): Promise<void> {
     const compressionStartTime = Date.now();
     const compressedPayload = await compressPayloadIfNeeded(payload);
     const compressionElapsed = Date.now() - compressionStartTime;
-    
+
     if (compressedPayload.compressed) {
       outputChannel.appendLine(
         `[PERF] Compression: ${compressionElapsed}ms (${compressedPayload.originalSize} → ${compressedPayload.compressedSize} bytes, ${compressedPayload.compressionRatio}% reduction)`
@@ -161,7 +210,7 @@ async function handleFileChanged(filePath: string): Promise<void> {
     // Log total pipeline time
     const totalElapsed = Date.now() - pipelineStartTime;
     outputChannel.appendLine(`[PERF] Total pipeline: ${totalElapsed}ms`);
-    
+
     // Performance warning if total time exceeds 2000ms
     if (totalElapsed > 2000) {
       outputChannel.appendLine(

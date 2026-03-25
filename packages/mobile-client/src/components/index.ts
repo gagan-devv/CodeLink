@@ -10,3 +10,8 @@ export type { PromptComposerProps } from './PromptComposer';
 export { PromptResponseDisplay } from './PromptResponseDisplay';
 export type { PromptResponseDisplayProps } from './PromptResponseDisplay';
 export { ErrorBoundary } from './ErrorBoundary';
+export { EmptyState } from './EmptyState';
+export type { EmptyStateProps } from './EmptyState';
+export { Settings } from './Settings';
+export { PromptTemplates } from './PromptTemplates';
+export type { PromptTemplate, PromptTemplatesProps } from './PromptTemplates';

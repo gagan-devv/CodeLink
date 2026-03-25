@@ -21,9 +21,20 @@
       }
     ]
   },
+  "configuration": {
+    "title": "CodeLink",
+    "properties": {
+      "codelink.relayServerUrl": {
+        "type": "string",
+        "default": "http://localhost:8080",
+        "description": "URL of the CodeLink Relay Server"
+      }
+    }
+  },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest run"
   },
   "dependencies": {
     "@codelink/protocol": "*",
@@ -31,7 +42,9 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@types/node": "^25.3.0",
     "@types/vscode": "^1.80.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
   }
 }

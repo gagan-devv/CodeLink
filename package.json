@@ -12,17 +12,27 @@
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:property": "vitest run tests/property",
+    "test:performance": "vitest run tests/performance",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ci": "vitest run --coverage --reporter=verbose",
+    "verify:coverage": "node tests/setup/test-coverage-formats.js"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
-    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/ui": "^4.1.0",
+    "babel-preset-expo": "^54.0.10",
     "eslint": "^8.0.0",
-    "fast-check": "^3.0.0",
+    "fast-check": "^4.6.0",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0",
-    "vitest": "^1.0.0"
+    "vitest": "^4.1.0"
   },
   "overrides": {
     "react": "18.3.1",

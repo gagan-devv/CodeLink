@@ -13,6 +13,8 @@ export class WebSocketClient {
   private readonly maxReconnectAttempts = 10;
   private readonly baseRetryDelay = 1000; // 1 second
   private isConnecting = false;
+  // private messageHandlers: ((message: ProtocolMessage) => void)[] = []; // Moved to end check
+
 
   /**
    * Initialize and connect to the relay server
@@ -46,6 +48,18 @@ export class WebSocketClient {
       this.isConnecting = false;
       this.reconnectAttempts = 0;
       this.flushMessageQueue();
+
+      // Re-bind message handlers
+      this.messageHandlers.forEach(handler => {
+        this.socket!.on('message', (data: string) => {
+          try {
+            const parsed = JSON.parse(data);
+            handler(parsed);
+          } catch (error) {
+            console.error('Error parsing message:', error);
+          }
+        });
+      });
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -55,7 +69,7 @@ export class WebSocketClient {
     this.socket.on('connect_error', (error) => {
       this.isConnecting = false;
       this.reconnectAttempts++;
-      
+
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
         console.error('Max reconnection attempts reached');
         return;
@@ -165,4 +179,33 @@ export class WebSocketClient {
     this.reconnectAttempts = 0;
     this.isConnecting = false;
   }
+  /**
+   * Register a callback for incoming messages
+   */
+  public onMessage(callback: (message: ProtocolMessage) => void): void {
+    if (!this.socket) {
+      // Store callback if socket not initialized yet? 
+      // For now, simpler to just assume socket is created in connect()
+      // or we can add a listener array.
+      // But connect() is called before this.
+      // Let's modify setupEventHandlers to handle this better or 
+      // just add the listener if socket exists.
+    }
+
+    // Better approach: Store handlers to bind when socket connects
+    this.messageHandlers.push(callback);
+
+    if (this.socket) {
+      this.socket.on('message', (data: string) => {
+        try {
+          const parsed = JSON.parse(data);
+          callback(parsed);
+        } catch (error) {
+          console.error('Error parsing message:', error);
+        }
+      });
+    }
+  }
+
+  private messageHandlers: ((message: ProtocolMessage) => void)[] = [];
 }
