@@ -1,8 +1,9 @@
-import { Component, ReactNode } from 'react';
+import React, { Component, ReactNode } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Button } from 'react-native-paper';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  fallback?: ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -10,47 +11,45 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-/**
- * Error Boundary component to catch and handle React errors
- * Prevents the entire app from crashing when a component error occurs
- */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = {
+      hasError: false,
+      error: null,
+    };
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // Update state so the next render will show the fallback UI
-    return { hasError: true, error };
+    return {
+      hasError: true,
+      error,
+    };
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
-    // Log error details to console for debugging
-    console.error('ErrorBoundary caught error:', error, errorInfo);
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 
-  render() {
+  handleReset = (): void => {
+    this.setState({
+      hasError: false,
+      error: null,
+    });
+  };
+
+  render(): ReactNode {
     if (this.state.hasError) {
-      // Render custom fallback UI if provided, otherwise default error message
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
-
       return (
-        <div className="flex flex-col items-center justify-center h-screen bg-[#0d1117] text-white p-4">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
-          <p className="text-gray-400 text-center mb-4">
-            An error occurred while rendering this component.
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-          >
-            Reload App
-          </button>
-        </div>
+        <View style={styles.container}>
+          <Text style={styles.title}>Something went wrong</Text>
+          <Text style={styles.message}>
+            {this.state.error?.message || 'An unexpected error occurred'}
+          </Text>
+          <Button mode="contained" onPress={this.handleReset} style={styles.button}>
+            Try Again
+          </Button>
+        </View>
       );
     }
 
@@ -58,4 +57,27 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-export default ErrorBoundary;
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#fff',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#d32f2f',
+  },
+  message: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+    color: '#666',
+  },
+  button: {
+    marginTop: 16,
+  },
+});

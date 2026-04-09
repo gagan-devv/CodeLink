@@ -1,5 +1,12 @@
 import { Server, Socket } from 'socket.io';
-import { ProtocolMessage, PingMessage, PongMessage, SyncFullContextMessage, InjectPromptMessage, InjectPromptResponseMessage } from '@codelink/protocol';
+import {
+  ProtocolMessage,
+  PingMessage,
+  PongMessage,
+  SyncFullContextMessage,
+  InjectPromptMessage,
+  InjectPromptResponse,
+} from '@codelink/protocol';
 
 // Track connected clients by type
 export const extensionClients = new Set<Socket>();
@@ -29,41 +36,53 @@ export function startServer(port: number = 8080): Server {
           const pong = createPongMessage(message);
           socket.emit('message', JSON.stringify(pong));
           console.log(`[RelayServer] Sent pong to ${socket.id}`);
-          
+
           // Track client type based on ping source
           if (message.source === 'extension') {
             extensionClients.add(socket);
-            console.log(`[RelayServer] Registered extension client: ${socket.id} (total: ${extensionClients.size})`);
+            console.log(
+              `[RelayServer] Registered extension client: ${socket.id} (total: ${extensionClients.size})`
+            );
           } else if (message.source === 'mobile') {
             mobileClients.add(socket);
-            console.log(`[RelayServer] Registered mobile client: ${socket.id} (total: ${mobileClients.size})`);
+            console.log(
+              `[RelayServer] Registered mobile client: ${socket.id} (total: ${mobileClients.size})`
+            );
           }
         } else if (message.type === 'SYNC_FULL_CONTEXT') {
-          console.log(`[RelayServer] Routing SYNC_FULL_CONTEXT message to ${mobileClients.size} mobile clients`);
+          console.log(
+            `[RelayServer] Routing SYNC_FULL_CONTEXT message to ${mobileClients.size} mobile clients`
+          );
           broadcastToMobileClients(message as SyncFullContextMessage);
         } else if (message.type === 'INJECT_PROMPT') {
-          console.log(`[RelayServer] Routing INJECT_PROMPT message to ${extensionClients.size} extension clients`);
+          console.log(
+            `[RelayServer] Routing INJECT_PROMPT message to ${extensionClients.size} extension clients`
+          );
           // Track which mobile client sent this request
           pendingPromptRequests.set(message.id, socket);
           routeToExtensionClients(message as InjectPromptMessage, socket);
         } else if (message.type === 'INJECT_PROMPT_RESPONSE') {
           console.log(`[RelayServer] Routing INJECT_PROMPT_RESPONSE back to mobile client`);
-          const response = message as InjectPromptResponseMessage;
-          
+          const response = message as InjectPromptResponse;
+
           // Find the mobile client that sent the original request
-          if (response.originalRequestId && pendingPromptRequests.has(response.originalRequestId)) {
-            const mobileSocket = pendingPromptRequests.get(response.originalRequestId)!;
-            pendingPromptRequests.delete(response.originalRequestId);
-            
+          if (response.originalId && pendingPromptRequests.has(response.originalId)) {
+            const mobileSocket = pendingPromptRequests.get(response.originalId)!;
+            pendingPromptRequests.delete(response.originalId);
+
             if (mobileSocket.connected) {
               mobileSocket.emit('message', JSON.stringify(response));
               console.log(`[RelayServer] Routed response to mobile client ${mobileSocket.id}`);
             } else {
-              console.log(`[RelayServer] Mobile client ${mobileSocket.id} disconnected, cannot send response`);
+              console.log(
+                `[RelayServer] Mobile client ${mobileSocket.id} disconnected, cannot send response`
+              );
             }
           } else {
             // Fallback: broadcast to all mobile clients if we can't find the original requester
-            console.log(`[RelayServer] No original request ID found, broadcasting to all mobile clients`);
+            console.log(
+              `[RelayServer] No original request ID found, broadcasting to all mobile clients`
+            );
             broadcastResponseToMobileClients(response);
           }
         }
@@ -76,7 +95,9 @@ export function startServer(port: number = 8080): Server {
       console.log(`[RelayServer] Client disconnected: ${socket.id}`);
       extensionClients.delete(socket);
       mobileClients.delete(socket);
-      console.log(`[RelayServer] Active clients - Extensions: ${extensionClients.size}, Mobile: ${mobileClients.size}`);
+      console.log(
+        `[RelayServer] Active clients - Extensions: ${extensionClients.size}, Mobile: ${mobileClients.size}`
+      );
     });
 
     socket.on('error', (error) => {
@@ -110,13 +131,15 @@ export function broadcastToMobileClients(message: SyncFullContextMessage): void 
     }
   });
 
-  console.log(`[RelayServer] Broadcast complete: ${successCount} successful, ${errorCount} errors, ${mobileClients.size} total mobile clients`);
+  console.log(
+    `[RelayServer] Broadcast complete: ${successCount} successful, ${errorCount} errors, ${mobileClients.size} total mobile clients`
+  );
 }
 
 /**
  * Broadcast INJECT_PROMPT_RESPONSE to all mobile clients (fallback when original requester is unknown)
  */
-export function broadcastResponseToMobileClients(message: InjectPromptResponseMessage): void {
+export function broadcastResponseToMobileClients(message: InjectPromptResponse): void {
   const messageStr = JSON.stringify(message);
   let successCount = 0;
 
@@ -141,14 +164,17 @@ export function broadcastResponseToMobileClients(message: InjectPromptResponseMe
 export function routeToExtensionClients(message: InjectPromptMessage, originSocket: Socket): void {
   if (extensionClients.size === 0) {
     // No extension clients available - send error response back to mobile
-    const errorResponse: InjectPromptResponseMessage = {
+    const errorResponse: InjectPromptResponse = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
       type: 'INJECT_PROMPT_RESPONSE',
-      success: false,
-      error: 'No extension client is connected. Please ensure the VS Code extension is running.',
+      originalId: message.id,
+      payload: {
+        success: false,
+        error: 'No extension client is connected. Please ensure the VS Code extension is running.',
+      },
     };
-    
+
     originSocket.emit('message', JSON.stringify(errorResponse));
     console.log(`[RelayServer] No extension clients available for prompt injection`);
     return;
@@ -179,14 +205,17 @@ export function routeToExtensionClients(message: InjectPromptMessage, originSock
 
   if (!routed) {
     // All extension clients were disconnected - send error response
-    const errorResponse: InjectPromptResponseMessage = {
+    const errorResponse: InjectPromptResponse = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
       type: 'INJECT_PROMPT_RESPONSE',
-      success: false,
-      error: 'All extension clients are disconnected. Please check your VS Code extension.',
+      originalId: message.id,
+      payload: {
+        success: false,
+        error: 'All extension clients are disconnected. Please check your VS Code extension.',
+      },
     };
-    
+
     originSocket.emit('message', JSON.stringify(errorResponse));
     console.log(`[RelayServer] Failed to route INJECT_PROMPT - all extension clients disconnected`);
   }

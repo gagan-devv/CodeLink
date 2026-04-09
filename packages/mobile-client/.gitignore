@@ -1,0 +1,47 @@
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# Local env files
+.env*.local
+.env
+
+# Typescript
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Testing
+coverage/
+/src/design-system/components/*test*
+/src/design-system/tokens/*.test.*
+/src/design-system/theme/*.test.*
+/src/design-system/typography/*.test.*
+
+
+/src/design-system/components/*.example.*
+/src/design-system/tokens/*.example.*
+/src/design-system/theme/*.example.*
+/src/design-system/typography/*.example.*

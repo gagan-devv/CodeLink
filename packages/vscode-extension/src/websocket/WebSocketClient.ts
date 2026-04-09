@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { ProtocolMessage, InjectPromptMessage } from '@codelink/protocol';
+import { ProtocolMessage } from '@codelink/protocol';
 
 /**
  * Message handler callback type for incoming messages
@@ -52,6 +52,18 @@ export class WebSocketClient {
       this.isConnecting = false;
       this.reconnectAttempts = 0;
       this.flushMessageQueue();
+
+      // Re-bind message handlers
+      this.messageHandlers.forEach((handler) => {
+        this.socket!.on('message', (data: string) => {
+          try {
+            const parsed = JSON.parse(data);
+            handler(parsed);
+          } catch (error) {
+            console.error('Error parsing message:', error);
+          }
+        });
+      });
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -61,7 +73,7 @@ export class WebSocketClient {
     this.socket.on('connect_error', (error) => {
       this.isConnecting = false;
       this.reconnectAttempts++;
-      
+
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
         console.error('Max reconnection attempts reached');
         return;
@@ -90,7 +102,7 @@ export class WebSocketClient {
    * Handle incoming messages by notifying all registered handlers
    */
   private handleIncomingMessage(message: ProtocolMessage): void {
-    this.messageHandlers.forEach(handler => {
+    this.messageHandlers.forEach((handler) => {
       try {
         handler(message);
       } catch (error) {
@@ -120,10 +132,7 @@ export class WebSocketClient {
    * Calculate exponential backoff delay
    */
   private calculateBackoffDelay(): number {
-    return Math.min(
-      this.baseRetryDelay * Math.pow(2, this.reconnectAttempts),
-      5000
-    );
+    return Math.min(this.baseRetryDelay * Math.pow(2, this.reconnectAttempts), 5000);
   }
 
   /**
@@ -169,7 +178,7 @@ export class WebSocketClient {
 
     const sendBatch = () => {
       const batch = this.messageQueue.splice(0, messagesPerBatch);
-      batch.forEach(msg => {
+      batch.forEach((msg) => {
         if (this.isConnected()) {
           this.socket!.emit('message', JSON.stringify(msg));
         }

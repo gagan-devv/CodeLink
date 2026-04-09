@@ -1,322 +1,523 @@
-import { ConnectionStatus } from '../websocket/WebSocketClient';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, FlatList, Dimensions, RefreshControl } from 'react-native';
+import { useDesignSystem } from '../design-system';
+import { Text } from '../design-system/typography/Text';
+import { Card } from '../design-system/components/Card';
+import { Icon } from '../design-system/components/Icon';
+import { ProgressBar } from '../design-system/components/ProgressBar';
+import { StatusIndicator, ConnectionStatus } from '../design-system/components/StatusIndicator';
+import { TopAppBar } from '../navigation/TopAppBar';
 
-interface DashboardProps {
-  status: ConnectionStatus;
-  activeFile: string | null;
-  lastSyncTime: Date | null;
+/**
+ * System metrics interface
+ */
+export interface SystemMetrics {
+  uptime: number;
   latency: number;
-  onRefresh: () => void;
-  onDisconnect: () => void;
-  onSettings: () => void;
-  onViewDiff: () => void;
-  hasPayload: boolean;
+  load: number;
+  region: string;
+  trafficSent: number;
+  trafficReceived: number;
 }
 
-function Dashboard({
-  status,
-  activeFile,
-  lastSyncTime,
-  latency,
+/**
+ * Activity item interface
+ */
+export interface ActivityItem {
+  id: string;
+  type: 'commit' | 'sync' | 'build' | 'deploy';
+  message: string;
+  timestamp: Date;
+  metadata?: Record<string, string>;
+}
+
+/**
+ * Dashboard component props
+ */
+export interface DashboardProps {
+  connectionStatus: ConnectionStatus;
+  metrics?: SystemMetrics;
+  recentActivity?: ActivityItem[];
+  onNavigateToDiffs: () => void;
+  onNavigateToCompose: () => void;
+  onRefresh?: () => Promise<void>;
+}
+
+/**
+ * Dashboard component displays system overview with bento grid layout
+ *
+ * Features:
+ * - TopAppBar with connection status
+ * - System Overview section with bento grid layout
+ * - System Health section with status cards
+ * - Shortcuts section with navigation cards
+ * - Recent Activity section with activity feed
+ * - Responsive grid (2 columns on large screens, 1 on small)
+ * - Asymmetrical spacing and card sizes for bento pattern
+ *
+ * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 13.5, 13.6, 15.3
+ */
+export const Dashboard: React.FC<DashboardProps> = ({
+  connectionStatus,
+  metrics = {
+    uptime: 99.8,
+    latency: 45,
+    load: 0.65,
+    region: 'us-west-2',
+    trafficSent: 2.5,
+    trafficReceived: 8.3,
+  },
+  recentActivity = [],
+  onNavigateToDiffs,
+  onNavigateToCompose,
   onRefresh,
-  onDisconnect,
-  onSettings,
-  onViewDiff,
-  hasPayload,
-}: DashboardProps) {
-  const getTimeAgo = (date: Date | null): string => {
-    if (!date) return 'Never';
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    const minutes = Math.floor(seconds / 60);
+}) => {
+  const { theme } = useDesignSystem();
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Detect screen size for responsive layout (Requirement 13.5)
+  useEffect(() => {
+    const updateLayout = () => {
+      const { width } = Dimensions.get('window');
+      setIsLargeScreen(width >= 768);
+    };
+
+    updateLayout();
+    const subscription = Dimensions.addEventListener('change', updateLayout);
+    return () => subscription?.remove();
+  }, []);
+
+  /**
+   * Handle refresh (Requirement 3.1)
+   */
+  const handleRefresh = async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  /**
+   * Format uptime percentage (Requirement 3.3)
+   */
+  const formatUptime = (uptime: number): string => {
+    return `${uptime.toFixed(1)}%`;
+  };
+
+  /**
+   * Format traffic volume (Requirement 3.4)
+   */
+  const formatTraffic = (traffic: number): string => {
+    return `${traffic.toFixed(1)} GB`;
+  };
+
+  /**
+   * Format activity timestamp (Requirement 3.7)
+   */
+  const formatActivityTime = (date: Date): string => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Just now';
     if (minutes < 60) return `${minutes}m ago`;
     const hours = Math.floor(minutes / 60);
-    return `${hours}h ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
   };
 
-  const getBranchName = (): string => {
-    // Extract branch from file path or use default
-    return 'feature/auth-module';
+  /**
+   * Get activity type icon (Requirement 3.7)
+   */
+  const getActivityIcon = (type: string): string => {
+    switch (type) {
+      case 'commit':
+        return 'check-circle';
+      case 'sync':
+        return 'sync';
+      case 'build':
+        return 'build';
+      case 'deploy':
+        return 'cloud-upload';
+      default:
+        return 'info';
+    }
   };
+
+  /**
+   * Render activity feed item (Requirement 3.7, 15.3)
+   */
+  const renderActivityItem = ({ item }: { item: ActivityItem }) => (
+    <View style={styles.activityItem}>
+      <Icon
+        name={getActivityIcon(item.type)}
+        size={20}
+        color="primary"
+        style={styles.activityIcon}
+      />
+      <View style={styles.activityContent}>
+        <Text variant="body-sm" color="onSurface">
+          {item.message}
+        </Text>
+        <Text variant="label-sm" color="onSurfaceVariant" style={styles.activityTime}>
+          {formatActivityTime(item.timestamp)}
+        </Text>
+      </View>
+    </View>
+  );
 
   return (
-    <div className="flex flex-col h-full bg-[#0d1117] p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <svg
-              className="w-6 h-6 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-              />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white">CodeLink</h1>
-        </div>
-        <button
-          onClick={onSettings}
-          className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
-        </button>
-      </div>
+    <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
+      {/* Top App Bar (Requirement 3.1) */}
+      <TopAppBar connectionStatus={connectionStatus} />
 
-      {/* Connection Status Card */}
-      <div
-        className={`rounded-xl p-4 mb-4 ${
-          status === 'connected'
-            ? 'bg-gradient-to-r from-green-500/20 to-green-600/20 border border-green-500/30'
-            : status === 'connecting'
-            ? 'bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 border border-yellow-500/30'
-            : 'bg-gradient-to-r from-red-500/20 to-red-600/20 border border-red-500/30'
-        }`}
+      {/* Scrollable Content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                status === 'connected'
-                  ? 'bg-green-500'
-                  : status === 'connecting'
-                  ? 'bg-yellow-500'
-                  : 'bg-red-500'
-              }`}
+        {/* System Overview Section (Requirement 3.2) */}
+        <View style={styles.section}>
+          <Text variant="headline-md" weight="bold" color="onSurface" style={styles.sectionTitle}>
+            System Overview
+          </Text>
+
+          {/* Bento Grid Layout (Requirement 3.8, 13.6) */}
+          <View style={[styles.bentoGrid, isLargeScreen && styles.bentoGridLarge]}>
+            {/* Large card: Uptime (Requirement 3.3) */}
+            <Card
+              variant="low"
+              padding="lg"
+              style={[styles.bentoCard, isLargeScreen && styles.bentoCardLarge]}
             >
-              <svg
-                className="w-5 h-5 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                {status === 'connected' ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                ) : (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
+              <Text variant="label-sm" color="onSurfaceVariant" uppercase style={styles.cardLabel}>
+                Uptime
+              </Text>
+              <Text variant="display-sm" weight="bold" color="secondary" style={styles.largeMetric}>
+                {formatUptime(metrics.uptime)}
+              </Text>
+              <Text variant="body-sm" color="onSurfaceVariant" style={styles.cardDescription}>
+                System availability
+              </Text>
+            </Card>
+
+            {/* Small cards: Latency and Load (Requirement 3.3) */}
+            <View style={[styles.bentoColumn, isLargeScreen && styles.bentoColumnSmall]}>
+              <Card variant="low" padding="md" style={styles.bentoCard}>
+                <Text
+                  variant="label-sm"
+                  color="onSurfaceVariant"
+                  uppercase
+                  style={styles.cardLabel}
+                >
+                  Latency
+                </Text>
+                <Text
+                  variant="headline-lg"
+                  weight="bold"
+                  color="primary"
+                  style={styles.mediumMetric}
+                >
+                  {metrics.latency}ms
+                </Text>
+              </Card>
+
+              <Card variant="low" padding="md" style={styles.bentoCard}>
+                <Text
+                  variant="label-sm"
+                  color="onSurfaceVariant"
+                  uppercase
+                  style={styles.cardLabel}
+                >
+                  Load
+                </Text>
+                <Text
+                  variant="headline-lg"
+                  weight="bold"
+                  color="tertiary"
+                  style={styles.mediumMetric}
+                >
+                  {(metrics.load * 100).toFixed(0)}%
+                </Text>
+              </Card>
+            </View>
+          </View>
+
+          {/* Traffic Volume Section (Requirement 3.4, 3.9) */}
+          <Card variant="low" padding="lg" style={styles.trafficCard}>
+            <Text variant="label-sm" color="onSurfaceVariant" uppercase style={styles.cardLabel}>
+              Traffic Volume
+            </Text>
+            <View style={styles.trafficRow}>
+              <View style={styles.trafficColumn}>
+                <Text variant="body-sm" color="onSurfaceVariant" style={styles.trafficLabel}>
+                  Sent
+                </Text>
+                <ProgressBar
+                  progress={Math.min(metrics.trafficSent * 10, 100)}
+                  variant="secondary"
+                  style={styles.trafficBar}
+                />
+                <Text variant="label-sm" color="secondary" style={styles.trafficValue}>
+                  {formatTraffic(metrics.trafficSent)}
+                </Text>
+              </View>
+              <View style={styles.trafficColumn}>
+                <Text variant="body-sm" color="onSurfaceVariant" style={styles.trafficLabel}>
+                  Received
+                </Text>
+                <ProgressBar
+                  progress={Math.min(metrics.trafficReceived * 10, 100)}
+                  variant="primary"
+                  style={styles.trafficBar}
+                />
+                <Text variant="label-sm" color="primary" style={styles.trafficValue}>
+                  {formatTraffic(metrics.trafficReceived)}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        </View>
+
+        {/* System Health Section (Requirement 3.5) */}
+        <View style={styles.section}>
+          <Text variant="headline-md" weight="bold" color="onSurface" style={styles.sectionTitle}>
+            System Health
+          </Text>
+
+          <View style={styles.healthGrid}>
+            <Card variant="low" padding="lg" style={styles.healthCard}>
+              <View style={styles.healthCardContent}>
+                <StatusIndicator status={connectionStatus} size="md" animated={true} />
+                <View style={styles.healthCardText}>
+                  <Text variant="body-md" weight="bold" color="onSurface">
+                    Relay Server
+                  </Text>
+                  <Text variant="body-sm" color="onSurfaceVariant">
+                    {connectionStatus === 'connected'
+                      ? 'Connected'
+                      : connectionStatus === 'connecting'
+                        ? 'Connecting'
+                        : 'Disconnected'}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+
+            <Card variant="low" padding="lg" style={styles.healthCard}>
+              <View style={styles.healthCardContent}>
+                <StatusIndicator status="connected" size="md" animated={false} />
+                <View style={styles.healthCardText}>
+                  <Text variant="body-md" weight="bold" color="onSurface">
+                    API
+                  </Text>
+                  <Text variant="body-sm" color="onSurfaceVariant">
+                    Connected
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          </View>
+        </View>
+
+        {/* Shortcuts Section (Requirement 3.6) */}
+        <View style={styles.section}>
+          <Text variant="headline-md" weight="bold" color="onSurface" style={styles.sectionTitle}>
+            Shortcuts
+          </Text>
+
+          <View style={styles.shortcutsGrid}>
+            <Card
+              variant="low"
+              padding="lg"
+              onPress={onNavigateToDiffs}
+              style={styles.shortcutCard}
+            >
+              <Icon name="compare-arrows" size={32} color="primary" style={styles.shortcutIcon} />
+              <Text variant="body-md" weight="bold" color="onSurface" style={styles.shortcutTitle}>
+                Diff Viewer
+              </Text>
+              <Text variant="body-sm" color="onSurfaceVariant">
+                Review code changes
+              </Text>
+            </Card>
+
+            <Card
+              variant="low"
+              padding="lg"
+              onPress={onNavigateToCompose}
+              style={styles.shortcutCard}
+            >
+              <Icon name="terminal" size={32} color="secondary" style={styles.shortcutIcon} />
+              <Text variant="body-md" weight="bold" color="onSurface" style={styles.shortcutTitle}>
+                Compose Prompt
+              </Text>
+              <Text variant="body-sm" color="onSurfaceVariant">
+                Send AI prompt
+              </Text>
+            </Card>
+          </View>
+        </View>
+
+        {/* Recent Activity Section (Requirement 3.7, 15.3) */}
+        {recentActivity.length > 0 && (
+          <View style={styles.section}>
+            <Text variant="headline-md" weight="bold" color="onSurface" style={styles.sectionTitle}>
+              Recent Activity
+            </Text>
+
+            <Card variant="low" padding="lg" style={styles.activityCard}>
+              <FlatList
+                data={recentActivity}
+                renderItem={renderActivityItem}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                ItemSeparatorComponent={() => (
+                  <View
+                    style={[styles.activityDivider, { borderColor: theme.colors.outlineVariant }]}
                   />
                 )}
-              </svg>
-            </div>
-            <div>
-              <div className="text-white font-bold text-lg uppercase">
-                {status === 'connected'
-                  ? 'CONNECTED'
-                  : status === 'connecting'
-                  ? 'CONNECTING'
-                  : 'DISCONNECTED'}
-              </div>
-            </div>
-          </div>
-          <div
-            className={`px-3 py-1 rounded-md text-xs font-semibold ${
-              status === 'connected'
-                ? 'bg-green-600 text-white'
-                : status === 'connecting'
-                ? 'bg-yellow-600 text-white'
-                : 'bg-red-600 text-white'
-            }`}
-          >
-            {status === 'connected' ? 'ONLINE' : 'OFFLINE'}
-          </div>
-        </div>
-      </div>
-
-      {/* Active File Card */}
-      <div className="bg-[#161b22] rounded-xl p-4 mb-4 border border-gray-800">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg
-              className="w-5 h-5 text-blue-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-gray-400 text-xs font-medium uppercase mb-1">
-              ACTIVE FILE
-            </div>
-            <div
-              className="text-blue-400 font-mono text-sm truncate cursor-pointer hover:text-blue-300 transition-colors"
-              onClick={hasPayload ? onViewDiff : undefined}
-            >
-              {activeFile || 'No file selected'}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Last Synced Card */}
-      <div className="bg-[#161b22] rounded-xl p-4 mb-4 border border-gray-800">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 bg-purple-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg
-              className="w-5 h-5 text-purple-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-              />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <div className="text-gray-400 text-xs font-medium uppercase mb-1">
-              LAST SYNCED
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="text-white font-medium">
-                {lastSyncTime ? 'Successfully synced' : 'Not synced yet'}
-              </div>
-              <div className="text-gray-400 text-sm">{getTimeAgo(lastSyncTime)}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Environment Info */}
-      <div className="mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <svg
-            className="w-4 h-4 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <div className="text-gray-400 text-xs font-medium uppercase">
-            ENVIRONMENT INFO
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          {/* Latency Card */}
-          <div className="bg-[#161b22] rounded-lg p-3 border border-gray-800">
-            <div className="text-gray-400 text-xs uppercase mb-2">LATENCY</div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <div className="text-white font-bold text-lg">{latency}ms</div>
-            </div>
-          </div>
-
-          {/* Branch Card */}
-          <div className="bg-[#161b22] rounded-lg p-3 border border-gray-800">
-            <div className="text-gray-400 text-xs uppercase mb-2">BRANCH</div>
-            <div className="flex items-center gap-2">
-              <svg
-                className="w-4 h-4 text-purple-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                />
-              </svg>
-              <div className="text-white font-mono text-xs truncate">
-                {getBranchName()}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="grid grid-cols-2 gap-3 mt-auto">
-        <button
-          onClick={onRefresh}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          REFRESH
-        </button>
-        <button
-          onClick={onDisconnect}
-          className="bg-[#161b22] hover:bg-[#1c2128] text-gray-300 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 border border-gray-800 transition-colors"
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"
-            />
-          </svg>
-          DISCONNECT
-        </button>
-      </div>
-    </div>
+            </Card>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
-}
+};
 
-export default Dashboard;
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 100, // Space for bottom nav
+  },
+  section: {
+    marginBottom: 32,
+  },
+  sectionTitle: {
+    marginBottom: 16,
+  },
+  bentoGrid: {
+    flexDirection: 'column',
+    gap: 12,
+  },
+  bentoGridLarge: {
+    flexDirection: 'row',
+  },
+  bentoCard: {
+    flex: 1,
+  },
+  bentoCardLarge: {
+    flex: 2,
+  },
+  bentoColumn: {
+    gap: 12,
+  },
+  bentoColumnSmall: {
+    flex: 1,
+  },
+  cardLabel: {
+    marginBottom: 8,
+  },
+  cardDescription: {
+    marginTop: 8,
+  },
+  largeMetric: {
+    marginVertical: 8,
+  },
+  mediumMetric: {
+    marginVertical: 4,
+  },
+  trafficCard: {
+    marginTop: 12,
+  },
+  trafficRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 12,
+  },
+  trafficColumn: {
+    flex: 1,
+  },
+  trafficLabel: {
+    marginBottom: 8,
+  },
+  trafficBar: {
+    marginVertical: 8,
+  },
+  trafficValue: {
+    marginTop: 4,
+  },
+  healthGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  healthCard: {
+    flex: 1,
+  },
+  healthCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  healthCardText: {
+    flex: 1,
+  },
+  shortcutsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  shortcutCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 140,
+  },
+  shortcutIcon: {
+    marginBottom: 12,
+  },
+  shortcutTitle: {
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  activityCard: {
+    minHeight: 200,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  activityIcon: {
+    marginTop: 2,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTime: {
+    marginTop: 4,
+  },
+  activityDivider: {
+    height: 1,
+    marginVertical: 8,
+  },
+});

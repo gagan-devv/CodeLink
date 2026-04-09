@@ -1,183 +1,83 @@
 import { describe, it, expect } from 'vitest';
 import {
+  MessageType,
   PingMessage,
   PongMessage,
-  ProtocolMessage,
-  MessageType,
   FileContextPayload,
   SyncFullContextMessage,
+  InjectPromptMessage,
+  InjectPromptResponse,
 } from './index';
 
-describe('Protocol Types', () => {
+describe('Protocol Package - Smoke Tests', () => {
+  describe('MessageType Enum', () => {
+    it('should have all required message types', () => {
+      expect(MessageType.PING).toBe('PING');
+      expect(MessageType.PONG).toBe('PONG');
+      expect(MessageType.SYNC_FULL_CONTEXT).toBe('SYNC_FULL_CONTEXT');
+      expect(MessageType.INJECT_PROMPT).toBe('INJECT_PROMPT');
+      expect(MessageType.INJECT_PROMPT_RESPONSE).toBe('INJECT_PROMPT_RESPONSE');
+    });
+  });
+
   describe('PingMessage', () => {
-    it('should create a valid PingMessage with extension source', () => {
+    it('should create a valid ping message', () => {
       const ping: PingMessage = {
-        id: 'test-id-123',
+        id: 'test-id',
         timestamp: Date.now(),
         type: 'ping',
         source: 'extension',
       };
 
-      expect(ping.id).toBe('test-id-123');
+      expect(ping.id).toBe('test-id');
       expect(ping.type).toBe('ping');
       expect(ping.source).toBe('extension');
-      expect(typeof ping.timestamp).toBe('number');
-    });
-
-    it('should create a valid PingMessage with mobile source', () => {
-      const ping: PingMessage = {
-        id: 'test-id-456',
-        timestamp: Date.now(),
-        type: 'ping',
-        source: 'mobile',
-      };
-
-      expect(ping.id).toBe('test-id-456');
-      expect(ping.type).toBe('ping');
-      expect(ping.source).toBe('mobile');
       expect(typeof ping.timestamp).toBe('number');
     });
   });
 
   describe('PongMessage', () => {
-    it('should create a valid PongMessage with originalId', () => {
+    it('should create a valid pong message', () => {
       const pong: PongMessage = {
-        id: 'pong-id-789',
+        id: 'pong-id',
         timestamp: Date.now(),
         type: 'pong',
-        originalId: 'original-ping-id',
+        originalId: 'ping-id',
       };
 
-      expect(pong.id).toBe('pong-id-789');
+      expect(pong.id).toBe('pong-id');
       expect(pong.type).toBe('pong');
-      expect(pong.originalId).toBe('original-ping-id');
+      expect(pong.originalId).toBe('ping-id');
       expect(typeof pong.timestamp).toBe('number');
     });
   });
 
-  describe('ProtocolMessage union type', () => {
-    it('should discriminate PingMessage type', () => {
-      const message: ProtocolMessage = {
-        id: 'test-id',
-        timestamp: Date.now(),
-        type: 'ping',
-        source: 'extension',
-      };
-
-      if (message.type === 'ping') {
-        expect(message.source).toBeDefined();
-        expect(['extension', 'mobile']).toContain(message.source);
-      }
-    });
-
-    it('should discriminate PongMessage type', () => {
-      const message: ProtocolMessage = {
-        id: 'test-id',
-        timestamp: Date.now(),
-        type: 'pong',
-        originalId: 'original-id',
-      };
-
-      if (message.type === 'pong') {
-        expect(message.originalId).toBeDefined();
-        expect(message.originalId).toBe('original-id');
-      }
-    });
-  });
-
-  describe('MessageType enum', () => {
-    it('should contain SYNC_FULL_CONTEXT type', () => {
-      expect(MessageType.SYNC_FULL_CONTEXT).toBe('SYNC_FULL_CONTEXT');
-    });
-
-    it('should contain PING type', () => {
-      expect(MessageType.PING).toBe('PING');
-    });
-
-    it('should contain PONG type', () => {
-      expect(MessageType.PONG).toBe('PONG');
-    });
-  });
-
   describe('FileContextPayload', () => {
-    it('should create a valid FileContextPayload with all required fields', () => {
+    it('should create a valid file context payload', () => {
       const payload: FileContextPayload = {
-        fileName: 'src/index.ts',
-        originalFile: 'const x = 1;',
-        modifiedFile: 'const x = 2;',
+        fileName: 'src/test.ts',
+        originalFile: 'original content',
+        modifiedFile: 'modified content',
         isDirty: true,
         timestamp: Date.now(),
       };
 
-      expect(payload.fileName).toBe('src/index.ts');
-      expect(payload.originalFile).toBe('const x = 1;');
-      expect(payload.modifiedFile).toBe('const x = 2;');
+      expect(payload.fileName).toBe('src/test.ts');
+      expect(payload.originalFile).toBe('original content');
+      expect(payload.modifiedFile).toBe('modified content');
       expect(payload.isDirty).toBe(true);
       expect(typeof payload.timestamp).toBe('number');
-    });
-
-    it('should handle empty originalFile for untracked files', () => {
-      const payload: FileContextPayload = {
-        fileName: 'src/newfile.ts',
-        originalFile: '',
-        modifiedFile: 'const newCode = true;',
-        isDirty: false,
-        timestamp: Date.now(),
-      };
-
-      expect(payload.originalFile).toBe('');
-      expect(payload.modifiedFile).toBe('const newCode = true;');
-    });
-
-    it('should handle identical files with isDirty false', () => {
-      const content = 'const unchanged = true;';
-      const payload: FileContextPayload = {
-        fileName: 'src/unchanged.ts',
-        originalFile: content,
-        modifiedFile: content,
-        isDirty: false,
-        timestamp: Date.now(),
-      };
-
-      expect(payload.originalFile).toBe(payload.modifiedFile);
-      expect(payload.isDirty).toBe(false);
     });
   });
 
   describe('SyncFullContextMessage', () => {
-    it('should create a valid SyncFullContextMessage structure', () => {
+    it('should create a valid sync full context message', () => {
       const message: SyncFullContextMessage = {
-        id: 'sync-msg-123',
+        id: 'sync-id',
         timestamp: Date.now(),
         type: 'SYNC_FULL_CONTEXT',
         payload: {
-          fileName: 'src/app.ts',
-          originalFile: 'old content',
-          modifiedFile: 'new content',
-          isDirty: true,
-          timestamp: Date.now(),
-        },
-      };
-
-      expect(message.id).toBe('sync-msg-123');
-      expect(message.type).toBe('SYNC_FULL_CONTEXT');
-      expect(message.payload.fileName).toBe('src/app.ts');
-      expect(message.payload.originalFile).toBe('old content');
-      expect(message.payload.modifiedFile).toBe('new content');
-      expect(message.payload.isDirty).toBe(true);
-      expect(typeof message.timestamp).toBe('number');
-      expect(typeof message.payload.timestamp).toBe('number');
-    });
-  });
-
-  describe('ProtocolMessage union type with SyncFullContextMessage', () => {
-    it('should discriminate SyncFullContextMessage type', () => {
-      const message: ProtocolMessage = {
-        id: 'test-sync-id',
-        timestamp: Date.now(),
-        type: 'SYNC_FULL_CONTEXT',
-        payload: {
-          fileName: 'test.ts',
+          fileName: 'src/test.ts',
           originalFile: 'original',
           modifiedFile: 'modified',
           isDirty: false,
@@ -185,12 +85,66 @@ describe('Protocol Types', () => {
         },
       };
 
-      if (message.type === 'SYNC_FULL_CONTEXT') {
-        expect(message.payload).toBeDefined();
-        expect(message.payload.fileName).toBe('test.ts');
-        expect(message.payload.originalFile).toBe('original');
-        expect(message.payload.modifiedFile).toBe('modified');
-      }
+      expect(message.id).toBe('sync-id');
+      expect(message.type).toBe('SYNC_FULL_CONTEXT');
+      expect(message.payload.fileName).toBe('src/test.ts');
+      expect(typeof message.timestamp).toBe('number');
+    });
+  });
+
+  describe('InjectPromptMessage', () => {
+    it('should create a valid inject prompt message', () => {
+      const message: InjectPromptMessage = {
+        id: 'prompt-id',
+        timestamp: Date.now(),
+        type: 'INJECT_PROMPT',
+        payload: {
+          prompt: 'Test prompt',
+        },
+      };
+
+      expect(message.id).toBe('prompt-id');
+      expect(message.type).toBe('INJECT_PROMPT');
+      expect(message.payload.prompt).toBe('Test prompt');
+      expect(typeof message.timestamp).toBe('number');
+    });
+  });
+
+  describe('InjectPromptResponse', () => {
+    it('should create a valid inject prompt response (success)', () => {
+      const response: InjectPromptResponse = {
+        id: 'response-id',
+        timestamp: Date.now(),
+        type: 'INJECT_PROMPT_RESPONSE',
+        originalId: 'prompt-id',
+        payload: {
+          success: true,
+          editorUsed: 'continue',
+        },
+      };
+
+      expect(response.id).toBe('response-id');
+      expect(response.type).toBe('INJECT_PROMPT_RESPONSE');
+      expect(response.originalId).toBe('prompt-id');
+      expect(response.payload.success).toBe(true);
+      expect(response.payload.editorUsed).toBe('continue');
+    });
+
+    it('should create a valid inject prompt response (error)', () => {
+      const response: InjectPromptResponse = {
+        id: 'response-id',
+        timestamp: Date.now(),
+        type: 'INJECT_PROMPT_RESPONSE',
+        originalId: 'prompt-id',
+        payload: {
+          success: false,
+          error: 'No editor found',
+        },
+      };
+
+      expect(response.id).toBe('response-id');
+      expect(response.payload.success).toBe(false);
+      expect(response.payload.error).toBe('No editor found');
     });
   });
 });

@@ -3,7 +3,12 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": ".",
-    "types": ["vitest/globals", "node"]
+    "types": ["vitest/globals", "node"],
+    "paths": {
+      "@testing-library/react-native": [
+        "./node_modules/@testing-library/react-native/build/index.d.ts"
+      ]
+    }
   },
   "include": [
     "tests/**/*",
@@ -11,5 +16,6 @@
     "packages/protocol/src/**/*",
     "packages/relay-server/src/**/*",
     "packages/vscode-extension/src/**/*"
-  ]
+  ],
+  "exclude": ["node_modules/@testing-library/react-native/src"]
 }

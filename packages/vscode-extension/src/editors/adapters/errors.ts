@@ -28,22 +28,22 @@ export interface EditorAdapterError {
   /** Machine-readable error code */
   errorCode: EditorAdapterErrorType;
   /** Additional context for debugging */
-  details?: any;
+  details?: unknown;
 }
 
 /**
  * Safe command execution wrapper that catches exceptions and returns error results.
- * 
+ *
  * Safety: Never throws exceptions. Always returns a PromptInjectionResult with
  * clear error messages if the command fails.
- * 
+ *
  * @param command - VS Code command to execute
  * @param args - Arguments to pass to the command
  * @returns PromptInjectionResult indicating success or failure
  */
 export async function safeExecuteCommand(
   command: string,
-  ...args: any[]
+  ...args: unknown[]
 ): Promise<PromptInjectionResult> {
   try {
     await vscode.commands.executeCommand(command, ...args);
@@ -63,10 +63,10 @@ export async function safeExecuteCommand(
 
 /**
  * Check if an adapter has a specific capability before attempting an operation.
- * 
+ *
  * Safety: Prevents invalid operations by checking capabilities first.
  * Throws a clear error if the capability is not supported.
- * 
+ *
  * @param adapter - The editor adapter to check
  * @param capability - The capability key to check
  * @param operationName - Human-readable name of the operation (for error messages)
@@ -78,22 +78,22 @@ export function requireCapability(
   operationName: string
 ): void {
   const hasCapability = adapter.capabilities[capability];
-  
+
   if (!hasCapability) {
     throw new Error(
       `Editor ${adapter.editorName} does not support ${operationName}. ` +
-      `Capability '${capability}' is not available. ` +
-      `Sync level: ${adapter.capabilities.syncLevel}`
+        `Capability '${capability}' is not available. ` +
+        `Sync level: ${adapter.capabilities.syncLevel}`
     );
   }
 }
 
 /**
  * Check if an adapter has implemented an optional method.
- * 
+ *
  * Safety: Ensures that adapters claiming a capability actually implement
  * the corresponding method.
- * 
+ *
  * @param adapter - The editor adapter to check
  * @param methodName - The method name to check
  * @param capability - The capability that should enable this method
@@ -105,18 +105,18 @@ export function requireMethod(
   capability: keyof IEditorAdapter['capabilities']
 ): void {
   const method = adapter[methodName];
-  
+
   if (!method || typeof method !== 'function') {
     throw new Error(
       `Editor ${adapter.editorName} claims to support '${String(capability)}' ` +
-      `but does not implement ${String(methodName)}() method`
+        `but does not implement ${String(methodName)}() method`
     );
   }
 }
 
 /**
  * Format an error message with context about the adapter and operation.
- * 
+ *
  * @param adapter - The editor adapter that encountered the error
  * @param operation - The operation that failed
  * @param error - The error that occurred
@@ -128,7 +128,7 @@ export function formatAdapterError(
   error: unknown
 ): string {
   const errorMessage = error instanceof Error ? error.message : String(error);
-  
+
   return (
     `Failed to ${operation} for editor ${adapter.editorName} (${adapter.editorId}): ` +
     `${errorMessage}`
@@ -137,7 +137,7 @@ export function formatAdapterError(
 
 /**
  * Create a structured error result for adapter operations.
- * 
+ *
  * @param errorType - The type of error that occurred
  * @param message - Human-readable error message
  * @param details - Optional additional context
@@ -146,7 +146,7 @@ export function formatAdapterError(
 export function createAdapterError(
   errorType: EditorAdapterErrorType,
   message: string,
-  details?: any
+  details?: unknown
 ): EditorAdapterError {
   return {
     success: false,
@@ -158,9 +158,9 @@ export function createAdapterError(
 
 /**
  * Safely execute an operation that requires a specific capability.
- * 
+ *
  * This combines capability checking with safe execution and error formatting.
- * 
+ *
  * @param adapter - The editor adapter to use
  * @param capability - The required capability
  * @param operationName - Human-readable operation name

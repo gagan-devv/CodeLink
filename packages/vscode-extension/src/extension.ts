@@ -2,7 +2,13 @@ import * as vscode from 'vscode';
 import * as zlib from 'zlib';
 import * as crypto from 'crypto';
 import { promisify } from 'util';
-import { SyncFullContextMessage, FileContextPayload, InjectPromptMessage, InjectPromptResponseMessage, ProtocolMessage } from '@codelink/protocol';
+import {
+  SyncFullContextMessage,
+  FileContextPayload,
+  InjectPromptMessage,
+  InjectPromptResponse,
+  ProtocolMessage,
+} from '@codelink/protocol';
 import { FileWatcher } from './watcher/FileWatcher';
 import { GitIntegrationModuleImpl } from './git/GitIntegrationModule';
 import { DiffGeneratorImpl } from './diff/DiffGenerator';
@@ -63,46 +69,50 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
 
   // Initialize Editor Registry
   editorRegistry = new EditorRegistry();
-  
+
   // Register all editor adapters
   editorRegistry.register(new ContinueAdapter());
   editorRegistry.register(new KiroAdapter());
   editorRegistry.register(new CursorAdapter());
   editorRegistry.register(new AntigravityAdapter());
-  
+
   outputChannel.appendLine('Editor registry initialized with 4 adapters');
-  
+
   // Run initial editor detection
   try {
     const detectionResults = await editorRegistry.detectAll();
     outputChannel.appendLine('Editor detection completed:');
-    
+
     for (const [editorId, result] of detectionResults) {
       if (result.isInstalled) {
-        outputChannel.appendLine(`  - ${editorId}: installed (${result.availableCommands?.length || 0} commands)`);
+        outputChannel.appendLine(
+          `  - ${editorId}: installed (${result.availableCommands?.length || 0} commands)`
+        );
       } else {
         outputChannel.appendLine(`  - ${editorId}: not installed`);
       }
     }
-    
+
     // Log the best available adapter
     const bestAdapter = await editorRegistry.getBestAdapter();
     if (bestAdapter) {
-      outputChannel.appendLine(`Best available editor: ${bestAdapter.editorName} (${bestAdapter.capabilities.syncLevel} sync)`);
+      outputChannel.appendLine(
+        `Best available editor: ${bestAdapter.editorName} (${bestAdapter.capabilities.syncLevel} sync)`
+      );
     } else {
       outputChannel.appendLine('No AI editor detected');
     }
   } catch (error) {
     outputChannel.appendLine(`Error during editor detection: ${error}`);
   }
-  
+
   // Store registry in extension context for access by other modules
   context.globalState.update('editorRegistry', editorRegistry);
 
   // Initialize Git Integration Module
   gitModule = new GitIntegrationModuleImpl();
   const gitInitialized = await gitModule.initialize(workspaceRoot);
-  
+
   if (gitInitialized) {
     outputChannel.appendLine('Git integration initialized successfully');
   } else {
@@ -115,7 +125,9 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
 
   // Initialize WebSocket Client
   // TODO: Make relay server URL configurable via settings
-  const relayServerUrl = 'http://localhost:8080';
+  // Get relay server URL from configuration
+  const config = vscode.workspace.getConfiguration('codelink');
+  const relayServerUrl = config.get<string>('relayServerUrl') || 'http://localhost:8080';
   wsClient = new WebSocketClient();
   wsClient.connect(relayServerUrl);
   outputChannel.appendLine(`WebSocket client connecting to ${relayServerUrl}`);
@@ -134,10 +146,7 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
     dispose: () => {
       fileWatcher.dispose();
       wsClient.disconnect();
-      // Clear editor registry cache on disposal
-      if (editorRegistry) {
-        editorRegistry.clearCache();
-      }
+      editorRegistry.clearCache();
     },
   });
 }
@@ -164,85 +173,93 @@ async function handleIncomingMessage(message: ProtocolMessage): Promise<void> {
  */
 async function handlePromptInjection(message: InjectPromptMessage): Promise<void> {
   const startTime = Date.now();
-  outputChannel.appendLine(`[INFO] Handling prompt injection: "${message.prompt.substring(0, 50)}..."`);
+  outputChannel.appendLine(
+    `[INFO] Handling prompt injection: "${message.payload.prompt.substring(0, 50)}..."`
+  );
 
   try {
     // Get the best available editor adapter
     const adapter = await editorRegistry.getBestAdapter();
 
     if (!adapter) {
-      // No editor available - send error response
-      const errorResponse: InjectPromptResponseMessage = {
+      const errorResponse: InjectPromptResponse = {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
         type: 'INJECT_PROMPT_RESPONSE',
-        success: false,
-        error: 'No AI editor is installed. Please install Continue, Kiro, Cursor, or Antigravity.',
-        originalRequestId: message.id,
+        originalId: message.id,
+        payload: {
+          success: false,
+          error:
+            'No AI editor is installed. Please install Continue, Kiro, Cursor, or Antigravity.',
+        },
       };
-
       wsClient.send(errorResponse);
       outputChannel.appendLine(`[ERROR] No AI editor available for prompt injection`);
       return;
     }
 
-    outputChannel.appendLine(`[INFO] Using editor: ${adapter.editorName} (${adapter.capabilities.syncLevel} sync)`);
+    outputChannel.appendLine(
+      `[INFO] Using editor: ${adapter.editorName} (${adapter.capabilities.syncLevel} sync)`
+    );
 
-    // Check if the adapter supports prompt injection
     if (!adapter.capabilities.canInjectPrompt) {
-      const errorResponse: InjectPromptResponseMessage = {
+      const errorResponse: InjectPromptResponse = {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
         type: 'INJECT_PROMPT_RESPONSE',
-        success: false,
-        error: `Editor ${adapter.editorName} does not support prompt injection`,
-        editorUsed: adapter.editorName,
-        originalRequestId: message.id,
+        originalId: message.id,
+        payload: {
+          success: false,
+          error: `Editor ${adapter.editorName} does not support prompt injection`,
+          editorUsed: adapter.editorName,
+        },
       };
-
       wsClient.send(errorResponse);
-      outputChannel.appendLine(`[ERROR] Editor ${adapter.editorName} does not support prompt injection`);
+      outputChannel.appendLine(
+        `[ERROR] Editor ${adapter.editorName} does not support prompt injection`
+      );
       return;
     }
 
-    // Inject the prompt
-    const result = await adapter.injectPrompt(message.prompt);
+    const result = await adapter.injectPrompt(message.payload.prompt);
     const elapsed = Date.now() - startTime;
 
-    // Send response back to mobile client
-    const response: InjectPromptResponseMessage = {
+    const response: InjectPromptResponse = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
       type: 'INJECT_PROMPT_RESPONSE',
-      success: result.success,
-      error: result.error,
-      editorUsed: adapter.editorName,
-      commandUsed: result.commandUsed,
-      originalRequestId: message.id,
+      originalId: message.id,
+      payload: {
+        success: result.success,
+        error: result.error,
+        editorUsed: adapter.editorName,
+      },
     };
-
     wsClient.send(response);
 
     if (result.success) {
-      outputChannel.appendLine(`[INFO] Prompt injection successful (${elapsed}ms) using ${result.commandUsed}`);
+      outputChannel.appendLine(
+        `[INFO] Prompt injection successful (${elapsed}ms) using ${result.commandUsed}`
+      );
     } else {
       outputChannel.appendLine(`[ERROR] Prompt injection failed (${elapsed}ms): ${result.error}`);
     }
   } catch (error) {
     const elapsed = Date.now() - startTime;
-    
-    // Send error response
-    const errorResponse: InjectPromptResponseMessage = {
+    const errorResponse: InjectPromptResponse = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
       type: 'INJECT_PROMPT_RESPONSE',
-      success: false,
-      error: `Unexpected error during prompt injection: ${error}`,
-      originalRequestId: message.id,
+      originalId: message.id,
+      payload: {
+        success: false,
+        error: `Unexpected error during prompt injection: ${error}`,
+      },
     };
-
     wsClient.send(errorResponse);
-    outputChannel.appendLine(`[ERROR] Unexpected error during prompt injection (${elapsed}ms): ${error}`);
+    outputChannel.appendLine(
+      `[ERROR] Unexpected error during prompt injection (${elapsed}ms): ${error}`
+    );
   }
 }
 
@@ -252,7 +269,7 @@ async function handlePromptInjection(message: InjectPromptMessage): Promise<void
  */
 async function handleFileChanged(filePath: string): Promise<void> {
   const pipelineStartTime = Date.now();
-  
+
   try {
     outputChannel.appendLine(`[INFO] File changed: ${filePath}`);
 
@@ -262,7 +279,9 @@ async function handleFileChanged(filePath: string): Promise<void> {
     try {
       headContent = await gitModule.getHeadVersion(filePath);
       const gitElapsed = Date.now() - gitStartTime;
-      outputChannel.appendLine(`[PERF] Git operation: ${gitElapsed}ms (HEAD content: ${headContent.length} bytes)`);
+      outputChannel.appendLine(
+        `[PERF] Git operation: ${gitElapsed}ms (HEAD content: ${headContent.length} bytes)`
+      );
     } catch (error) {
       const gitElapsed = Date.now() - gitStartTime;
       outputChannel.appendLine(`[ERROR] Failed to fetch HEAD version (${gitElapsed}ms): ${error}`);
@@ -273,7 +292,7 @@ async function handleFileChanged(filePath: string): Promise<void> {
     const diffStartTime = Date.now();
     const payload = await diffGenerator.generateDiff(filePath, headContent);
     const diffElapsed = Date.now() - diffStartTime;
-    
+
     if (!payload) {
       outputChannel.appendLine(`[WARN] Failed to generate diff (${diffElapsed}ms), skipping`);
       return;
@@ -287,7 +306,7 @@ async function handleFileChanged(filePath: string): Promise<void> {
     const compressionStartTime = Date.now();
     const compressedPayload = await compressPayloadIfNeeded(payload);
     const compressionElapsed = Date.now() - compressionStartTime;
-    
+
     if (compressedPayload.compressed) {
       outputChannel.appendLine(
         `[PERF] Compression: ${compressionElapsed}ms (${compressedPayload.originalSize} → ${compressedPayload.compressedSize} bytes, ${compressedPayload.compressionRatio}% reduction)`
@@ -317,14 +336,13 @@ async function handleFileChanged(filePath: string): Promise<void> {
     // Log total pipeline time
     const totalElapsed = Date.now() - pipelineStartTime;
     outputChannel.appendLine(`[PERF] Total pipeline: ${totalElapsed}ms`);
-    
+
     // Performance warning if total time exceeds 2000ms
     if (totalElapsed > 2000) {
       outputChannel.appendLine(
         `[WARN] Pipeline exceeded 2000ms threshold: ${totalElapsed}ms for ${payload.fileName}`
       );
     }
-
   } catch (error) {
     const totalElapsed = Date.now() - pipelineStartTime;
     outputChannel.appendLine(`[ERROR] Pipeline error (${totalElapsed}ms): ${error}`);
@@ -350,11 +368,11 @@ export function deactivate() {
 
 /**
  * Get the editor registry instance.
- * 
+ *
  * This function provides access to the editor registry for other modules
  * that need to interact with AI editors (e.g., WebSocket handlers for
  * mobile prompt injection).
- * 
+ *
  * @returns The editor registry instance, or undefined if not initialized
  */
 export function getEditorRegistry(): EditorRegistry | undefined {
@@ -363,11 +381,11 @@ export function getEditorRegistry(): EditorRegistry | undefined {
 
 /**
  * Reset the editor registry (for testing purposes only).
- * 
+ *
  * @internal
  */
 export function resetEditorRegistry(): void {
-  editorRegistry = undefined as any;
+  editorRegistry = undefined as unknown as EditorRegistry;
 }
 
 /**

@@ -82,7 +82,7 @@ export interface DiffArtifact {
 
 /**
  * Common interface that all editor adapters must implement.
- * 
+ *
  * Safety: All methods use only public VS Code APIs and return result objects (never throw).
  */
 export interface IEditorAdapter {

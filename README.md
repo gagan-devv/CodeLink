@@ -11,12 +11,14 @@ CodeLink consists of three main components:
 A Visual Studio Code extension that integrates with your local development environment. It communicates with the relay server to receive code change requests from the mobile client.
 
 **Git Integration Components**:
+
 - **File Watcher**: Monitors active editor changes with 1000ms debouncing
 - **Git Integration Module**: Fetches HEAD versions from local Git repository using simple-git
 - **Diff Generator**: Compares HEAD vs current file state and generates FileContextPayload
 - **WebSocket Client**: Transmits SYNC_FULL_CONTEXT messages to relay server
 
 **Editor Adapter System**:
+
 - **Editor Registry**: Manages and detects available AI code editors (Continue, Kiro, Cursor, Antigravity)
 - **Capability-Driven Architecture**: Adapts behavior based on what each editor supports
 - **Prompt Injection**: Sends prompts from mobile to AI editor chat panels using public VS Code commands
@@ -101,6 +103,7 @@ External Dependencies:
 ```
 
 **Data Flow**:
+
 1. User edits file in VS Code
 2. File Watcher detects change (after 1000ms debounce)
 3. Git Integration Module fetches HEAD version from Git repository
@@ -125,12 +128,12 @@ CodeLink integrates with multiple AI code editors through a capability-driven ad
 
 #### Supported Editors
 
-| Editor | Prompt Injection | Chat History | Token Streaming | Diff Artifacts | Sync Level |
-|--------|-----------------|--------------|-----------------|----------------|------------|
-| **Continue** | ✅ | ✅ | ✅ | ✅ | Full |
-| **Kiro** | ✅ | ✅ | ✅ | ✅ | Partial |
-| **Cursor** | ✅ | ❌ | ❌ | ❌ | Control-Only |
-| **Antigravity** | ✅ | ❌ | ❌ | ❌ | Control-Only |
+| Editor          | Prompt Injection | Chat History | Token Streaming | Diff Artifacts | Sync Level   |
+| --------------- | ---------------- | ------------ | --------------- | -------------- | ------------ |
+| **Continue**    | ✅               | ✅           | ✅              | ✅             | Full         |
+| **Kiro**        | ✅               | ✅           | ✅              | ✅             | Partial      |
+| **Cursor**      | ✅               | ❌           | ❌              | ❌             | Control-Only |
+| **Antigravity** | ✅               | ❌           | ❌              | ❌             | Control-Only |
 
 #### How It Works
 
@@ -197,6 +200,7 @@ interface InjectPromptResponse {
 ```
 
 **Message Flow**:
+
 1. Mobile client sends `INJECT_PROMPT` message to relay server
 2. Relay server routes message to VS Code extension
 3. Extension queries Editor Registry for best available adapter
@@ -216,23 +220,27 @@ The Editor Adapter System follows these design principles:
 #### Troubleshooting
 
 **Prompt injection not working**:
+
 - Verify an AI editor is installed in VS Code
 - Check VS Code Output panel for CodeLink extension logs
 - Ensure the editor's extension is activated (open its chat panel once)
 - Review the error message in the mobile client response
 
 **No editor detected**:
+
 - Install at least one supported AI editor (Continue, Kiro, Cursor, or Antigravity)
 - Restart VS Code after installing an editor
 - Check that the editor extension is enabled in VS Code
 - Run "Developer: Show Running Extensions" to verify the editor is active
 
 **Wrong editor selected**:
+
 - The system automatically selects the editor with the highest sync level
 - Preference order: Continue (full) > Kiro (partial) > Cursor/Antigravity (control-only)
 - To force a specific editor, disable other AI editor extensions
 
 **Command execution fails**:
+
 - Ensure the AI editor is fully initialized (may take a few seconds after VS Code starts)
 - Check that the editor's chat panel can be opened manually
 - Review VS Code extension logs for detailed error messages
@@ -307,15 +315,16 @@ interface SyncFullContextMessage {
 }
 
 interface FileContextPayload {
-  fileName: string;        // Workspace-relative path (e.g., "src/index.ts")
-  originalFile: string;    // Content from Git HEAD (empty if untracked)
-  modifiedFile: string;    // Current file content from disk
-  isDirty: boolean;        // True if file has unsaved changes
-  timestamp: number;       // Unix timestamp in milliseconds
+  fileName: string; // Workspace-relative path (e.g., "src/index.ts")
+  originalFile: string; // Content from Git HEAD (empty if untracked)
+  modifiedFile: string; // Current file content from disk
+  isDirty: boolean; // True if file has unsaved changes
+  timestamp: number; // Unix timestamp in milliseconds
 }
 ```
 
 **Message Flow**:
+
 1. VS Code extension creates `SYNC_FULL_CONTEXT` message with `FileContextPayload`
 2. Message is sent to relay server via WebSocket
 3. Relay server broadcasts message to all connected mobile clients
@@ -332,6 +341,7 @@ The Git Integration feature is designed for responsive real-time feedback:
 - **End-to-End Latency**: Total time from last keystroke to mobile display is under 2 seconds
 
 **Performance Tips**:
+
 - Large files (>10,000 lines) may take longer to process
 - Binary files are automatically skipped
 - Network latency affects WebSocket transmission time
@@ -340,6 +350,7 @@ The Git Integration feature is designed for responsive real-time feedback:
 #### Troubleshooting
 
 **Diffs not appearing on mobile**:
+
 - Verify the relay server is running and accessible
 - Check that the mobile client shows "Connected" status
 - Ensure the file is within your VS Code workspace
@@ -347,36 +358,42 @@ The Git Integration feature is designed for responsive real-time feedback:
 - Verify the file is a text file (binary files are skipped)
 
 **Empty diffs for tracked files**:
+
 - Ensure the file is committed to Git (check `git status`)
 - Verify Git repository is initialized in your workspace
 - Check that the file path is correct and relative to workspace root
 - Review VS Code extension logs for Git operation errors
 
 **Performance issues**:
+
 - Large files (>10,000 lines) may experience slower processing
 - Check network latency between VS Code and relay server
 - Verify Git operations are not timing out (check logs)
 - Consider closing unused files to reduce monitoring overhead
 
 **Git repository not found**:
+
 - Ensure your workspace is within a Git repository
 - Run `git rev-parse --show-toplevel` to verify Git is initialized
 - Check that the VS Code workspace folder is correctly configured
 - Review extension logs for Git initialization errors
 
 **WebSocket connection issues**:
+
 - Verify relay server is running on the expected port (default: 8080)
 - Check firewall settings allow WebSocket connections
 - Ensure no other service is using the relay server port
 - Review browser console for WebSocket connection errors
 
 **Unsaved changes not reflected**:
+
 - The diff shows disk content, not unsaved editor content
 - Save the file (Ctrl+S / Cmd+S) to see unsaved changes in the diff
 - The orange dot indicator shows when changes are unsaved
 - isDirty flag tracks unsaved state separately from diff content
 
 **Untracked files showing as all additions**:
+
 - This is expected behavior for files not committed to Git
 - The originalFile will be empty for untracked files
 - Commit the file to Git to see proper diffs
@@ -514,12 +531,56 @@ To verify the entire system is working:
 
 ## Code Quality Scripts
 
+### CI/CD Pipeline
+
+CodeLink uses GitHub Actions for continuous integration. The pipeline runs on every commit and includes:
+
+- **Linting**: ESLint checks for code quality
+- **Type Checking**: TypeScript compilation for all packages
+- **Formatting**: Prettier verification
+- **Testing**: Comprehensive test suites with 80% coverage requirement
+
+See [CI/CD Setup Documentation](.github/CI_CD_SETUP.md) for detailed information.
+
+### Pre-Commit Hooks
+
+Install Git hooks to run checks before each commit:
+
+```bash
+./scripts/setup-git-hooks.sh
+```
+
+This will automatically run linting, type checking, and formatting checks before allowing commits.
+
 ### Linting
 
 Check code for linting errors:
 
 ```bash
 npm run lint
+```
+
+Auto-fix linting issues:
+
+```bash
+npm run lint:fix
+```
+
+### Type Checking
+
+Check TypeScript compilation for all packages:
+
+```bash
+npm run typecheck
+```
+
+Check individual packages:
+
+```bash
+npm run typecheck:protocol   # Protocol package
+npm run typecheck:relay      # Relay server
+npm run typecheck:vscode     # VS Code extension
+npm run typecheck:mobile     # Mobile client
 ```
 
 ### Formatting
@@ -536,6 +597,14 @@ Check if code is properly formatted:
 npm run format:check
 ```
 
+### Pre-Commit Check
+
+Run all checks (lint + typecheck + format):
+
+```bash
+npm run precommit
+```
+
 ### Testing
 
 Run all tests:
@@ -548,6 +617,71 @@ Run tests in watch mode:
 
 ```bash
 npm run test:watch
+```
+
+Run tests with coverage:
+
+```bash
+npm run test:coverage
+```
+
+## Development Workflow
+
+### Starting a New Feature
+
+1. Create a feature branch:
+
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. Install pre-commit hooks (first time only):
+
+   ```bash
+   ./scripts/setup-git-hooks.sh
+   ```
+
+3. Make your changes and commit:
+
+   ```bash
+   git add .
+   git commit -m "feat: your feature description"
+   ```
+
+   The pre-commit hook will automatically run linting, type checking, and formatting checks.
+
+4. Push your changes:
+
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+5. Create a pull request on GitHub
+   - CI/CD pipeline will run automatically
+   - All checks must pass before merging
+   - At least one approval is required
+
+### Before Committing
+
+Always run these checks locally:
+
+```bash
+# Run all pre-commit checks
+npm run precommit
+
+# Or run individually
+npm run lint
+npm run typecheck
+npm run format:check
+npm test
+```
+
+### Bypassing Pre-Commit Hooks
+
+In rare cases where you need to bypass the pre-commit hook (not recommended):
+
+```bash
+git commit --no-verify -m "your message"
 ```
 
 ## Project Structure

@@ -1,12 +1,20 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { FileContextPayload } from '@codelink/protocol';
+import { useOrientation } from '../hooks';
 
-interface DiffViewerProps {
+/**
+ * DiffViewer component props
+ */
+export interface DiffViewerProps {
   payload: FileContextPayload;
   isLoading?: boolean;
   onBack?: () => void;
 }
 
+/**
+ * Represents a single line in the diff
+ */
 interface DiffLine {
   type: 'added' | 'removed' | 'unchanged';
   lineNumber: number;
@@ -15,9 +23,18 @@ interface DiffLine {
   newLineNumber?: number;
 }
 
-function DiffViewer({ payload, isLoading = false, onBack }: DiffViewerProps) {
+/**
+ * DiffViewer component displays unified file diffs in React Native
+ * Supports both portrait and landscape orientations with responsive layout
+ * Provides horizontal and vertical scrolling for long content
+ *
+ * Requirements: 6.1, 7.2, 7.4, 7.5, 10.1, 10.2, 10.3, 10.4, 10.5
+ */
+export const DiffViewer: React.FC<DiffViewerProps> = ({ payload, isLoading = false, onBack }) => {
   const { fileName, originalFile, modifiedFile } = payload;
-  const [isRendering, setIsRendering] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_isRendering, setIsRendering] = useState(true);
+  const { isLandscape } = useOrientation();
 
   // Check if this is a new file (no original content)
   const isNewFile = originalFile === '';
@@ -25,16 +42,18 @@ function DiffViewer({ payload, isLoading = false, onBack }: DiffViewerProps) {
   // Check if there are no changes
   const noChanges = originalFile === modifiedFile;
 
-  // Calculate additions and deletions
+  /**
+   * Calculate additions and deletions statistics
+   */
   const calculateStats = () => {
     if (noChanges) return { additions: 0, deletions: 0 };
-    
+
     const oldLines = originalFile.split('\n');
     const newLines = modifiedFile.split('\n');
-    
+
     let additions = 0;
     let deletions = 0;
-    
+
     // Simple line-based diff calculation
     const maxLines = Math.max(oldLines.length, newLines.length);
     for (let i = 0; i < maxLines; i++) {
@@ -47,21 +66,24 @@ function DiffViewer({ payload, isLoading = false, onBack }: DiffViewerProps) {
         deletions++;
       }
     }
-    
+
     return { additions, deletions };
   };
 
   const stats = calculateStats();
 
-  // Generate simple line-by-line diff (memoized to recalculate when payload changes)
+  /**
+   * Generate simple line-by-line diff
+   * Memoized to recalculate only when payload changes
+   */
   const diffLines = useMemo(() => {
     const generateDiff = (): DiffLine[] => {
       if (noChanges && !isNewFile) return [];
-      
+
       const oldLines = originalFile.split('\n');
       const newLines = modifiedFile.split('\n');
       const diff: DiffLine[] = [];
-      
+
       if (isNewFile) {
         // All lines are additions
         newLines.forEach((line, idx) => {
@@ -77,7 +99,7 @@ function DiffViewer({ payload, isLoading = false, onBack }: DiffViewerProps) {
         const maxLines = Math.max(oldLines.length, newLines.length);
         let oldLineNum = 1;
         let newLineNum = 1;
-        
+
         for (let i = 0; i < maxLines; i++) {
           if (i >= oldLines.length) {
             // Addition
@@ -121,247 +143,291 @@ function DiffViewer({ payload, isLoading = false, onBack }: DiffViewerProps) {
           }
         }
       }
-      
+
       return diff;
     };
 
     return generateDiff();
   }, [originalFile, modifiedFile, noChanges, isNewFile]);
 
-  // Get file path parts
+  /**
+   * Get file path parts for display
+   */
   const getFilePath = () => {
     const parts = fileName.split('/');
     return parts.slice(0, -1).join(' / ');
   };
 
-  // Handle loading state transition
+  /**
+   * Handle loading state transition
+   */
   useEffect(() => {
     setIsRendering(true);
     const timer = setTimeout(() => setIsRendering(false), 100);
     return () => clearTimeout(timer);
   }, [payload]);
 
-  const handleComment = () => {
-    console.log('Comment button clicked');
-    alert('Comment functionality not yet implemented');
-  };
+  /**
+   * Render a single diff line with syntax highlighting
+   */
+  const renderLine = (line: DiffLine, index: number) => {
+    const lineStyle = [
+      styles.lineContainer,
+      line.type === 'added' && styles.addedLine,
+      line.type === 'removed' && styles.removedLine,
+    ];
 
-  const handleApprove = () => {
-    console.log('Approve button clicked');
-    alert('Approve functionality not yet implemented');
+    return (
+      <View key={index} style={lineStyle}>
+        {/* Line numbers */}
+        <View style={styles.lineNumbers}>
+          <Text style={styles.lineNumber}>{line.oldLineNumber || ''}</Text>
+          <Text style={[styles.lineNumber, styles.lineNumberRight]}>
+            {line.newLineNumber || ''}
+          </Text>
+        </View>
+
+        {/* Diff indicator */}
+        <View style={styles.diffIndicator}>
+          {line.type === 'added' && <Text style={styles.addedIndicator}>+</Text>}
+          {line.type === 'removed' && <Text style={styles.removedIndicator}>-</Text>}
+        </View>
+
+        {/* Code content */}
+        <Text style={styles.lineContent}>{line.content || ' '}</Text>
+      </View>
+    );
   };
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full bg-[#0d1117]">
-        <div className="flex items-center justify-center h-full">
-          <div className="w-8 h-8 border-4 border-gray-700 border-t-blue-500 rounded-full animate-spin" />
-        </div>
-      </div>
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </View>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#0d1117]">
+    <View style={[styles.container, isLandscape && styles.containerLandscape]}>
       {/* Header */}
-      <div className="bg-[#161b22] border-b border-gray-800 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <button
-              onClick={onBack}
-              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors flex-shrink-0"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <svg
-                className="w-5 h-5 text-gray-400 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <div className="flex-1 min-w-0">
-                <div className="text-white font-medium truncate">{fileName}</div>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="px-2 py-1 bg-green-600/20 text-green-400 text-xs font-semibold rounded">
-              +{stats.additions}
-            </div>
-            <div className="px-2 py-1 bg-red-600/20 text-red-400 text-xs font-semibold rounded">
-              -{stats.deletions}
-            </div>
-            <button className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerLeft}>
+            {onBack && (
+              <Text style={styles.backButton} onPress={onBack}>
+                ← Back
+              </Text>
+            )}
+            <View style={styles.fileInfo}>
+              <Text style={styles.fileName} numberOfLines={1}>
+                {fileName}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.statsContainer}>
+            <View style={styles.additionsBadge}>
+              <Text style={styles.additionsText}>+{stats.additions}</Text>
+            </View>
+            <View style={styles.deletionsBadge}>
+              <Text style={styles.deletionsText}>-{stats.deletions}</Text>
+            </View>
+          </View>
+        </View>
 
         {/* File Path */}
         {getFilePath() && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-              />
-            </svg>
-            <span className="font-mono">{getFilePath()}</span>
-          </div>
+          <View style={styles.filePathContainer}>
+            <Text style={styles.filePath} numberOfLines={1}>
+              {getFilePath()}
+            </Text>
+          </View>
         )}
-      </div>
+      </View>
 
-      {/* Diff Content */}
-      <div className={`flex-1 overflow-auto ${isRendering ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}>
+      {/* Diff Content with horizontal and vertical scrolling */}
+      <View style={styles.diffContainer}>
         {noChanges && !isNewFile ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-gray-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div className="text-gray-400 text-sm">No changes</div>
-            </div>
-          </div>
+          <View style={styles.noChangesContainer}>
+            <Text style={styles.noChangesIcon}>✓</Text>
+            <Text style={styles.noChangesText}>No changes</Text>
+          </View>
         ) : (
-          <div className="font-mono text-sm">
-            {diffLines.map((line, idx) => (
-              <div
-                key={idx}
-                className={`flex ${
-                  line.type === 'added'
-                    ? 'bg-green-900/30'
-                    : line.type === 'removed'
-                    ? 'bg-red-900/30'
-                    : 'bg-transparent'
-                }`}
-              >
-                {/* Line numbers */}
-                <div className="flex-shrink-0 flex">
-                  <div className="w-12 text-right px-2 py-1 text-gray-600 select-none">
-                    {line.oldLineNumber || ''}
-                  </div>
-                  <div className="w-12 text-right px-2 py-1 text-gray-600 select-none border-r border-gray-800">
-                    {line.newLineNumber || ''}
-                  </div>
-                </div>
-                
-                {/* Diff indicator */}
-                <div className="w-8 flex-shrink-0 flex items-center justify-center text-gray-500">
-                  {line.type === 'added' ? (
-                    <span className="text-green-400">+</span>
-                  ) : line.type === 'removed' ? (
-                    <span className="text-red-400">-</span>
-                  ) : (
-                    ''
-                  )}
-                </div>
-                
-                {/* Code content */}
-                <div className="flex-1 px-2 py-1 text-gray-300 overflow-x-auto whitespace-pre">
-                  {line.content || ' '}
-                </div>
-              </div>
-            ))}
-          </div>
+          <ScrollView horizontal contentContainerStyle={styles.horizontalScrollContent}>
+            <ScrollView
+              style={styles.verticalScroll}
+              contentContainerStyle={styles.verticalScrollContent}
+            >
+              {diffLines.map(renderLine)}
+            </ScrollView>
+          </ScrollView>
         )}
-      </div>
-
-      {/* Action Bar */}
-      <div className="bg-[#161b22] border-t border-gray-800 p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={handleComment}
-            className="bg-[#21262d] hover:bg-[#2d333b] text-gray-300 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 border border-gray-700 transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-              />
-            </svg>
-            Comment
-          </button>
-          <button
-            onClick={handleApprove}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            Approve
-          </button>
-        </div>
-      </div>
-    </div>
+      </View>
+    </View>
   );
-}
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0d1117',
+  },
+  containerLandscape: {
+    // Landscape-specific adjustments handled by ScrollView
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#9ca3af',
+    fontSize: 16,
+  },
+  header: {
+    backgroundColor: '#161b22',
+    borderBottomWidth: 1,
+    borderBottomColor: '#30363d',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+  },
+  backButton: {
+    color: '#9ca3af',
+    fontSize: 16,
+    marginRight: 12,
+  },
+  fileInfo: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 8,
+  },
+  fileName: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginLeft: 12,
+  },
+  additionsBadge: {
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  additionsText: {
+    color: '#4CAF50',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  deletionsBadge: {
+    backgroundColor: 'rgba(244, 67, 54, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  deletionsText: {
+    color: '#F44336',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filePathContainer: {
+    marginTop: 8,
+  },
+  filePath: {
+    color: '#6b7280',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  diffContainer: {
+    flex: 1,
+  },
+  noChangesContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noChangesIcon: {
+    fontSize: 48,
+    color: '#6b7280',
+    marginBottom: 16,
+  },
+  noChangesText: {
+    color: '#9ca3af',
+    fontSize: 14,
+  },
+  horizontalScrollContent: {
+    minWidth: '100%',
+  },
+  verticalScroll: {
+    flex: 1,
+  },
+  verticalScrollContent: {
+    paddingBottom: 16,
+  },
+  lineContainer: {
+    flexDirection: 'row',
+    minHeight: 24,
+    paddingVertical: 2,
+  },
+  addedLine: {
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+  },
+  removedLine: {
+    backgroundColor: 'rgba(244, 67, 54, 0.15)',
+  },
+  lineNumbers: {
+    flexDirection: 'row',
+    minWidth: 96,
+  },
+  lineNumber: {
+    width: 48,
+    textAlign: 'right',
+    paddingHorizontal: 8,
+    color: '#6b7280',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  lineNumberRight: {
+    borderRightWidth: 1,
+    borderRightColor: '#30363d',
+  },
+  diffIndicator: {
+    width: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addedIndicator: {
+    color: '#4CAF50',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  removedIndicator: {
+    color: '#F44336',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  lineContent: {
+    flex: 1,
+    paddingHorizontal: 8,
+    color: '#d1d5db',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+});
 
 export default DiffViewer;
