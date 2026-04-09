@@ -3,6 +3,7 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": ".",
+    "jsx": "react",
     "types": ["vitest/globals", "node"],
     "paths": {
       "@testing-library/react-native": [
@@ -15,7 +16,8 @@
     "vitest.config.ts",
     "packages/protocol/src/**/*",
     "packages/relay-server/src/**/*",
-    "packages/vscode-extension/src/**/*"
+    "packages/vscode-extension/src/**/*",
+    "packages/mobile-client/src/**/*"
   ],
   "exclude": ["node_modules/@testing-library/react-native/src"]
 }

@@ -162,50 +162,53 @@ const AppContent: React.FC = () => {
   ]);
 
   // Render scene based on route
+  const DashboardScene: React.FC = () => (
+    <View style={styles.scene}>
+      <Dashboard
+        connectionStatus={status}
+        onNavigateToCompose={() => setIndex(1)}
+        onNavigateToDiffs={() => setIndex(2)}
+        onRefresh={async () => {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+      />
+    </View>
+  );
+
+  const PromptScene: React.FC = () => (
+    <View style={styles.scene}>
+      <PromptComposer onSubmit={handlePromptSubmit} isLoading={isSubmitting} error={promptError} />
+      <PromptResponseDisplay response={promptResponse} onDismiss={handleResponseDismiss} />
+    </View>
+  );
+
+  const DiffScene: React.FC = () => (
+    <View style={styles.scene}>
+      {diffState.currentDiff ? (
+        <DiffViewer payload={diffState.currentDiff} />
+      ) : (
+        <EmptyState
+          icon="file-document-outline"
+          title="No Diffs Available"
+          description="Diffs will appear here when files are synced from your editor"
+          actionLabel="Go to Dashboard"
+          onAction={() => setIndex(0)}
+        />
+      )}
+    </View>
+  );
+
+  const SettingsScene: React.FC = () => (
+    <View style={styles.scene}>
+      <Settings />
+    </View>
+  );
+
   const renderScene = BottomNavigation.SceneMap({
-    dashboard: () => (
-      <View style={styles.scene}>
-        <Dashboard
-          connectionStatus={status}
-          onNavigateToCompose={() => setIndex(1)}
-          onNavigateToDiffs={() => setIndex(2)}
-          onRefresh={async () => {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            // Refresh logic can be added here if needed
-          }}
-        />
-      </View>
-    ),
-    prompt: () => (
-      <View style={styles.scene}>
-        <PromptComposer
-          onSubmit={handlePromptSubmit}
-          isLoading={isSubmitting}
-          error={promptError}
-        />
-        <PromptResponseDisplay response={promptResponse} onDismiss={handleResponseDismiss} />
-      </View>
-    ),
-    diff: () => (
-      <View style={styles.scene}>
-        {diffState.currentDiff ? (
-          <DiffViewer payload={diffState.currentDiff} />
-        ) : (
-          <EmptyState
-            icon="file-document-outline"
-            title="No Diffs Available"
-            description="Diffs will appear here when files are synced from your editor"
-            actionLabel="Go to Dashboard"
-            onAction={() => setIndex(0)}
-          />
-        )}
-      </View>
-    ),
-    settings: () => (
-      <View style={styles.scene}>
-        <Settings />
-      </View>
-    ),
+    dashboard: DashboardScene,
+    prompt: PromptScene,
+    diff: DiffScene,
+    settings: SettingsScene,
   });
 
   // Render icon with badge
@@ -218,7 +221,9 @@ const AppContent: React.FC = () => {
     focused: boolean;
     color: string;
   }) => {
-    const icon = focused ? route.focusedIcon : route.unfocusedIcon;
+    const icon = (focused ? route.focusedIcon : route.unfocusedIcon) as React.ComponentProps<
+      typeof MaterialCommunityIcons
+    >['name'];
 
     // Show badge on diff tab if there are new diffs
     if (route.key === 'diff' && diffState.history.length > 0) {
