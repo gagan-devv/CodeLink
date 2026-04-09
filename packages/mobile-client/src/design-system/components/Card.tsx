@@ -68,80 +68,95 @@ export interface CardProps {
 
 /**
  * Card component with surface hierarchy variants
+ * Memoized for performance optimization (Requirement 15.6)
  */
-export const Card: React.FC<CardProps> = ({
-  variant = 'default',
-  padding = 'lg',
-  borderRadius = 'lg',
-  elevation = 0,
-  children,
-  style,
-  onPress,
-}) => {
-  const { theme } = useDesignSystem();
-
-  /**
-   * Get background color based on variant (surface hierarchy)
-   */
-  const getBackgroundColor = (): string => {
-    switch (variant) {
-      case 'lowest':
-        return theme.colors.surfaceContainerLowest;
-      case 'low':
-        return theme.colors.surfaceContainerLow;
-      case 'default':
-        return theme.colors.surfaceContainer;
-      case 'high':
-        return theme.colors.surfaceContainerHigh;
-      case 'highest':
-        return theme.colors.surfaceContainerHighest;
-    }
-  };
-
-  /**
-   * Get padding value from spacing tokens
-   */
-  const getPadding = (): number => {
-    return theme.spacing[padding];
-  };
-
-  /**
-   * Get border radius value from border radius tokens
-   */
-  const getBorderRadius = (): number => {
-    return theme.borderRadius[borderRadius];
-  };
-
-  /**
-   * Build card style
-   */
-  const cardStyle: StyleProp<ViewStyle> = [
-    styles.card,
-    {
-      backgroundColor: getBackgroundColor(),
-      padding: getPadding(),
-      borderRadius: getBorderRadius(),
-      elevation,
-    },
+export const Card = React.memo<CardProps>(
+  ({
+    variant = 'default',
+    padding = 'lg',
+    borderRadius = 'lg',
+    elevation = 0,
+    children,
     style,
-  ];
+    onPress,
+  }) => {
+    const { theme } = useDesignSystem();
 
-  /**
-   * Render card as touchable if onPress is provided
-   */
-  if (onPress) {
+    /**
+     * Get background color based on variant (surface hierarchy)
+     */
+    const getBackgroundColor = (): string => {
+      switch (variant) {
+        case 'lowest':
+          return theme.colors.surfaceContainerLowest;
+        case 'low':
+          return theme.colors.surfaceContainerLow;
+        case 'default':
+          return theme.colors.surfaceContainer;
+        case 'high':
+          return theme.colors.surfaceContainerHigh;
+        case 'highest':
+          return theme.colors.surfaceContainerHighest;
+      }
+    };
+
+    /**
+     * Get padding value from spacing tokens
+     */
+    const getPadding = (): number => {
+      return theme.spacing[padding];
+    };
+
+    /**
+     * Get border radius value from border radius tokens
+     */
+    const getBorderRadius = (): number => {
+      return theme.borderRadius[borderRadius];
+    };
+
+    /**
+     * Build card style
+     */
+    const cardStyle: StyleProp<ViewStyle> = [
+      styles.card,
+      {
+        backgroundColor: getBackgroundColor(),
+        padding: getPadding(),
+        borderRadius: getBorderRadius(),
+        elevation,
+      },
+      style,
+    ];
+
+    /**
+     * Render card as touchable if onPress is provided
+     */
+    if (onPress) {
+      return (
+        <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={cardStyle}>
+          {children}
+        </TouchableOpacity>
+      );
+    }
+
+    /**
+     * Render card as static view
+     */
+    return <View style={cardStyle}>{children}</View>;
+  },
+  // Custom comparison function for better memoization
+  (prevProps, nextProps) => {
     return (
-      <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={cardStyle}>
-        {children}
-      </TouchableOpacity>
+      prevProps.variant === nextProps.variant &&
+      prevProps.padding === nextProps.padding &&
+      prevProps.borderRadius === nextProps.borderRadius &&
+      prevProps.elevation === nextProps.elevation &&
+      prevProps.onPress === nextProps.onPress &&
+      prevProps.style === nextProps.style &&
+      prevProps.children === nextProps.children
     );
   }
-
-  /**
-   * Render card as static view
-   */
-  return <View style={cardStyle}>{children}</View>;
-};
+);
 
 const styles = StyleSheet.create({
   card: {

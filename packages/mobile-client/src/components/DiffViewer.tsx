@@ -7,6 +7,7 @@ import { TopAppBar } from '../navigation/TopAppBar';
 import { Card } from '../design-system/components/Card';
 import { Button } from '../design-system/components/Button';
 import { Icon } from '../design-system/components/Icon';
+import { Skeleton } from '../design-system/components/Skeleton';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 
 /**
@@ -411,11 +412,36 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
         <TopAppBar connectionStatus={connectionStatus} />
-        <View style={styles.loadingContainer}>
-          <Text variant="body-lg" color="onSurfaceVariant">
-            Loading...
-          </Text>
-        </View>
+        <ScrollView style={styles.scrollView}>
+          <View style={{ padding: 16 }}>
+            {/* File header skeleton */}
+            <Card variant="low" style={styles.fileHeader}>
+              <View style={styles.fileHeaderTop}>
+                <View style={{ flex: 1 }}>
+                  <Skeleton width="60%" height={24} style={{ marginBottom: 8 }} />
+                  <Skeleton width="80%" height={16} />
+                </View>
+              </View>
+            </Card>
+
+            {/* Diff content skeleton */}
+            <Card variant="lowest" style={{ marginTop: 16 }}>
+              <View style={styles.diffSkeletonContainer}>
+                {[...Array(10)].map((_, i) => (
+                  <View key={i} style={styles.diffLineSkeletonRow}>
+                    <Skeleton width={40} height={16} style={{ marginRight: 12 }} />
+                    <Skeleton width="85%" height={16} />
+                  </View>
+                ))}
+              </View>
+            </Card>
+
+            {/* Summary footer skeleton */}
+            <Card variant="low" style={styles.summaryFooter}>
+              <Skeleton width="50%" height={20} />
+            </Card>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -627,10 +653,13 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  diffSkeletonContainer: {
+    padding: 16,
+  },
+  diffLineSkeletonRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
   emptyStateContainer: {
     flex: 1,

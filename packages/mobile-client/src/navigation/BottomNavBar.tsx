@@ -7,8 +7,8 @@
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.12, 11.1
  */
 
-import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useDesignSystem } from '../design-system';
@@ -44,6 +44,90 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 /**
+ * Navigation item component with animation
+ * Requirements: 12.7, 12.8
+ */
+const NavItem: React.FC<{
+  item: NavItem;
+  isActive: boolean;
+  onPress: () => void;
+  theme: ReturnType<typeof useDesignSystem>['theme'];
+}> = ({ item, isActive, onPress, theme }) => {
+  const elevationAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+  const bgColorAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+
+  // Animate elevation and background color on selection change
+  // Requirements: 12.7, 12.8 - 200ms duration
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(elevationAnim, {
+        toValue: isActive ? 1 : 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+      Animated.timing(bgColorAnim, {
+        toValue: isActive ? 1 : 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [isActive, elevationAnim, bgColorAnim]);
+
+  const backgroundColor = bgColorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', theme.colors.surfaceContainerLow],
+  });
+
+  const elevation = elevationAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 4],
+  });
+
+  return (
+    <TouchableOpacity
+      style={styles.navItem}
+      onPress={onPress}
+      accessible={true}
+      accessibilityLabel={`Navigate to ${item.label}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
+    >
+      <Animated.View
+        style={[
+          styles.navItemContent,
+          {
+            backgroundColor,
+            borderRadius: theme.borderRadius.lg,
+            elevation: Platform.OS === 'android' ? elevation : 0,
+            shadowOpacity: Platform.OS === 'ios' ? elevationAnim : 0,
+          },
+        ]}
+      >
+        {/* Icon */}
+        <Icon
+          name={item.icon}
+          size={24}
+          color={isActive ? 'secondary' : 'surfaceContainerHighest'}
+        />
+
+        {/* Label */}
+        <Text
+          variant="label-sm"
+          weight="medium"
+          uppercase
+          style={{
+            color: isActive ? theme.colors.secondary : theme.colors.surfaceContainerHighest,
+            marginTop: 4,
+          }}
+        >
+          {item.label}
+        </Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+/**
  * BottomNavBar component with glassmorphism effect
  *
  * Features:
@@ -54,8 +138,9 @@ const NAV_ITEMS: NavItem[] = [
  * - Glassmorphism effect with BlurView
  * - Safe area padding for notched devices
  * - Haptic feedback on tap
+ * - Animated elevation and background color transitions
  *
- * Requirements: 8.1-8.12, 11.1
+ * Requirements: 8.1-8.12, 11.1, 12.7, 12.8
  */
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({ activeRoute, onNavigate }) => {
   const { theme } = useDesignSystem();
@@ -99,41 +184,13 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ activeRoute, onNavig
           const isActive = activeRoute === item.key;
 
           return (
-            <TouchableOpacity
+            <NavItem
               key={item.key}
-              style={[
-                styles.navItem,
-                isActive && {
-                  backgroundColor: theme.colors.surfaceContainerLow,
-                  borderRadius: theme.borderRadius.lg,
-                },
-              ]}
+              item={item}
+              isActive={isActive}
               onPress={() => handlePress(item.key)}
-              accessible={true}
-              accessibilityLabel={`Navigate to ${item.label}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-            >
-              {/* Icon */}
-              <Icon
-                name={item.icon}
-                size={24}
-                color={isActive ? 'secondary' : 'surfaceContainerHighest'}
-              />
-
-              {/* Label */}
-              <Text
-                variant="label-sm"
-                weight="medium"
-                uppercase
-                style={{
-                  color: isActive ? theme.colors.secondary : theme.colors.surfaceContainerHighest,
-                  marginTop: 4,
-                }}
-              >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
+              theme={theme}
+            />
           );
         })}
       </View>
@@ -143,7 +200,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ activeRoute, onNavig
 
 /**
  * Styles for BottomNavBar
- * Requirements: 8.7, 8.8, 8.9, 8.10
+ * Requirements: 8.7, 8.8, 8.9, 8.10, 12.7, 12.8
  */
 const styles = StyleSheet.create({
   container: {
@@ -176,9 +233,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
     minHeight: 56, // Ensures 44pt+ touch target with padding
     minWidth: 64,
+  },
+  navItemContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    width: '100%',
+    // Shadow for iOS elevation animation
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
+      },
+    }),
   },
 });
