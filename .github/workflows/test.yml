@@ -26,6 +26,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Build protocol package
+        run: |
+          cd packages/protocol
+          npm run build
+
       - name: Run ESLint
         run: npm run lint
         continue-on-error: false
