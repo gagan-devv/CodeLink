@@ -2,7 +2,7 @@
 // This file will export all React Native components
 
 export { Dashboard } from './Dashboard';
-export type { DashboardProps } from './Dashboard';
+export type { DashboardProps, SystemMetrics, ActivityItem } from './Dashboard';
 export { DiffViewer } from './DiffViewer';
 export type { DiffViewerProps } from './DiffViewer';
 export { PromptComposer } from './PromptComposer';
@@ -15,3 +15,5 @@ export type { EmptyStateProps } from './EmptyState';
 export { Settings } from './Settings';
 export { PromptTemplates } from './PromptTemplates';
 export type { PromptTemplate, PromptTemplatesProps } from './PromptTemplates';
+export { AppLoading } from './AppLoading';
+export type { AppLoadingProps } from './AppLoading';

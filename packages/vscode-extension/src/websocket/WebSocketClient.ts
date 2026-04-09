@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { ProtocolMessage, InjectPromptMessage } from '@codelink/protocol';
+import { ProtocolMessage } from '@codelink/protocol';
 
 /**
  * Message handler callback type for incoming messages
@@ -54,7 +54,7 @@ export class WebSocketClient {
       this.flushMessageQueue();
 
       // Re-bind message handlers
-      this.messageHandlers.forEach(handler => {
+      this.messageHandlers.forEach((handler) => {
         this.socket!.on('message', (data: string) => {
           try {
             const parsed = JSON.parse(data);
@@ -102,7 +102,7 @@ export class WebSocketClient {
    * Handle incoming messages by notifying all registered handlers
    */
   private handleIncomingMessage(message: ProtocolMessage): void {
-    this.messageHandlers.forEach(handler => {
+    this.messageHandlers.forEach((handler) => {
       try {
         handler(message);
       } catch (error) {
@@ -132,10 +132,7 @@ export class WebSocketClient {
    * Calculate exponential backoff delay
    */
   private calculateBackoffDelay(): number {
-    return Math.min(
-      this.baseRetryDelay * Math.pow(2, this.reconnectAttempts),
-      5000
-    );
+    return Math.min(this.baseRetryDelay * Math.pow(2, this.reconnectAttempts), 5000);
   }
 
   /**
@@ -181,7 +178,7 @@ export class WebSocketClient {
 
     const sendBatch = () => {
       const batch = this.messageQueue.splice(0, messagesPerBatch);
-      batch.forEach(msg => {
+      batch.forEach((msg) => {
         if (this.isConnected()) {
           this.socket!.emit('message', JSON.stringify(msg));
         }
@@ -221,33 +218,4 @@ export class WebSocketClient {
     this.reconnectAttempts = 0;
     this.isConnecting = false;
   }
-  /**
-   * Register a callback for incoming messages
-   */
-  public onMessage(callback: (message: ProtocolMessage) => void): void {
-    if (!this.socket) {
-      // Store callback if socket not initialized yet? 
-      // For now, simpler to just assume socket is created in connect()
-      // or we can add a listener array.
-      // But connect() is called before this.
-      // Let's modify setupEventHandlers to handle this better or 
-      // just add the listener if socket exists.
-    }
-
-    // Better approach: Store handlers to bind when socket connects
-    this.messageHandlers.push(callback);
-
-    if (this.socket) {
-      this.socket.on('message', (data: string) => {
-        try {
-          const parsed = JSON.parse(data);
-          callback(parsed);
-        } catch (error) {
-          console.error('Error parsing message:', error);
-        }
-      });
-    }
-  }
-
-  private messageHandlers: ((message: ProtocolMessage) => void)[] = [];
 }

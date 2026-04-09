@@ -54,9 +54,7 @@ export const usePromptHistory = () => {
   };
 
   const updateHistoryItem = async (id: string, updates: Partial<PromptHistoryItem>) => {
-    const newHistory = history.map(item =>
-      item.id === id ? { ...item, ...updates } : item
-    );
+    const newHistory = history.map((item) => (item.id === id ? { ...item, ...updates } : item));
     await saveHistory(newHistory);
   };
 
@@ -70,7 +68,7 @@ export const usePromptHistory = () => {
   };
 
   const deleteHistoryItem = async (id: string) => {
-    const newHistory = history.filter(item => item.id !== id);
+    const newHistory = history.filter((item) => item.id !== id);
     await saveHistory(newHistory);
   };
 

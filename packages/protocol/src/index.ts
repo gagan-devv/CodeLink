@@ -28,11 +28,11 @@ export interface PongMessage extends Message {
 
 // File context payload for diff viewing
 export interface FileContextPayload {
-  fileName: string;           // Workspace-relative file path (e.g., "src/index.ts")
-  originalFile: string;       // Content from Git HEAD (empty string if untracked)
-  modifiedFile: string;       // Current file content from disk
-  isDirty: boolean;          // True if file has unsaved changes in editor
-  timestamp: number;         // Unix timestamp in milliseconds when diff was generated
+  fileName: string; // Workspace-relative file path (e.g., "src/index.ts")
+  originalFile: string; // Content from Git HEAD (empty string if untracked)
+  modifiedFile: string; // Current file content from disk
+  isDirty: boolean; // True if file has unsaved changes in editor
+  timestamp: number; // Unix timestamp in milliseconds when diff was generated
 }
 
 // Sync full context message for sending diffs to mobile
@@ -61,9 +61,9 @@ export interface InjectPromptResponse extends Message {
 }
 
 // Union type for all messages
-export type ProtocolMessage = 
-  | PingMessage 
-  | PongMessage 
+export type ProtocolMessage =
+  | PingMessage
+  | PongMessage
   | SyncFullContextMessage
   | InjectPromptMessage
   | InjectPromptResponse;
@@ -166,7 +166,7 @@ export function isInjectPromptResponse(value: unknown): value is InjectPromptRes
   }
 
   const msg = value as InjectPromptResponse;
-  
+
   if (!('originalId' in msg) || typeof msg.originalId !== 'string') {
     return false;
   }

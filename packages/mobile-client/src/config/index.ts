@@ -40,7 +40,7 @@ const getRelayServerUrl = (): string => {
 
 /**
  * Default application configuration
- * 
+ *
  * Configuration values:
  * - relayServerUrl: WebSocket URL for the relay server
  * - socketOptions.reconnection: Enable automatic reconnection

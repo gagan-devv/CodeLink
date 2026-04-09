@@ -27,16 +27,13 @@ interface DiffLine {
  * DiffViewer component displays unified file diffs in React Native
  * Supports both portrait and landscape orientations with responsive layout
  * Provides horizontal and vertical scrolling for long content
- * 
+ *
  * Requirements: 6.1, 7.2, 7.4, 7.5, 10.1, 10.2, 10.3, 10.4, 10.5
  */
-export const DiffViewer: React.FC<DiffViewerProps> = ({
-  payload,
-  isLoading = false,
-  onBack
-}) => {
+export const DiffViewer: React.FC<DiffViewerProps> = ({ payload, isLoading = false, onBack }) => {
   const { fileName, originalFile, modifiedFile } = payload;
-  const [isRendering, setIsRendering] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_isRendering, setIsRendering] = useState(true);
   const { isLandscape } = useOrientation();
 
   // Check if this is a new file (no original content)
@@ -50,13 +47,13 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
    */
   const calculateStats = () => {
     if (noChanges) return { additions: 0, deletions: 0 };
-    
+
     const oldLines = originalFile.split('\n');
     const newLines = modifiedFile.split('\n');
-    
+
     let additions = 0;
     let deletions = 0;
-    
+
     // Simple line-based diff calculation
     const maxLines = Math.max(oldLines.length, newLines.length);
     for (let i = 0; i < maxLines; i++) {
@@ -69,7 +66,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         deletions++;
       }
     }
-    
+
     return { additions, deletions };
   };
 
@@ -82,11 +79,11 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const diffLines = useMemo(() => {
     const generateDiff = (): DiffLine[] => {
       if (noChanges && !isNewFile) return [];
-      
+
       const oldLines = originalFile.split('\n');
       const newLines = modifiedFile.split('\n');
       const diff: DiffLine[] = [];
-      
+
       if (isNewFile) {
         // All lines are additions
         newLines.forEach((line, idx) => {
@@ -102,7 +99,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         const maxLines = Math.max(oldLines.length, newLines.length);
         let oldLineNum = 1;
         let newLineNum = 1;
-        
+
         for (let i = 0; i < maxLines; i++) {
           if (i >= oldLines.length) {
             // Addition
@@ -146,7 +143,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           }
         }
       }
-      
+
       return diff;
     };
 
@@ -184,28 +181,20 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       <View key={index} style={lineStyle}>
         {/* Line numbers */}
         <View style={styles.lineNumbers}>
-          <Text style={styles.lineNumber}>
-            {line.oldLineNumber || ''}
-          </Text>
+          <Text style={styles.lineNumber}>{line.oldLineNumber || ''}</Text>
           <Text style={[styles.lineNumber, styles.lineNumberRight]}>
             {line.newLineNumber || ''}
           </Text>
         </View>
-        
+
         {/* Diff indicator */}
         <View style={styles.diffIndicator}>
-          {line.type === 'added' && (
-            <Text style={styles.addedIndicator}>+</Text>
-          )}
-          {line.type === 'removed' && (
-            <Text style={styles.removedIndicator}>-</Text>
-          )}
+          {line.type === 'added' && <Text style={styles.addedIndicator}>+</Text>}
+          {line.type === 'removed' && <Text style={styles.removedIndicator}>-</Text>}
         </View>
-        
+
         {/* Code content */}
-        <Text style={styles.lineContent}>
-          {line.content || ' '}
-        </Text>
+        <Text style={styles.lineContent}>{line.content || ' '}</Text>
       </View>
     );
   };
@@ -265,10 +254,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             <Text style={styles.noChangesText}>No changes</Text>
           </View>
         ) : (
-          <ScrollView
-            horizontal
-            contentContainerStyle={styles.horizontalScrollContent}
-          >
+          <ScrollView horizontal contentContainerStyle={styles.horizontalScrollContent}>
             <ScrollView
               style={styles.verticalScroll}
               contentContainerStyle={styles.verticalScrollContent}

@@ -35,3 +35,13 @@ node_modules/
 
 # Testing
 coverage/
+/src/design-system/components/*test*
+/src/design-system/tokens/*.test.*
+/src/design-system/theme/*.test.*
+/src/design-system/typography/*.test.*
+
+
+/src/design-system/components/*.example.*
+/src/design-system/tokens/*.example.*
+/src/design-system/theme/*.example.*
+/src/design-system/typography/*.example.*

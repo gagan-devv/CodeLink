@@ -27,14 +27,14 @@ export type ResponseCallback = (response: InjectPromptResponse) => void;
 export interface PromptManager {
   // Prompt submission
   submitPrompt(prompt: string): string; // Returns message ID
-  
+
   // Response handling
   handleResponse(response: InjectPromptResponse): void;
-  
+
   // State queries
   getPendingPrompts(): PendingPrompt[];
   getPromptStatus(id: string): PendingPrompt | null;
-  
+
   // Callback registration
   onResponse(callback: ResponseCallback): void;
 }
@@ -118,7 +118,7 @@ export class PromptManagerImpl implements PromptManager {
   handleResponse(response: InjectPromptResponse): void {
     // Find original prompt using response.originalId
     const originalPrompt = this.pendingPrompts.get(response.originalId);
-    
+
     if (!originalPrompt) {
       console.warn(`Received response for unknown prompt ID: ${response.originalId}`);
       return;
@@ -128,7 +128,7 @@ export class PromptManagerImpl implements PromptManager {
     originalPrompt.status = response.payload.success ? 'success' : 'error';
 
     // Invoke registered callbacks
-    this.responseCallbacks.forEach(callback => {
+    this.responseCallbacks.forEach((callback) => {
       try {
         callback(response);
       } catch (error) {

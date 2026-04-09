@@ -10,10 +10,10 @@ export interface SocketManager {
   connect(serverUrl: string): Promise<void>;
   disconnect(): void;
   isConnected(): boolean;
-  
+
   // Message sending
   sendMessage(message: ProtocolMessage): void;
-  
+
   // Event listeners
   onMessage(handler: (message: ProtocolMessage) => void): void;
   onConnect(handler: () => void): void;
@@ -52,10 +52,10 @@ export class SocketManagerImpl implements SocketManager {
     return new Promise((resolve, reject) => {
       try {
         this.isManualDisconnect = false;
-        
+
         // Get configuration
         const config = getConfig();
-        
+
         // Initialize Socket.IO connection with configuration
         this.socket = io(serverUrl, {
           reconnection: false, // We handle reconnection manually for exponential backoff
@@ -72,7 +72,7 @@ export class SocketManagerImpl implements SocketManager {
 
         this.socket.on('disconnect', (reason) => {
           this.notifyDisconnectHandlers();
-          
+
           // Attempt automatic reconnection if not manually disconnected
           if (!this.isManualDisconnect && reason !== 'io client disconnect') {
             this.attemptReconnect(serverUrl);
@@ -93,12 +93,12 @@ export class SocketManagerImpl implements SocketManager {
         this.socket.on('connect_error', (error) => {
           const err = new Error(`Connection error: ${error.message}`);
           this.notifyErrorHandlers(err);
-          
+
           // If initial connection fails, reject the promise
           if (this.reconnectAttempts === 0) {
             reject(err);
           }
-          
+
           // Attempt reconnection
           if (!this.isManualDisconnect) {
             this.attemptReconnect(serverUrl);
@@ -109,7 +109,6 @@ export class SocketManagerImpl implements SocketManager {
           const err = error instanceof Error ? error : new Error('Socket error');
           this.notifyErrorHandlers(err);
         });
-
       } catch (error) {
         const err = error instanceof Error ? error : new Error('Failed to initialize socket');
         this.notifyErrorHandlers(err);
@@ -143,7 +142,7 @@ export class SocketManagerImpl implements SocketManager {
     // Schedule reconnection attempt
     this.reconnectTimer = setTimeout(() => {
       if (!this.isManualDisconnect) {
-        this.connect(serverUrl).catch((error) => {
+        this.connect(serverUrl).catch((_error) => {
           // Error already handled in connect method
         });
       }
@@ -155,7 +154,7 @@ export class SocketManagerImpl implements SocketManager {
    */
   disconnect(): void {
     this.isManualDisconnect = true;
-    
+
     // Clear reconnect timer
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -236,7 +235,7 @@ export class SocketManagerImpl implements SocketManager {
    * Notifies all registered message handlers
    */
   private notifyMessageHandlers(message: ProtocolMessage): void {
-    this.messageHandlers.forEach(handler => {
+    this.messageHandlers.forEach((handler) => {
       try {
         handler(message);
       } catch (error) {
@@ -249,7 +248,7 @@ export class SocketManagerImpl implements SocketManager {
    * Notifies all registered connect handlers
    */
   private notifyConnectHandlers(): void {
-    this.connectHandlers.forEach(handler => {
+    this.connectHandlers.forEach((handler) => {
       try {
         handler();
       } catch (error) {
@@ -262,7 +261,7 @@ export class SocketManagerImpl implements SocketManager {
    * Notifies all registered disconnect handlers
    */
   private notifyDisconnectHandlers(): void {
-    this.disconnectHandlers.forEach(handler => {
+    this.disconnectHandlers.forEach((handler) => {
       try {
         handler();
       } catch (error) {
@@ -275,7 +274,7 @@ export class SocketManagerImpl implements SocketManager {
    * Notifies all registered error handlers
    */
   private notifyErrorHandlers(error: Error): void {
-    this.errorHandlers.forEach(handler => {
+    this.errorHandlers.forEach((handler) => {
       try {
         handler(error);
       } catch (err) {

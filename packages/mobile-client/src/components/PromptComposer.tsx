@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { TextInput, Button, Text, HelperText, IconButton, Menu, Chip, Portal, Modal } from 'react-native-paper';
+import {
+  TextInput,
+  Button,
+  Text,
+  HelperText,
+  IconButton,
+  Chip,
+  Portal,
+  Modal,
+} from 'react-native-paper';
 import * as Haptics from 'expo-haptics';
 import { useOrientation } from '../hooks';
 import { useDraftPrompt } from '../hooks/useDraftPrompt';
@@ -20,21 +29,18 @@ export interface PromptComposerProps {
  * PromptComposer component for composing and submitting prompts
  * Provides real-time character count, validation, and loading states
  * Supports both portrait and landscape orientations with responsive layout
- * 
+ *
  * Requirements: 1.1, 1.2, 1.4, 1.5, 10.1, 10.2, 10.4, 10.5
  */
-export const PromptComposer: React.FC<PromptComposerProps> = ({
-  onSubmit,
-  isLoading,
-  error
-}) => {
+export const PromptComposer: React.FC<PromptComposerProps> = ({ onSubmit, isLoading, error }) => {
   const { draft, setDraft, clearDraft, isSaving, lastSaved } = useDraftPrompt();
   const { history, addToHistory } = usePromptHistory();
   const [prompt, setPrompt] = useState(draft);
   const [charCount, setCharCount] = useState(draft.length);
   const [validationError, setValidationError] = useState<string | null>(null);
   const { isLandscape } = useOrientation();
-  const [menuVisible, setMenuVisible] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_menuVisible, _setMenuVisible] = useState(false);
   const [historyVisible, setHistoryVisible] = useState(false);
   const [templatesVisible, setTemplatesVisible] = useState(false);
 
@@ -55,7 +61,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     if (text.length <= MAX_CHARS) {
       setPrompt(text);
       setCharCount(text.length);
-      
+
       // Clear validation error when user starts typing
       if (validationError) {
         setValidationError(null);
@@ -84,19 +90,19 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     if (!validatePrompt(prompt)) {
       return;
     }
-    
+
     // Haptic feedback
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
+
     // Add to history
     await addToHistory({
       id: Date.now().toString(),
       prompt,
       timestamp: Date.now(),
     });
-    
+
     onSubmit(prompt);
-    
+
     // Clear draft after successful submission
     await clearDraft();
     setPrompt('');
@@ -125,34 +131,27 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
    * Clear current prompt
    */
   const handleClear = () => {
-    Alert.alert(
-      'Clear Prompt',
-      'Are you sure you want to clear the current prompt?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            setPrompt('');
-            setCharCount(0);
-            await clearDraft();
-          },
+    Alert.alert('Clear Prompt', 'Are you sure you want to clear the current prompt?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          setPrompt('');
+          setCharCount(0);
+          await clearDraft();
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const isNearLimit = charCount >= MAX_CHARS * WARNING_THRESHOLD;
   const isAtLimit = charCount >= MAX_CHARS;
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={[
-        styles.container,
-        isLandscape && styles.containerLandscape
-      ]}
+      contentContainerStyle={[styles.container, isLandscape && styles.containerLandscape]}
     >
       {/* Toolbar */}
       <View style={styles.toolbar}>
@@ -171,9 +170,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
         </View>
         <View style={styles.toolbarRight}>
           {isSaving && <Text style={styles.savingText}>Saving...</Text>}
-          {lastSaved && !isSaving && (
-            <Text style={styles.savedText}>Saved</Text>
-          )}
+          {lastSaved && !isSaving && <Text style={styles.savedText}>Saved</Text>}
           <IconButton
             icon="delete-outline"
             size={20}
@@ -202,11 +199,13 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
       {/* Character count display */}
       {/* Requirement 1.2: Real-time character count feedback */}
       <View style={styles.charCountContainer}>
-        <Text style={[
-          styles.charCount,
-          isNearLimit && styles.charCountWarning,
-          isAtLimit && styles.charCountError
-        ]}>
+        <Text
+          style={[
+            styles.charCount,
+            isNearLimit && styles.charCountWarning,
+            isAtLimit && styles.charCountError,
+          ]}
+        >
           {charCount} / {MAX_CHARS} characters
         </Text>
         {isNearLimit && !isAtLimit && (

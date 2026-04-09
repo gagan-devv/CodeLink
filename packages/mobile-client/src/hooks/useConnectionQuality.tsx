@@ -21,7 +21,7 @@ export const useConnectionQuality = () => {
     latency: null,
     lastPingTime: null,
   });
-  const pingIntervalRef = useRef<NodeJS.Timeout>();
+  const pingIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
     if (status !== 'connected') {
@@ -39,14 +39,14 @@ export const useConnectionQuality = () => {
     // Measure latency periodically
     const measureLatency = async () => {
       const startTime = Date.now();
-      
+
       try {
         // Send a ping message and wait for response
         // This is a simplified version - you'd need to implement actual ping/pong
         const latency = Date.now() - startTime;
-        
+
         const quality = getQualityFromLatency(latency);
-        
+
         setMetrics({
           quality,
           latency,

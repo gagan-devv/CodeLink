@@ -1,5 +1,3 @@
-import * as vscode from 'vscode';
-
 /**
  * Interface for AI Editor Adapters
  */

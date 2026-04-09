@@ -43,10 +43,10 @@ export class DiffMessageHandler {
 
       // Parse FileContextPayload
       const payload = this.parseFileContextPayload(message);
-      
+
       // Update diff state
       this.updateDiffState(payload);
-      
+
       return true;
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Failed to handle message');
@@ -95,7 +95,7 @@ export class DiffMessageHandler {
   private updateDiffState(payload: FileContextPayload): void {
     // Add to history
     const newHistory = [...this.diffState.history, payload];
-    
+
     // Trim history if it exceeds max size
     if (newHistory.length > this.maxHistorySize) {
       newHistory.shift();
@@ -189,7 +189,7 @@ export class DiffMessageHandler {
    * Notifies all state change listeners
    */
   private notifyStateChangeListeners(): void {
-    this.stateChangeListeners.forEach(listener => {
+    this.stateChangeListeners.forEach((listener) => {
       try {
         listener(this.getDiffState());
       } catch (error) {
@@ -202,7 +202,7 @@ export class DiffMessageHandler {
    * Notifies all error listeners
    */
   private notifyErrorListeners(error: Error): void {
-    this.errorListeners.forEach(listener => {
+    this.errorListeners.forEach((listener) => {
       try {
         listener(error);
       } catch (err) {

@@ -58,7 +58,7 @@ export class FileWatcher {
     }
 
     this.activeFilePath = filePath;
-    
+
     // Trigger diff generation immediately when switching files
     this.triggerFileChanged(filePath);
   }
@@ -89,7 +89,7 @@ export class FileWatcher {
   private debounceFileChange(filePath: string): void {
     // Track when the change occurred
     this.lastChangeTime = Date.now();
-    
+
     // Clear existing timer
     this.clearDebounceTimer();
 
@@ -98,13 +98,13 @@ export class FileWatcher {
       // Verify debounce timing (1000ms ± 50ms tolerance)
       const actualDelay = Date.now() - this.lastChangeTime;
       const tolerance = 50;
-      
+
       if (Math.abs(actualDelay - this.debounceDelay) > tolerance) {
         console.warn(
           `[FileWatcher] Debounce timing outside tolerance: ${actualDelay}ms (expected ${this.debounceDelay}ms ± ${tolerance}ms)`
         );
       }
-      
+
       this.triggerFileChanged(filePath);
     }, this.debounceDelay);
   }
@@ -132,12 +132,12 @@ export class FileWatcher {
    */
   private isWithinWorkspace(filePath: string): boolean {
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    
+
     if (!workspaceFolders || workspaceFolders.length === 0) {
       return false;
     }
 
-    return workspaceFolders.some(folder => {
+    return workspaceFolders.some((folder) => {
       const workspacePath = folder.uri.fsPath;
       return filePath.startsWith(workspacePath);
     });
@@ -148,7 +148,7 @@ export class FileWatcher {
    */
   public dispose(): void {
     this.clearDebounceTimer();
-    this.disposables.forEach(disposable => disposable.dispose());
+    this.disposables.forEach((disposable) => disposable.dispose());
     this.disposables = [];
     this.activeFilePath = null;
   }

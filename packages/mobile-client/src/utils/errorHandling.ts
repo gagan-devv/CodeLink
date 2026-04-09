@@ -38,22 +38,22 @@ export function formatErrorMessage(error: AppError): string {
   switch (error.type) {
     case ErrorType.NETWORK_ERROR:
       return 'Network error occurred. Please check your internet connection and try again.';
-    
+
     case ErrorType.PROMPT_SUBMISSION_ERROR:
       return `Failed to submit prompt: ${error.message}`;
-    
+
     case ErrorType.CONNECTION_ERROR:
       return 'Connection failed. Please check your network settings and ensure the relay server is accessible.';
-    
+
     case ErrorType.VALIDATION_ERROR:
       return error.message;
-    
+
     case ErrorType.PARSING_ERROR:
       return 'Unable to process server response. The data may be corrupted.';
-    
+
     case ErrorType.UNEXPECTED_ERROR:
       return 'An unexpected error occurred. Please try again.';
-    
+
     default:
       return 'An error occurred. Please try again.';
   }
@@ -75,7 +75,7 @@ export function getActionableSteps(error: AppError): string[] {
         'Try switching between WiFi and mobile data',
         'Restart the app',
       ];
-    
+
     case ErrorType.CONNECTION_ERROR:
       return [
         'Verify the relay server is running',
@@ -83,33 +83,27 @@ export function getActionableSteps(error: AppError): string[] {
         'Try reconnecting manually',
         'Contact support if the issue persists',
       ];
-    
+
     case ErrorType.PROMPT_SUBMISSION_ERROR:
       return [
         'Review your prompt for any issues',
         'Try submitting again',
         'Check your connection status',
       ];
-    
+
     case ErrorType.VALIDATION_ERROR:
-      return [
-        'Review the validation message',
-        'Correct the input and try again',
-      ];
-    
+      return ['Review the validation message', 'Correct the input and try again'];
+
     case ErrorType.PARSING_ERROR:
-      return [
-        'Request fresh data from the server',
-        'Restart the app if the issue persists',
-      ];
-    
+      return ['Request fresh data from the server', 'Restart the app if the issue persists'];
+
     case ErrorType.UNEXPECTED_ERROR:
       return [
         'Try the action again',
         'Restart the app if the issue persists',
         'Contact support if the problem continues',
       ];
-    
+
     default:
       return ['Try again', 'Restart the app if the issue persists'];
   }
@@ -139,10 +133,11 @@ export function createAppError(
  */
 export function logError(error: AppError): void {
   const logMessage = `[${new Date(error.timestamp).toISOString()}] ${error.type}: ${error.message}`;
-  
+
   // Check if __DEV__ is defined (React Native environment)
-  const isDevelopment = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
-  
+  const isDevelopment =
+    typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+
   if (isDevelopment) {
     // In development, log full error details
     console.error(logMessage);
@@ -164,24 +159,28 @@ export function logError(error: AppError): void {
 export function discriminateErrorType(error: unknown): ErrorType {
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
-    
+
     if (message.includes('network') || message.includes('fetch') || message.includes('timeout')) {
       return ErrorType.NETWORK_ERROR;
     }
-    
-    if (message.includes('connection') || message.includes('socket') || message.includes('disconnect')) {
+
+    if (
+      message.includes('connection') ||
+      message.includes('socket') ||
+      message.includes('disconnect')
+    ) {
       return ErrorType.CONNECTION_ERROR;
     }
-    
+
     if (message.includes('validation') || message.includes('invalid')) {
       return ErrorType.VALIDATION_ERROR;
     }
-    
+
     if (message.includes('parse') || message.includes('json') || message.includes('syntax')) {
       return ErrorType.PARSING_ERROR;
     }
   }
-  
+
   return ErrorType.UNEXPECTED_ERROR;
 }
 
@@ -201,10 +200,10 @@ export interface ErrorDisplay {
 export function createErrorDisplay(error: AppError): ErrorDisplay {
   const message = formatErrorMessage(error);
   const actionableSteps = getActionableSteps(error);
-  
+
   let title: string;
   let severity: 'error' | 'warning' | 'info' = 'error';
-  
+
   switch (error.type) {
     case ErrorType.NETWORK_ERROR:
       title = 'Network Error';
@@ -228,7 +227,7 @@ export function createErrorDisplay(error: AppError): ErrorDisplay {
     default:
       title = 'Error';
   }
-  
+
   return {
     title,
     message,

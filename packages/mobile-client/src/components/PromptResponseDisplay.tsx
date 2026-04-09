@@ -16,13 +16,13 @@ export interface PromptResponseDisplayProps {
  * PromptResponseDisplay component for displaying prompt submission results
  * Shows success/error messages with editor identification
  * Auto-dismisses after configured duration
- * 
+ *
  * Requirements: 3.2, 3.3, 4.1, 4.3
  */
 export const PromptResponseDisplay: React.FC<PromptResponseDisplayProps> = ({
   response,
   onDismiss,
-  duration = 4000
+  duration = 4000,
 }) => {
   // Auto-dismiss after duration
   useEffect(() => {

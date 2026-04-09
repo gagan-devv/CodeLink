@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { List, Switch, Button, Divider, Text, RadioButton } from 'react-native-paper';
+import { List, Button, Divider, RadioButton } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../hooks/useTheme';
 import { usePromptHistory } from '../hooks/usePromptHistory';
@@ -17,43 +17,35 @@ export const Settings: React.FC = () => {
   const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
 
   const handleClearCache = async () => {
-    Alert.alert(
-      'Clear Cache',
-      'Are you sure you want to clear all cached data?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.clear();
-              Alert.alert('Success', 'Cache cleared successfully');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to clear cache');
-            }
-          },
+    Alert.alert('Clear Cache', 'Are you sure you want to clear all cached data?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await AsyncStorage.clear();
+            Alert.alert('Success', 'Cache cleared successfully');
+          } catch (error) {
+            Alert.alert('Error', 'Failed to clear cache');
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleClearHistory = () => {
-    Alert.alert(
-      'Clear History',
-      'Are you sure you want to clear all prompt history?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            await clearHistory();
-            Alert.alert('Success', 'History cleared successfully');
-          },
+    Alert.alert('Clear History', 'Are you sure you want to clear all prompt history?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          await clearHistory();
+          Alert.alert('Success', 'History cleared successfully');
         },
-      ]
-    );
+      },
+    ]);
   };
 
   return (
@@ -61,11 +53,11 @@ export const Settings: React.FC = () => {
       {/* Appearance Section */}
       <List.Section>
         <List.Subheader>Appearance</List.Subheader>
-        
+
         <List.Item
           title="Theme"
           description="Choose your preferred theme"
-          left={props => <List.Icon {...props} icon="palette" />}
+          left={(_props) => <List.Icon {..._props} icon="palette" />}
         />
         <RadioButton.Group
           onValueChange={(value) => setThemeMode(value as ThemeMode)}
@@ -83,10 +75,10 @@ export const Settings: React.FC = () => {
         <List.Item
           title="Font Size"
           description="Adjust text size"
-          left={props => <List.Icon {...props} icon="format-size" />}
+          left={(_props) => <List.Icon {..._props} icon="format-size" />}
         />
         <RadioButton.Group
-          onValueChange={(value) => setFontSize(value as any)}
+          onValueChange={(value) => setFontSize(value as 'small' | 'medium' | 'large')}
           value={fontSize}
         >
           <View style={styles.radioGroup}>
@@ -102,12 +94,12 @@ export const Settings: React.FC = () => {
       {/* Data & Privacy Section */}
       <List.Section>
         <List.Subheader>Data & Privacy</List.Subheader>
-        
+
         <List.Item
           title="Clear Prompt History"
           description="Remove all saved prompts"
-          left={props => <List.Icon {...props} icon="history" />}
-          right={props => (
+          left={(_props) => <List.Icon {..._props} icon="history" />}
+          right={(_props) => (
             <Button mode="outlined" onPress={handleClearHistory}>
               Clear
             </Button>
@@ -117,8 +109,8 @@ export const Settings: React.FC = () => {
         <List.Item
           title="Clear Cache"
           description="Remove all cached data"
-          left={props => <List.Icon {...props} icon="delete-sweep" />}
-          right={props => (
+          left={(_props) => <List.Icon {..._props} icon="delete-sweep" />}
+          right={(_props) => (
             <Button mode="outlined" onPress={handleClearCache}>
               Clear
             </Button>
@@ -131,24 +123,22 @@ export const Settings: React.FC = () => {
       {/* About Section */}
       <List.Section>
         <List.Subheader>About</List.Subheader>
-        
+
         <List.Item
           title="Version"
           description="0.1.0"
-          left={props => <List.Icon {...props} icon="information" />}
+          left={(_props) => <List.Icon {..._props} icon="information" />}
         />
 
         <List.Item
           title="CodeLink Mobile Client"
           description="AI-powered code collaboration"
-          left={props => <List.Icon {...props} icon="code-braces" />}
+          left={(_props) => <List.Icon {..._props} icon="code-braces" />}
         />
       </List.Section>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Made with ❤️ for developers
-        </Text>
+        <Text style={styles.footerText}>Made with ❤️ for developers</Text>
       </View>
     </ScrollView>
   );

@@ -21,7 +21,7 @@ export default defineConfig({
     exclude: [
       'tests/unit/mobile-client/components.test.tsx'
     ],
-    setupFiles: ['./tests/setup/test-setup.ts'],
+    setupFiles: ['./tests/setup/test-setup.ts', './tests/setup/react-native-testing-setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json', 'lcov'],
@@ -50,18 +50,40 @@ export default defineConfig({
     },
     globals: true,
     testTimeout: 10000,
+    // Disable source map resolution to prevent loading TypeScript sources
+    sourcemap: false,
     // Use jsdom for React Native component tests
     environmentMatchGlobs: [
       ['tests/unit/mobile-client/**', 'jsdom']
-    ]
+    ],
+    // Transform node_modules that need transpilation
+    server: {
+      deps: {
+        inline: [
+          'react-native',
+          '@testing-library/react-native',
+        ]
+      }
+    }
   },
   resolve: {
-    alias: {
-      '@codelink/protocol': path.resolve(__dirname, './packages/protocol/src'),
+    // Use array form so we can include regex-based aliases for deep imports
+    alias: [
+      { find: '@codelink/protocol', replacement: path.resolve(__dirname, './packages/protocol/src') },
       // Alias react-native to our mock for testing
-      'react-native$': path.resolve(__dirname, './tests/setup/react-native-mock.ts'),
-      'react-native/': path.resolve(__dirname, './packages/mobile-client/node_modules/react-native/')
-    },
+      { find: 'react-native', replacement: path.resolve(__dirname, './tests/setup/react-native-mock.ts') },
+      { find: 'react-native/', replacement: path.resolve(__dirname, './packages/mobile-client/node_modules/react-native/') },
+      // Resolve React from root node_modules (monorepo setup)
+      { find: 'react', replacement: path.resolve(__dirname, './node_modules/react') },
+      { find: 'react-dom', replacement: path.resolve(__dirname, './node_modules/react-dom') },
+      // Explicitly resolve @testing-library/react-native from root node_modules
+      { find: '@testing-library/react-native', replacement: path.resolve(__dirname, './node_modules/@testing-library/react-native/build/index.js') },
+      // Ensure deep imports like @testing-library/react-native/src/... map to the compiled build/ equivalents
+      { find: /^@testing-library\/react-native\/src\/(.*)/, replacement: path.resolve(__dirname, './node_modules/@testing-library/react-native/build/') + '$1' },
+      // Fallback mapping for other deep imports under the package root
+      { find: '@testing-library/react-native/', replacement: path.resolve(__dirname, './node_modules/@testing-library/react-native/build/') }
+    ],
     conditions: ['import', 'module', 'browser', 'default'],
+    extensions: ['.js', '.jsx', '.ts', '.tsx', '.json']
   }
 });

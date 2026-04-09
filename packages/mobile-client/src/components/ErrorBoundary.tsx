@@ -16,14 +16,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     super(props);
     this.state = {
       hasError: false,
-      error: null
+      error: null,
     };
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return {
       hasError: true,
-      error
+      error,
     };
   }
 
@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   handleReset = (): void => {
     this.setState({
       hasError: false,
-      error: null
+      error: null,
     });
   };
 
@@ -63,21 +63,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#fff'
+    backgroundColor: '#fff',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#d32f2f'
+    color: '#d32f2f',
   },
   message: {
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 24,
-    color: '#666'
+    color: '#666',
   },
   button: {
-    marginTop: 16
-  }
+    marginTop: 16,
+  },
 });

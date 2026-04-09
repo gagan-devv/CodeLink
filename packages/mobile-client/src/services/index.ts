@@ -1,12 +1,13 @@
 // Service layer exports
 // This file will export all service implementations
 
-export { SocketManager, SocketManagerImpl } from './SocketManager';
+export { SocketManagerImpl } from './SocketManager';
+export type { SocketManager } from './SocketManager';
 export { DiffMessageHandler, type DiffState } from './DiffMessageHandler';
-export { 
-  PromptManager, 
-  PromptManagerImpl, 
-  type PendingPrompt, 
+export {
+  PromptManagerImpl,
+  type PromptManager,
+  type PendingPrompt,
   type PromptStatus,
-  type ResponseCallback 
+  type ResponseCallback,
 } from './PromptManager';

@@ -24,9 +24,7 @@ export class ContinueAdapter implements IEditorAdapter {
     try {
       const commands = await vscode.commands.getCommands(true);
 
-      const continueCommands = commands.filter((cmd) =>
-        cmd.startsWith('continue.')
-      );
+      const continueCommands = commands.filter((cmd) => cmd.startsWith('continue.'));
 
       const isInstalled = continueCommands.length > 0;
 
@@ -45,10 +43,9 @@ export class ContinueAdapter implements IEditorAdapter {
 
   async injectPrompt(prompt: string): Promise<PromptInjectionResult> {
     try {
-      await vscode.commands.executeCommand(
-        'continue.continueGUIView.focusContinueInput',
-        { text: prompt }
-      );
+      await vscode.commands.executeCommand('continue.continueGUIView.focusContinueInput', {
+        text: prompt,
+      });
 
       return {
         success: true,
@@ -86,9 +83,7 @@ export class ContinueAdapter implements IEditorAdapter {
     // Implementation would access Continue's internal state
     // This is allowed because Continue is open-source
     // Actual implementation depends on Continue's API
-    throw new Error(
-      'readChatHistory not yet implemented for Continue adapter'
-    );
+    throw new Error('readChatHistory not yet implemented for Continue adapter');
   }
 
   /**
@@ -106,8 +101,6 @@ export class ContinueAdapter implements IEditorAdapter {
   async readDiffArtifacts(): Promise<DiffArtifact[]> {
     // Implementation would access Continue's diff state
     // This is allowed because Continue is open-source
-    throw new Error(
-      'readDiffArtifacts not yet implemented for Continue adapter'
-    );
+    throw new Error('readDiffArtifacts not yet implemented for Continue adapter');
   }
 }

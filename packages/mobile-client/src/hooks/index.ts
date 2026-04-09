@@ -6,31 +6,19 @@ export {
   useConnection,
   type ConnectionStatus,
   type ConnectionContextValue,
-  type ConnectionStatusProviderProps
+  type ConnectionStatusProviderProps,
 } from './useConnection';
 
-export {
-  useOrientation,
-  type Orientation,
-  type UseOrientationResult
-} from './useOrientation';
+export { useOrientation, type Orientation, type UseOrientationResult } from './useOrientation';
 
-export {
-  ThemeProvider,
-  useTheme
-} from './useTheme';
+export { ThemeProvider, useTheme } from './useTheme';
 
-export {
-  usePromptHistory,
-  type PromptHistoryItem
-} from './usePromptHistory';
+export { usePromptHistory, type PromptHistoryItem } from './usePromptHistory';
 
-export {
-  useDraftPrompt
-} from './useDraftPrompt';
+export { useDraftPrompt } from './useDraftPrompt';
 
 export {
   useConnectionQuality,
   type ConnectionQuality,
-  type ConnectionMetrics
+  type ConnectionMetrics,
 } from './useConnectionQuality';

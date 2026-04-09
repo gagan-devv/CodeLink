@@ -20,9 +20,9 @@ export interface UseOrientationResult {
 /**
  * Custom hook to track device orientation
  * Listens to dimension changes and determines current orientation
- * 
+ *
  * Requirements: 10.1, 10.2, 10.3
- * 
+ *
  * @returns Current orientation state and dimensions
  */
 export const useOrientation = (): UseOrientationResult => {

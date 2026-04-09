@@ -14,7 +14,8 @@ import {
   DiffViewer,
   ErrorBoundary,
   EmptyState,
-  Settings
+  Settings,
+  AppLoading,
 } from './src/components';
 
 // Services
@@ -27,11 +28,14 @@ import {
   useConnection,
   ThemeProvider,
   useTheme,
-  usePromptHistory
+  usePromptHistory,
 } from './src/hooks';
 
 // Config
 import { getConfig } from './src/config';
+
+// Design System
+import { useCustomFonts } from './src/design-system/typography/fontLoading';
 
 // Utils
 import { isInjectPromptResponse, isSyncFullContextMessage } from './src/utils/messageValidation';
@@ -51,7 +55,7 @@ const AppContent: React.FC = () => {
   const [diffState, setDiffState] = useState<DiffState>({
     currentDiff: null,
     history: [],
-    selectedIndex: -1
+    selectedIndex: -1,
   });
 
   // Initialize PromptManager and DiffMessageHandler
@@ -66,7 +70,7 @@ const AppContent: React.FC = () => {
       if (isInjectPromptResponse(message)) {
         promptManager.handleResponse(message);
       }
-      
+
       // Route SYNC_FULL_CONTEXT to DiffMessageHandler
       if (isSyncFullContextMessage(message)) {
         diffHandler.handleMessage(message);
@@ -79,7 +83,7 @@ const AppContent: React.FC = () => {
     promptManager.onResponse((response) => {
       setPromptResponse(response);
       setIsSubmitting(false);
-      
+
       // Update history with result
       if (currentPromptId) {
         updateHistoryItem(currentPromptId, {
@@ -87,14 +91,14 @@ const AppContent: React.FC = () => {
           editorUsed: response.payload.editorUsed,
         });
       }
-      
+
       // Haptic feedback
       if (response.payload.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-      
+
       // Clear response after 4 seconds
       setTimeout(() => {
         setPromptResponse(null);
@@ -132,16 +136,27 @@ const AppContent: React.FC = () => {
     setPromptResponse(null);
   };
 
-  // Handle reconnection
-  const handleReconnect = async () => {
+  // Handle reconnection (currently unused but kept for future use)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleReconnect = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     reconnect();
   };
 
   // Define navigation routes
   const [routes] = useState([
-    { key: 'dashboard', title: 'Dashboard', focusedIcon: 'view-dashboard', unfocusedIcon: 'view-dashboard-outline' },
-    { key: 'prompt', title: 'Prompt', focusedIcon: 'message-text', unfocusedIcon: 'message-text-outline' },
+    {
+      key: 'dashboard',
+      title: 'Dashboard',
+      focusedIcon: 'view-dashboard',
+      unfocusedIcon: 'view-dashboard-outline',
+    },
+    {
+      key: 'prompt',
+      title: 'Prompt',
+      focusedIcon: 'message-text',
+      unfocusedIcon: 'message-text-outline',
+    },
     { key: 'diff', title: 'Diff', focusedIcon: 'file-compare', unfocusedIcon: 'file-compare' },
     { key: 'settings', title: 'Settings', focusedIcon: 'cog', unfocusedIcon: 'cog-outline' },
   ]);
@@ -152,12 +167,12 @@ const AppContent: React.FC = () => {
       <View style={styles.scene}>
         <Dashboard
           connectionStatus={status}
-          onNavigateToPrompts={() => setIndex(1)}
+          onNavigateToCompose={() => setIndex(1)}
           onNavigateToDiffs={() => setIndex(2)}
-          onReconnect={handleReconnect}
-          pendingPromptsCount={0}
-          recentDiffsCount={diffState.history.length}
-          lastSyncTime={diffState.history.length > 0 ? new Date() : null}
+          onRefresh={async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            // Refresh logic can be added here if needed
+          }}
         />
       </View>
     ),
@@ -168,18 +183,13 @@ const AppContent: React.FC = () => {
           isLoading={isSubmitting}
           error={promptError}
         />
-        <PromptResponseDisplay
-          response={promptResponse}
-          onDismiss={handleResponseDismiss}
-        />
+        <PromptResponseDisplay response={promptResponse} onDismiss={handleResponseDismiss} />
       </View>
     ),
     diff: () => (
       <View style={styles.scene}>
         {diffState.currentDiff ? (
-          <DiffViewer
-            payload={diffState.currentDiff}
-          />
+          <DiffViewer payload={diffState.currentDiff} />
         ) : (
           <EmptyState
             icon="file-document-outline"
@@ -199,9 +209,17 @@ const AppContent: React.FC = () => {
   });
 
   // Render icon with badge
-  const renderIcon = ({ route, focused, color }: any) => {
+  const renderIcon = ({
+    route,
+    focused,
+    color,
+  }: {
+    route: { key: string; focusedIcon: string; unfocusedIcon: string };
+    focused: boolean;
+    color: string;
+  }) => {
     const icon = focused ? route.focusedIcon : route.unfocusedIcon;
-    
+
     // Show badge on diff tab if there are new diffs
     if (route.key === 'diff' && diffState.history.length > 0) {
       return (
@@ -211,7 +229,7 @@ const AppContent: React.FC = () => {
         </View>
       );
     }
-    
+
     return <MaterialCommunityIcons name={icon} size={24} color={color} />;
   };
 
@@ -234,7 +252,20 @@ const AppContent: React.FC = () => {
  */
 export default function App() {
   const config = getConfig();
-  
+
+  // Load custom fonts
+  const { fontsLoaded, fontError } = useCustomFonts();
+
+  // Show loading screen while fonts are loading
+  if (!fontsLoaded) {
+    return <AppLoading message="Loading fonts..." />;
+  }
+
+  // Log font loading error but continue with system fonts
+  if (fontError) {
+    console.error('Font loading failed, using system fonts:', fontError);
+  }
+
   return (
     <ErrorBoundary>
       <ThemeProvider>

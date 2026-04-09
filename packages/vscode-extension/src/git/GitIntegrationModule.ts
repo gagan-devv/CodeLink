@@ -61,26 +61,26 @@ export class GitIntegrationModuleImpl implements GitIntegrationModule {
     }
 
     const startTime = Date.now();
-    
+
     try {
       // Convert absolute path to repository-relative path
       const relativePath = this.getRelativePath(filePath);
-      
+
       // Fetch HEAD version using git show
       const content = await this.git.show([`HEAD:${relativePath}`]);
-      
+
       const elapsed = Date.now() - startTime;
       console.log(
         `[GitIntegration] Fetched HEAD version for ${relativePath} (${content.length} bytes, took ${elapsed}ms)`
       );
-      
+
       // Performance warning if Git operation took too long
       if (elapsed > 500) {
         console.warn(
           `[GitIntegration] Git operation exceeded 500ms threshold: ${elapsed}ms for ${relativePath}`
         );
       }
-      
+
       return content;
     } catch (error) {
       const elapsed = Date.now() - startTime;
@@ -98,7 +98,7 @@ export class GitIntegrationModuleImpl implements GitIntegrationModule {
 
     try {
       const relativePath = this.getRelativePath(filePath);
-      
+
       // Check if file exists in HEAD
       await this.git.show([`HEAD:${relativePath}`]);
       return true;
@@ -115,7 +115,7 @@ export class GitIntegrationModuleImpl implements GitIntegrationModule {
   private getRelativePath(filePath: string): string {
     // Use VS Code's workspace API to get relative path
     const relativePath = vscode.workspace.asRelativePath(filePath, false);
-    
+
     // Normalize path separators for Git (always use forward slashes)
     return relativePath.replace(/\\/g, '/');
   }

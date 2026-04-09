@@ -41,7 +41,7 @@ const DEFAULT_SERVER_URL = 'http://localhost:8080';
  */
 export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> = ({
   children,
-  serverUrl = DEFAULT_SERVER_URL
+  serverUrl = DEFAULT_SERVER_URL,
 }) => {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [error, setError] = useState<Error | null>(null);
@@ -95,14 +95,10 @@ export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> =
     status,
     error,
     reconnect,
-    socketManager: socketManager.current
+    socketManager: socketManager.current,
   };
 
-  return (
-    <ConnectionContext.Provider value={value}>
-      {children}
-    </ConnectionContext.Provider>
-  );
+  return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;
 };
 
 /**

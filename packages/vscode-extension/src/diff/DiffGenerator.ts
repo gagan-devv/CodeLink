@@ -23,42 +23,42 @@ const FILE_SIZE_MAX_THRESHOLD = 10 * 1024 * 1024; // 10MB in bytes
 export class DiffGeneratorImpl implements DiffGenerator {
   async generateDiff(filePath: string, headContent: string): Promise<FileContextPayload | null> {
     const startTime = Date.now();
-    
+
     try {
       // Validate file path
       if (!filePath || filePath.trim().length === 0) {
         console.warn(`[DiffGenerator] Invalid file path: empty or whitespace-only`);
         return null;
       }
-      
+
       // Check file size before reading
       const fileStats = await this.getFileStats(filePath);
-      
+
       if (fileStats.size > FILE_SIZE_MAX_THRESHOLD) {
         console.warn(
           `[DiffGenerator] File too large (${this.formatBytes(fileStats.size)}), skipping: ${filePath}`
         );
         return null;
       }
-      
+
       if (fileStats.size > FILE_SIZE_WARNING_THRESHOLD) {
         console.warn(
           `[DiffGenerator] Large file detected (${this.formatBytes(fileStats.size)}): ${filePath}`
         );
       }
-      
+
       // Read current file content - prefer editor content over disk
       const modifiedFile = await this.getCurrentFileContent(filePath);
-      
+
       // Get workspace-relative path for fileName
       const fileName = vscode.workspace.asRelativePath(filePath, false);
-      
+
       // Check if file has unsaved changes
       const isDirty = this.isFileDirty(filePath);
-      
+
       // Generate timestamp
       const timestamp = Date.now();
-      
+
       // Construct FileContextPayload
       const payload: FileContextPayload = {
         fileName,
@@ -67,23 +67,26 @@ export class DiffGeneratorImpl implements DiffGenerator {
         isDirty,
         timestamp,
       };
-      
+
       const elapsed = Date.now() - startTime;
       console.log(
         `[DiffGenerator] Generated diff for ${fileName} (${this.formatBytes(modifiedFile.length)} bytes, isDirty: ${isDirty}, took ${elapsed}ms)`
       );
-      
+
       // Performance warning if diff generation took too long
       if (elapsed > 200) {
         console.warn(
           `[DiffGenerator] Diff generation exceeded 200ms threshold: ${elapsed}ms for ${fileName}`
         );
       }
-      
+
       return payload;
     } catch (error) {
       const elapsed = Date.now() - startTime;
-      console.error(`[DiffGenerator] Error generating diff for ${filePath} (took ${elapsed}ms):`, error);
+      console.error(
+        `[DiffGenerator] Error generating diff for ${filePath} (took ${elapsed}ms):`,
+        error
+      );
       return null;
     }
   }
@@ -122,15 +125,13 @@ export class DiffGeneratorImpl implements DiffGenerator {
    */
   private async getCurrentFileContent(filePath: string): Promise<string> {
     // First, try to get content from open editor
-    const document = vscode.workspace.textDocuments.find(
-      doc => doc.uri.fsPath === filePath
-    );
-    
+    const document = vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === filePath);
+
     if (document) {
       // Return editor content (includes unsaved changes)
       return document.getText();
     }
-    
+
     // Fall back to reading from disk if not open in editor
     return this.readFileContent(filePath);
   }
@@ -157,15 +158,13 @@ export class DiffGeneratorImpl implements DiffGenerator {
    */
   private isFileDirty(filePath: string): boolean {
     // Find the document in VS Code's open documents
-    const document = vscode.workspace.textDocuments.find(
-      doc => doc.uri.fsPath === filePath
-    );
-    
+    const document = vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === filePath);
+
     // If document is open, check its dirty state
     if (document) {
       return document.isDirty;
     }
-    
+
     // If document is not open, it's not dirty
     return false;
   }
