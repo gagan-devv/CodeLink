@@ -67,35 +67,35 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
     {
       id: 'refactor',
       label: 'Refactor',
-      icon: 'auto-fix-high' as any, // Material Symbols icon
+      icon: 'build', // MaterialIcons equivalent for refactor/fix
       iconColor: theme.colors.primary,
       template: 'Refactor the following code to improve readability and maintainability:\n\n',
     },
     {
       id: 'explain',
       label: 'Explain',
-      icon: 'description' as any, // Material Symbols icon
+      icon: 'description', // MaterialIcons icon for documentation/explanation
       iconColor: theme.colors.secondary,
       template: 'Explain what this code does:\n\n',
     },
     {
       id: 'fix-bug',
       label: 'Fix Bug',
-      icon: 'bug-report' as any, // Material Symbols icon
+      icon: 'bug-report', // MaterialIcons icon for bugs
       iconColor: theme.colors.error,
       template: 'Fix the bug in this code:\n\n',
     },
     {
       id: 'write-tests',
       label: 'Write Tests',
-      icon: 'checklist' as any, // Material Symbols icon
+      icon: 'check-circle', // MaterialIcons equivalent for checklist/tests
       iconColor: theme.colors.tertiary,
       template: 'Write unit tests for this code:\n\n',
     },
     {
       id: 'documentation',
       label: 'Documentation',
-      icon: 'history-edu' as any, // Material Symbols icon
+      icon: 'school', // MaterialIcons equivalent for education/documentation
       iconColor: theme.colors.primaryContainer,
       template: 'Generate documentation for this code:\n\n',
     },
@@ -235,10 +235,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           {templates.map((template) => (
             <TouchableOpacity
               key={template.id}
-              style={[
-                styles.templateChip,
-                { backgroundColor: theme.colors.surfaceContainerHigh },
-              ]}
+              style={[styles.templateChip, { backgroundColor: theme.colors.surfaceContainerHigh }]}
               onPress={() => handleSelectTemplate(template)}
               activeOpacity={0.7}
             >
@@ -252,10 +249,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
 
         {/* Requirement 5.3: Main composer container with terminal-like header (colored dots) */}
         <View
-          style={[
-            styles.composerContainer,
-            { backgroundColor: theme.colors.surfaceContainerLow },
-          ]}
+          style={[styles.composerContainer, { backgroundColor: theme.colors.surfaceContainerLow }]}
         >
           {/* Terminal-like header with colored dots */}
           <View
@@ -278,7 +272,10 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                 New Instruction
               </Text>
             </View>
-            <TouchableOpacity onPress={handleClear} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity
+              onPress={handleClear}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Icon name="close" size={18} color={theme.colors.onSurfaceVariant} />
             </TouchableOpacity>
           </View>
@@ -292,10 +289,7 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
             ]}
           >
             <RNTextInput
-              style={[
-                styles.textarea,
-                { color: theme.colors.onSurface },
-              ]}
+              style={[styles.textarea, { color: theme.colors.onSurface }]}
               placeholder="Ask AI to edit your code..."
               placeholderTextColor={`${theme.colors.onSurfaceVariant}66`}
               value={prompt}
@@ -307,7 +301,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
 
             {/* Requirement 5.6: Bottom toolbar with Clear and Attach buttons */}
             {/* Requirement 5.5, 5.13: Character counter with error state when limit exceeded */}
-            <View style={[styles.bottomToolbar, { borderTopColor: `${theme.colors.outlineVariant}1A` }]}>
+            <View
+              style={[styles.bottomToolbar, { borderTopColor: `${theme.colors.outlineVariant}1A` }]}
+            >
               <View style={styles.toolbarButtons}>
                 <TouchableOpacity
                   style={styles.toolbarButton}
@@ -318,7 +314,9 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                   <Icon
                     name="backspace"
                     size={20}
-                    color={prompt.length === 0 ? theme.colors.onSurfaceVariant : theme.colors.primary}
+                    color={
+                      prompt.length === 0 ? theme.colors.onSurfaceVariant : theme.colors.primary
+                    }
                   />
                   <Text
                     variant="label-sm"

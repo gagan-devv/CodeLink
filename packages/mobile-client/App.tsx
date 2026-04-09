@@ -131,11 +131,6 @@ const AppContent: React.FC = () => {
     }
   };
 
-  // Handle response dismissal
-  const handleResponseDismiss = () => {
-    setPromptResponse(null);
-  };
-
   // Handle reconnection (currently unused but kept for future use)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _handleReconnect = async () => {
@@ -178,7 +173,7 @@ const AppContent: React.FC = () => {
   const PromptScene: React.FC = () => (
     <View style={styles.scene}>
       <PromptComposer onSubmit={handlePromptSubmit} isLoading={isSubmitting} error={promptError} />
-      <PromptResponseDisplay response={promptResponse} onDismiss={handleResponseDismiss} />
+      <PromptResponseDisplay response={promptResponse} connectionStatus={status} />
     </View>
   );
 
