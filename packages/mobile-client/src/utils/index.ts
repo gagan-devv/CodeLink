@@ -28,3 +28,44 @@ export {
   handleError,
   handleUnknownError,
 } from './errorHandling';
+
+// Export platform adaptation utilities
+export {
+  type PlatformType,
+  getCurrentPlatform,
+  isIOS,
+  isAndroid,
+  isWeb,
+  getStatusBarStyle,
+  getActivityIndicatorSize,
+  triggerHapticFeedback,
+  registerBackButtonHandler,
+  getKeyboardBehavior,
+  getKeyboardVerticalOffset,
+  supportsSwipeBack,
+  hasHardwareBackButton,
+  getNavigationGestureConfig,
+} from './platformAdaptations';
+
+// Export responsive layout utilities
+export {
+  BREAKPOINTS,
+  MAX_CONTENT_WIDTH,
+  MIN_TOUCH_TARGET_SIZE,
+  type ScreenSize,
+  getScreenDimensions,
+  getScreenSize,
+  getGridColumns,
+  getBentoGridConfig,
+  getContentWidth,
+  getTypographyScale,
+  scaleFont,
+  scaleSpacing,
+  ensureMinTouchTarget,
+  getResponsivePadding,
+  isLargeScreen,
+  isSmallScreen,
+  getPixelRatio,
+  dpToPixels,
+  pixelsToDp,
+} from './responsiveLayout';

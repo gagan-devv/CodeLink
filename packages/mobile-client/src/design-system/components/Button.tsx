@@ -17,11 +17,10 @@ import {
   ActivityIndicator,
   StyleProp,
   ViewStyle,
-  Platform,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDesignSystem } from '../theme/useDesignSystem';
+import { triggerHapticFeedback } from '../../utils/platformAdaptations';
 
 /**
  * Button variant types
@@ -180,24 +179,13 @@ export const Button: React.FC<ButtonProps> = ({
 
   /**
    * Handle press - trigger haptic feedback and callback
+   * Requirements: 22.1, 22.6, 22.7
    */
-  const handlePress = () => {
+  const handlePress = async () => {
     if (!isInteractive) return;
 
-    // Trigger haptic feedback
-    if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      switch (hapticFeedback) {
-        case 'light':
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          break;
-        case 'medium':
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          break;
-        case 'heavy':
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          break;
-      }
-    }
+    // Trigger platform-specific haptic feedback
+    await triggerHapticFeedback(hapticFeedback);
 
     onPress();
   };

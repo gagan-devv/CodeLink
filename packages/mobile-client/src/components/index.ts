@@ -17,3 +17,5 @@ export { PromptTemplates } from './PromptTemplates';
 export type { PromptTemplate, PromptTemplatesProps } from './PromptTemplates';
 export { AppLoading } from './AppLoading';
 export type { AppLoadingProps } from './AppLoading';
+export { ResponsiveContainer } from './ResponsiveContainer';
+export type { ResponsiveContainerProps } from './ResponsiveContainer';

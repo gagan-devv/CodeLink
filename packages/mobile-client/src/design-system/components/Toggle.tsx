@@ -8,9 +8,9 @@
  */
 
 import React from 'react';
-import { View, Switch, Text, StyleSheet, Platform, StyleProp, ViewStyle } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { View, Switch, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { useDesignSystem } from '../theme/useDesignSystem';
+import { triggerHapticFeedback } from '../../utils/platformAdaptations';
 
 export interface ToggleProps {
   /**
@@ -81,13 +81,14 @@ export const Toggle: React.FC<ToggleProps> = ({
 
   /**
    * Handle value change with haptic feedback
+   * Requirements: 22.5, 22.6, 22.7
    */
-  const handleValueChange = (newValue: boolean) => {
+  const handleValueChange = async (newValue: boolean) => {
     if (disabled) return;
 
-    // Trigger haptic feedback
-    if (hapticFeedback && (Platform.OS === 'ios' || Platform.OS === 'android')) {
-      Haptics.selectionAsync();
+    // Trigger platform-specific haptic feedback
+    if (hapticFeedback) {
+      await triggerHapticFeedback('selection');
     }
 
     onValueChange(newValue);

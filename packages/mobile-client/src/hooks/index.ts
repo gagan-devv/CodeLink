@@ -28,3 +28,7 @@ export {
   useScreenChangeAnnouncement,
   useLoadingAnnouncement,
 } from './useScreenReaderAnnouncement';
+
+export { usePlatformNavigation } from './usePlatformNavigation';
+
+export { useResponsiveLayout, type ResponsiveLayoutConfig } from './useResponsiveLayout';
