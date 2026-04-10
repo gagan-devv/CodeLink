@@ -53,6 +53,11 @@ export const useConnectionQuality = () => {
           lastPingTime: new Date(),
         });
       } catch (error) {
+        // Log network errors (Requirement 17.11)
+        console.error('Connection quality check failed:', {
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        });
         setMetrics({
           quality: 'poor',
           latency: null,

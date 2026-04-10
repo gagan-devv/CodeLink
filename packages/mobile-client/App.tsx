@@ -29,6 +29,7 @@ import {
   ThemeProvider,
   useTheme,
   usePromptHistory,
+  useScreenReaderAnnouncement,
 } from './src/hooks';
 
 // Config
@@ -44,9 +45,10 @@ import { isInjectPromptResponse, isSyncFullContextMessage } from './src/utils/me
  * Main application content with navigation
  */
 const AppContent: React.FC = () => {
-  const { status, socketManager, reconnect } = useConnection();
+  const { status, error, socketManager, reconnect } = useConnection();
   const { theme, isDark } = useTheme();
   const { updateHistoryItem } = usePromptHistory();
+  const { announce } = useScreenReaderAnnouncement();
   const [index, setIndex] = useState(0);
   const [promptResponse, setPromptResponse] = useState<InjectPromptResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -131,11 +133,6 @@ const AppContent: React.FC = () => {
     }
   };
 
-  // Handle response dismissal
-  const handleResponseDismiss = () => {
-    setPromptResponse(null);
-  };
-
   // Handle reconnection (currently unused but kept for future use)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _handleReconnect = async () => {
@@ -161,11 +158,22 @@ const AppContent: React.FC = () => {
     { key: 'settings', title: 'Settings', focusedIcon: 'cog', unfocusedIcon: 'cog-outline' },
   ]);
 
+  // Announce screen changes for accessibility
+  // Requirement 14.11: Announce screen changes on navigation
+  useEffect(() => {
+    const currentRoute = routes[index];
+    if (currentRoute) {
+      announce(`${currentRoute.title} screen`, 300);
+    }
+  }, [index, routes, announce]);
+
   // Render scene based on route
   const DashboardScene: React.FC = () => (
     <View style={styles.scene}>
       <Dashboard
         connectionStatus={status}
+        connectionError={error}
+        onRetry={reconnect}
         onNavigateToCompose={() => setIndex(1)}
         onNavigateToDiffs={() => setIndex(2)}
         onRefresh={async () => {
@@ -178,7 +186,7 @@ const AppContent: React.FC = () => {
   const PromptScene: React.FC = () => (
     <View style={styles.scene}>
       <PromptComposer onSubmit={handlePromptSubmit} isLoading={isSubmitting} error={promptError} />
-      <PromptResponseDisplay response={promptResponse} onDismiss={handleResponseDismiss} />
+      <PromptResponseDisplay response={promptResponse} connectionStatus={status} />
     </View>
   );
 

@@ -49,6 +49,12 @@ export interface StatusIndicatorProps {
    * Custom style overrides
    */
   style?: StyleProp<ViewStyle>;
+
+  /**
+   * Accessibility label for screen readers
+   * If not provided, uses status label as accessibility label
+   */
+  accessibilityLabel?: string;
 }
 
 /**
@@ -60,6 +66,7 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({
   size = 'md',
   animated = true,
   style,
+  accessibilityLabel,
 }) => {
   const { theme } = useDesignSystem();
   const pulseScale = useRef(new Animated.Value(1)).current;
@@ -162,7 +169,12 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({
   const statusLabel = getStatusLabel();
 
   return (
-    <View style={[styles.container, style]}>
+    <View
+      style={[styles.container, style]}
+      accessible={true}
+      accessibilityLabel={accessibilityLabel || `Connection status: ${statusLabel}`}
+      accessibilityRole="text"
+    >
       {/* Status dot with optional pulse animation */}
       <View style={styles.dotContainer}>
         <Animated.View

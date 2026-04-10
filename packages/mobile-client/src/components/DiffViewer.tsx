@@ -7,6 +7,7 @@ import { TopAppBar } from '../navigation/TopAppBar';
 import { Card } from '../design-system/components/Card';
 import { Button } from '../design-system/components/Button';
 import { Icon } from '../design-system/components/Icon';
+import { Skeleton } from '../design-system/components/Skeleton';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 
 /**
@@ -76,8 +77,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
               refreshing={refreshing}
               onRefresh={handleRefresh}
               tintColor={theme.colors.primary}
+              accessibilityLabel="Refresh diff changes"
             />
           }
+          accessible={true}
+          accessibilityLabel="Diff viewer empty state"
+          accessibilityHint="Pull down to refresh and load diff changes"
         >
           <Icon name="difference" size={64} color="onSurfaceVariant" />
           <Text variant="headline-sm" color="onSurfaceVariant" style={styles.emptyStateText}>
@@ -411,11 +416,36 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
         <TopAppBar connectionStatus={connectionStatus} />
-        <View style={styles.loadingContainer}>
-          <Text variant="body-lg" color="onSurfaceVariant">
-            Loading...
-          </Text>
-        </View>
+        <ScrollView style={styles.scrollView}>
+          <View style={{ padding: 16 }}>
+            {/* File header skeleton */}
+            <Card variant="low" style={styles.fileHeader}>
+              <View style={styles.fileHeaderTop}>
+                <View style={{ flex: 1 }}>
+                  <Skeleton width="60%" height={24} style={{ marginBottom: 8 }} />
+                  <Skeleton width="80%" height={16} />
+                </View>
+              </View>
+            </Card>
+
+            {/* Diff content skeleton */}
+            <Card variant="lowest" style={{ marginTop: 16 }}>
+              <View style={styles.diffSkeletonContainer}>
+                {[...Array(10)].map((_, i) => (
+                  <View key={i} style={styles.diffLineSkeletonRow}>
+                    <Skeleton width={40} height={16} style={{ marginRight: 12 }} />
+                    <Skeleton width="85%" height={16} />
+                  </View>
+                ))}
+              </View>
+            </Card>
+
+            {/* Summary footer skeleton */}
+            <Card variant="low" style={styles.summaryFooter}>
+              <Skeleton width="50%" height={20} />
+            </Card>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -432,8 +462,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             refreshing={refreshing}
             onRefresh={handleRefresh}
             tintColor={theme.colors.primary}
+            accessibilityLabel="Refresh diff changes"
           />
         }
+        accessible={true}
+        accessibilityLabel="Diff viewer content"
+        accessibilityHint="Pull down to refresh diff changes"
       >
         {/* File Header */}
         <Card variant="low" padding="lg" style={styles.fileHeader}>
@@ -479,6 +513,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
                   size="sm"
                   onPress={onCommit}
                   icon={<Icon name="check-circle" size={16} color="onSecondary" />}
+                  accessibilityLabel="Commit changes"
+                  accessibilityHint="Double tap to commit the current changes"
                 >
                   Commit
                 </Button>
@@ -490,6 +526,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
                   onPress={onRevert}
                   icon={<Icon name="undo" size={16} color="secondary" />}
                   style={styles.revertButton}
+                  accessibilityLabel="Revert changes"
+                  accessibilityHint="Double tap to revert the current changes"
                 >
                   Revert
                 </Button>
@@ -627,10 +665,13 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  diffSkeletonContainer: {
+    padding: 16,
+  },
+  diffLineSkeletonRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
   emptyStateContainer: {
     flex: 1,

@@ -34,7 +34,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'ghost';
 
 /**
  * Button size variants
- * - sm: Small button (32px height)
+ * - sm: Small button (44px height) - meets WCAG 2.1 AA minimum
  * - md: Medium button (44px height) - default
  * - lg: Large button (56px height)
  */
@@ -112,6 +112,18 @@ export interface ButtonProps {
    * @default 'light'
    */
   hapticFeedback?: HapticFeedback;
+
+  /**
+   * Accessibility label for screen readers
+   * If not provided, uses children text as label
+   */
+  accessibilityLabel?: string;
+
+  /**
+   * Accessibility hint for screen readers
+   * Provides additional context about what happens when button is pressed
+   */
+  accessibilityHint?: string;
 }
 
 /**
@@ -129,6 +141,8 @@ export const Button: React.FC<ButtonProps> = ({
   children,
   style,
   hapticFeedback = 'light',
+  accessibilityLabel,
+  accessibilityHint,
 }) => {
   const { theme } = useDesignSystem();
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -190,11 +204,12 @@ export const Button: React.FC<ButtonProps> = ({
 
   /**
    * Get button height based on size
+   * All sizes meet WCAG 2.1 AA minimum 44x44pt touch target (Requirement 14.8)
    */
   const getHeight = (): number => {
     switch (size) {
       case 'sm':
-        return 32;
+        return 44; // Increased from 32 to meet 44pt minimum touch target
       case 'md':
         return 44;
       case 'lg':
@@ -296,14 +311,15 @@ export const Button: React.FC<ButtonProps> = ({
    * Render button based on variant
    */
   const renderButton = () => {
-    const height = getHeight();
+    const minHeight = getHeight();
     const paddingHorizontal = getPaddingHorizontal();
 
     const baseStyle = [
       styles.button,
       {
-        height,
+        minHeight, // Use minHeight instead of height to allow growth with larger text (Requirement 14.9)
         paddingHorizontal,
+        paddingVertical: theme.spacing.sm, // Add vertical padding for text scaling
         borderRadius: theme.borderRadius.lg,
         opacity: disabled ? 0.5 : 1,
       },
@@ -367,6 +383,16 @@ export const Button: React.FC<ButtonProps> = ({
         onPressOut={handlePressOut}
         onPress={handlePress}
         style={fullWidth && styles.fullWidth}
+        accessible={true}
+        accessibilityLabel={
+          accessibilityLabel || (typeof children === 'string' ? children : 'Button')
+        }
+        accessibilityHint={accessibilityHint}
+        accessibilityRole="button"
+        accessibilityState={{
+          disabled: !isInteractive,
+          busy: loading,
+        }}
       >
         {renderButton()}
       </TouchableOpacity>

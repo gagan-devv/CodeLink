@@ -5,11 +5,14 @@
  * Supports all typography scales from display-lg to label-sm with
  * automatic font family mapping based on variant type.
  *
- * Requirements: 2.7, 2.8, 2.9
+ * Supports dynamic text sizing (Requirement 14.9) by respecting system
+ * font scale settings (iOS Dynamic Type and Android Font Size).
+ *
+ * Requirements: 2.7, 2.8, 2.9, 14.9
  */
 
 import React from 'react';
-import { Text as RNText, type TextStyle, type StyleProp } from 'react-native';
+import { Text as RNText, type TextStyle, type StyleProp, PixelRatio } from 'react-native';
 import { useDesignSystem } from '../theme/useDesignSystem';
 import type { ColorTokens } from '../tokens/colors';
 import type { TypographyTokens } from '../tokens/typography';
@@ -147,7 +150,12 @@ export const Text: React.FC<TextProps> = ({
 
   // Get font size from variant
   const fontSizeKey = getFontSizeKey(variant);
-  const fontSize = theme.typography.sizes[fontSizeKey];
+  const baseFontSize = theme.typography.sizes[fontSizeKey];
+
+  // Apply system font scale for accessibility (Requirement 14.9)
+  // This respects iOS Dynamic Type and Android Font Size settings
+  const fontScale = PixelRatio.getFontScale();
+  const fontSize = baseFontSize * fontScale;
 
   // Get font weight
   const fontWeight = theme.typography.weights[weight];

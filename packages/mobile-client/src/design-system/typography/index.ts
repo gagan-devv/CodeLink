@@ -7,3 +7,4 @@
 
 export * from './Text';
 export * from './fontLoading';
+export * from './DynamicTextExample';

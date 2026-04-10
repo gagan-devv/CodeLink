@@ -1,20 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  TextInput,
-  Button,
-  Text,
-  HelperText,
-  IconButton,
-  Chip,
-  Portal,
-  Modal,
-} from 'react-native-paper';
+  View,
+  StyleSheet,
+  ScrollView,
+  TextInput as RNTextInput,
+  TouchableOpacity,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { useOrientation } from '../hooks';
+import { useDesignSystem } from '../design-system/theme';
+import { Text } from '../design-system/typography';
+import { Icon, IconName } from '../design-system/components/Icon';
+import { TopAppBar } from '../navigation/TopAppBar';
 import { useDraftPrompt } from '../hooks/useDraftPrompt';
 import { usePromptHistory } from '../hooks/usePromptHistory';
-import { PromptTemplates } from './PromptTemplates';
+import { useLoadingAnnouncement } from '../hooks/useScreenReaderAnnouncement';
+
+/**
+ * Prompt template definition
+ */
+interface PromptTemplate {
+  id: string;
+  label: string;
+  icon: IconName;
+  iconColor: string;
+  template: string;
+}
 
 /**
  * PromptComposer component props
@@ -23,29 +37,74 @@ export interface PromptComposerProps {
   onSubmit: (prompt: string) => void;
   isLoading: boolean;
   error: string | null;
+  connectionStatus?: 'connected' | 'disconnected' | 'connecting';
 }
 
 /**
- * PromptComposer component for composing and submitting prompts
- * Provides real-time character count, validation, and loading states
- * Supports both portrait and landscape orientations with responsive layout
+ * PromptComposer component - Redesigned with Obsidian UI aesthetic
+ * Features terminal-like interface, template chips, and floating action button
  *
- * Requirements: 1.1, 1.2, 1.4, 1.5, 10.1, 10.2, 10.4, 10.5
+ * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11, 5.12, 5.13
+ * Requirements: 25.1, 25.8, 12.6
  */
-export const PromptComposer: React.FC<PromptComposerProps> = ({ onSubmit, isLoading, error }) => {
-  const { draft, setDraft, clearDraft, isSaving, lastSaved } = useDraftPrompt();
-  const { history, addToHistory } = usePromptHistory();
+export const PromptComposer: React.FC<PromptComposerProps> = ({
+  onSubmit,
+  isLoading,
+  error,
+  connectionStatus = 'connected',
+}) => {
+  const { theme } = useDesignSystem();
+  const { draft, setDraft, clearDraft } = useDraftPrompt();
+  const { addToHistory } = usePromptHistory();
   const [prompt, setPrompt] = useState(draft);
   const [charCount, setCharCount] = useState(draft.length);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const { isLandscape } = useOrientation();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_menuVisible, _setMenuVisible] = useState(false);
-  const [historyVisible, setHistoryVisible] = useState(false);
-  const [templatesVisible, setTemplatesVisible] = useState(false);
+  const fabScale = useRef(new Animated.Value(1)).current;
 
-  const MAX_CHARS = 5000;
-  const WARNING_THRESHOLD = 0.8;
+  const MAX_CHARS = 2000;
+
+  // Announce loading state for accessibility
+  // Requirement 14.11: Announce loading states
+  useLoadingAnnouncement(isLoading, 'Sending prompt to AI editor', 'Prompt sent');
+
+  // Template chips data
+  // Requirement 5.2: Template chips (Refactor, Explain, Fix Bug, Write Tests, Documentation)
+  const templates: PromptTemplate[] = [
+    {
+      id: 'refactor',
+      label: 'Refactor',
+      icon: 'build', // MaterialIcons equivalent for refactor/fix
+      iconColor: theme.colors.primary,
+      template: 'Refactor the following code to improve readability and maintainability:\n\n',
+    },
+    {
+      id: 'explain',
+      label: 'Explain',
+      icon: 'description', // MaterialIcons icon for documentation/explanation
+      iconColor: theme.colors.secondary,
+      template: 'Explain what this code does:\n\n',
+    },
+    {
+      id: 'fix-bug',
+      label: 'Fix Bug',
+      icon: 'bug-report', // MaterialIcons icon for bugs
+      iconColor: theme.colors.error,
+      template: 'Fix the bug in this code:\n\n',
+    },
+    {
+      id: 'write-tests',
+      label: 'Write Tests',
+      icon: 'check-circle', // MaterialIcons equivalent for checklist/tests
+      iconColor: theme.colors.tertiary,
+      template: 'Write unit tests for this code:\n\n',
+    },
+    {
+      id: 'documentation',
+      label: 'Documentation',
+      icon: 'school', // MaterialIcons equivalent for education/documentation
+      iconColor: theme.colors.primaryContainer,
+      template: 'Generate documentation for this code:\n\n',
+    },
+  ];
 
   // Sync with draft
   useEffect(() => {
@@ -54,44 +113,73 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({ onSubmit, isLoad
 
   /**
    * Handle text input changes
-   * Updates prompt state and character count
-   * Requirement 1.2: Real-time character count feedback
+   * Requirement 5.4: Multiline textarea with character counter
+   * Requirement 5.5: Character counter showing current/maximum
    */
   const handleTextChange = (text: string) => {
     if (text.length <= MAX_CHARS) {
       setPrompt(text);
       setCharCount(text.length);
-
-      // Clear validation error when user starts typing
-      if (validationError) {
-        setValidationError(null);
-      }
     }
   };
 
   /**
-   * Validate prompt before submission
-   * Requirement 1.4: Reject empty/whitespace prompts
+   * Handle template chip selection
+   * Requirement 5.11: Insert template text into textarea on tap
    */
-  const validatePrompt = (text: string): boolean => {
-    if (text.trim().length === 0) {
-      setValidationError('Prompt cannot be empty or contain only whitespace');
-      return false;
-    }
-    return true;
+  const handleSelectTemplate = async (template: PromptTemplate) => {
+    await Haptics.selectionAsync();
+    setPrompt(template.template);
+    setCharCount(template.template.length);
+  };
+
+  /**
+   * Handle clear button
+   * Requirement 5.6: Clear button in bottom toolbar
+   */
+  const handleClear = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPrompt('');
+    setCharCount(0);
+    await clearDraft();
+  };
+
+  /**
+   * Handle attach button (placeholder for future implementation)
+   * Requirement 5.6: Attach button in bottom toolbar
+   */
+  const handleAttach = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // TODO: Implement file attachment functionality
+  };
+
+  /**
+   * Handle FAB press animation
+   * Requirement 12.6: Scale animation on FAB press
+   */
+  const handleFABPressIn = () => {
+    Animated.spring(fabScale, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleFABPressOut = () => {
+    Animated.spring(fabScale, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
   };
 
   /**
    * Handle prompt submission
-   * Requirement 1.3: Create INJECT_PROMPT message
-   * Requirement 1.4: Prevent submission of empty prompts
+   * Requirement 5.12: Send prompt action on FAB tap
    */
   const handleSubmit = async () => {
-    if (!validatePrompt(prompt)) {
+    if (prompt.trim().length === 0 || isLoading || charCount > MAX_CHARS) {
       return;
     }
 
-    // Haptic feedback
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     // Add to history
@@ -109,283 +197,440 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({ onSubmit, isLoad
     setCharCount(0);
   };
 
-  /**
-   * Handle template selection
-   */
-  const handleSelectTemplate = (template: string) => {
-    setPrompt(template);
-    setCharCount(template.length);
-    setTemplatesVisible(false);
-  };
-
-  /**
-   * Handle history item selection
-   */
-  const handleSelectHistory = (item: string) => {
-    setPrompt(item);
-    setCharCount(item.length);
-    setHistoryVisible(false);
-  };
-
-  /**
-   * Clear current prompt
-   */
-  const handleClear = () => {
-    Alert.alert('Clear Prompt', 'Are you sure you want to clear the current prompt?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: async () => {
-          setPrompt('');
-          setCharCount(0);
-          await clearDraft();
-        },
-      },
-    ]);
-  };
-
-  const isNearLimit = charCount >= MAX_CHARS * WARNING_THRESHOLD;
   const isAtLimit = charCount >= MAX_CHARS;
+  const canSubmit = prompt.trim().length > 0 && !isLoading && !isAtLimit;
 
   return (
-    <ScrollView
-      style={styles.scrollView}
-      contentContainerStyle={[styles.container, isLandscape && styles.containerLandscape]}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      {/* Toolbar */}
-      <View style={styles.toolbar}>
-        <View style={styles.toolbarLeft}>
-          <IconButton
-            icon="history"
-            size={20}
-            onPress={() => setHistoryVisible(true)}
-            disabled={history.length === 0}
-          />
-          <IconButton
-            icon="file-document-outline"
-            size={20}
-            onPress={() => setTemplatesVisible(true)}
-          />
-        </View>
-        <View style={styles.toolbarRight}>
-          {isSaving && <Text style={styles.savingText}>Saving...</Text>}
-          {lastSaved && !isSaving && <Text style={styles.savedText}>Saved</Text>}
-          <IconButton
-            icon="delete-outline"
-            size={20}
-            onPress={handleClear}
-            disabled={prompt.length === 0}
-          />
-        </View>
-      </View>
+      {/* Requirement 5.1: TopAppBar */}
+      <TopAppBar connectionStatus={connectionStatus} />
 
-      {/* Multiline text input for prompt composition */}
-      {/* Requirement 1.1: Multi-line prompt input */}
-      {/* Requirement 10.4: Accessible in both orientations */}
-      <TextInput
-        mode="outlined"
-        label="Enter your prompt"
-        placeholder="Type your prompt here..."
-        value={prompt}
-        onChangeText={handleTextChange}
-        multiline
-        numberOfLines={isLandscape ? 4 : 8}
-        disabled={isLoading}
-        style={[styles.input, isLandscape && styles.inputLandscape]}
-        error={!!validationError || !!error || isAtLimit}
-      />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Requirement 5.1, 5.3: Active Context header with "Compose Prompt" title */}
+        <View style={styles.contextArea}>
+          <Text
+            variant="label-sm"
+            weight="bold"
+            color="primary"
+            uppercase
+            style={styles.contextLabel}
+          >
+            Active Context
+          </Text>
+          <Text variant="headline-md" weight="extrabold" style={styles.contextTitle}>
+            Compose Prompt
+          </Text>
+        </View>
 
-      {/* Character count display */}
-      {/* Requirement 1.2: Real-time character count feedback */}
-      <View style={styles.charCountContainer}>
-        <Text
+        {/* Requirement 5.2, 5.3: Horizontal scrolling template chips container */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.templateChipsContainer}
+          contentContainerStyle={styles.templateChipsContent}
+        >
+          {templates.map((template) => (
+            <TouchableOpacity
+              key={template.id}
+              style={[styles.templateChip, { backgroundColor: theme.colors.surfaceContainerHigh }]}
+              onPress={() => handleSelectTemplate(template)}
+              activeOpacity={0.7}
+              accessible={true}
+              accessibilityLabel={`${template.label} template`}
+              accessibilityHint="Double tap to insert template into prompt"
+              accessibilityRole="button"
+            >
+              <Icon name={template.icon} size={16} color={template.iconColor} />
+              <Text variant="label-md" weight="medium" style={styles.templateChipLabel}>
+                {template.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Requirement 5.3: Main composer container with terminal-like header (colored dots) */}
+        <View
+          style={[styles.composerContainer, { backgroundColor: theme.colors.surfaceContainerLow }]}
+        >
+          {/* Terminal-like header with colored dots */}
+          <View
+            style={[
+              styles.terminalHeader,
+              { backgroundColor: theme.colors.surfaceContainerLowest },
+            ]}
+          >
+            <View style={styles.terminalDots}>
+              <View style={[styles.dot, { backgroundColor: `${theme.colors.error}66` }]} />
+              <View style={[styles.dot, { backgroundColor: `${theme.colors.tertiary}66` }]} />
+              <View style={[styles.dot, { backgroundColor: `${theme.colors.secondary}66` }]} />
+              <Text
+                variant="label-sm"
+                weight="medium"
+                color="onSurfaceVariant"
+                uppercase
+                style={styles.terminalLabel}
+              >
+                New Instruction
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleClear}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessible={true}
+              accessibilityLabel="Clear prompt"
+              accessibilityHint="Double tap to clear the prompt text"
+              accessibilityRole="button"
+            >
+              <Icon name="close" size={18} color={theme.colors.onSurfaceVariant} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Requirement 5.4, 5.9: Multiline textarea with surfaceContainerLowest background */}
+          {/* Requirement 25.1, 25.8: Keyboard handling to keep textarea visible */}
+          <View
+            style={[
+              styles.textareaContainer,
+              { backgroundColor: theme.colors.surfaceContainerLowest },
+            ]}
+          >
+            <RNTextInput
+              style={[styles.textarea, { color: theme.colors.onSurface }]}
+              placeholder="Ask AI to edit your code..."
+              placeholderTextColor={`${theme.colors.onSurfaceVariant}66`}
+              value={prompt}
+              onChangeText={handleTextChange}
+              multiline
+              textAlignVertical="top"
+              editable={!isLoading}
+            />
+
+            {/* Requirement 5.6: Bottom toolbar with Clear and Attach buttons */}
+            {/* Requirement 5.5, 5.13: Character counter with error state when limit exceeded */}
+            <View
+              style={[styles.bottomToolbar, { borderTopColor: `${theme.colors.outlineVariant}1A` }]}
+            >
+              <View style={styles.toolbarButtons}>
+                <TouchableOpacity
+                  style={styles.toolbarButton}
+                  onPress={handleClear}
+                  disabled={prompt.length === 0}
+                  activeOpacity={0.7}
+                  accessible={true}
+                  accessibilityLabel="Clear prompt"
+                  accessibilityHint="Double tap to clear all prompt text"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: prompt.length === 0 }}
+                >
+                  <Icon
+                    name="backspace"
+                    size={20}
+                    color={
+                      prompt.length === 0 ? theme.colors.onSurfaceVariant : theme.colors.primary
+                    }
+                  />
+                  <Text
+                    variant="label-sm"
+                    weight="bold"
+                    uppercase
+                    color={prompt.length === 0 ? 'onSurfaceVariant' : 'primary'}
+                    style={styles.toolbarButtonLabel}
+                  >
+                    Clear
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.toolbarButton}
+                  onPress={handleAttach}
+                  activeOpacity={0.7}
+                  accessible={true}
+                  accessibilityLabel="Attach file"
+                  accessibilityHint="Double tap to attach a file to the prompt"
+                  accessibilityRole="button"
+                >
+                  <Icon name="attach-file" size={20} color={theme.colors.onSurfaceVariant} />
+                  <Text
+                    variant="label-sm"
+                    weight="bold"
+                    uppercase
+                    color="onSurfaceVariant"
+                    style={styles.toolbarButtonLabel}
+                  >
+                    Attach
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View
+                style={[
+                  styles.charCounter,
+                  {
+                    backgroundColor: `${theme.colors.surfaceContainerHighest}4D`,
+                  },
+                  isAtLimit && { backgroundColor: `${theme.colors.errorContainer}4D` },
+                ]}
+              >
+                <Text
+                  variant="label-sm"
+                  weight="bold"
+                  color={isAtLimit ? 'error' : 'onSurfaceVariant'}
+                  style={styles.charCounterText}
+                >
+                  {charCount} / {MAX_CHARS}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Requirement 5.8: Pro tip hint section with lightbulb icon */}
+        <View
           style={[
-            styles.charCount,
-            isNearLimit && styles.charCountWarning,
-            isAtLimit && styles.charCountError,
+            styles.hintSection,
+            {
+              backgroundColor: `${theme.colors.primaryContainer}0D`,
+              borderColor: `${theme.colors.primaryContainer}1A`,
+            },
           ]}
         >
-          {charCount} / {MAX_CHARS} characters
-        </Text>
-        {isNearLimit && !isAtLimit && (
-          <Chip size="small" style={styles.warningChip}>
-            Approaching limit
-          </Chip>
+          <Icon name="lightbulb" size={20} color={theme.colors.primary} style={styles.hintIcon} />
+          <View style={styles.hintTextContainer}>
+            <Text variant="body-sm" color="onSurfaceVariant" style={styles.hintText}>
+              <Text variant="body-sm" weight="bold" color="primary">
+                Pro Tip:{' '}
+              </Text>
+              Mention specific functions or file names to help the AI understand the scope of your
+              requested changes more accurately.
+            </Text>
+          </View>
+        </View>
+
+        {/* Error display */}
+        {error && (
+          <View
+            style={[
+              styles.errorContainer,
+              {
+                backgroundColor: `${theme.colors.errorContainer}1A`,
+                borderColor: `${theme.colors.error}33`,
+              },
+            ]}
+          >
+            <Icon name="error" size={20} color={theme.colors.error} />
+            <Text variant="body-sm" color="error" style={styles.errorText}>
+              {error}
+            </Text>
+          </View>
         )}
-        {isAtLimit && (
-          <Chip size="small" style={styles.errorChip}>
-            Character limit reached
-          </Chip>
-        )}
-      </View>
+      </ScrollView>
 
-      {/* Validation error display */}
-      {/* Requirement 1.4: Display validation message */}
-      {validationError && (
-        <HelperText type="error" visible={true}>
-          {validationError}
-        </HelperText>
-      )}
-
-      {/* External error display */}
-      {error && (
-        <HelperText type="error" visible={true}>
-          {error}
-        </HelperText>
-      )}
-
-      {/* Submit button with loading state */}
-      {/* Requirement 1.5: Disable button and show loading indicator during submission */}
-      {/* Requirement 10.4: Accessible in both orientations */}
-      <Button
-        mode="contained"
-        onPress={handleSubmit}
-        disabled={isLoading || prompt.trim().length === 0 || isAtLimit}
-        loading={isLoading}
-        style={styles.submitButton}
-        contentStyle={styles.buttonContent}
-        icon="send"
+      {/* Requirement 5.7, 5.10: Floating action button (FAB) with send icon */}
+      {/* Requirement 12.6: Gradient background (primary to primaryContainer) and scale animation */}
+      <Animated.View
+        style={[
+          styles.fabContainer,
+          {
+            transform: [{ scale: fabScale }],
+            opacity: canSubmit ? 1 : 0.5,
+          },
+        ]}
       >
-        {isLoading ? 'Submitting...' : 'Submit Prompt'}
-      </Button>
-
-      {/* History Modal */}
-      <Portal>
-        <Modal
-          visible={historyVisible}
-          onDismiss={() => setHistoryVisible(false)}
-          contentContainerStyle={styles.modalContent}
+        <TouchableOpacity
+          onPressIn={handleFABPressIn}
+          onPressOut={handleFABPressOut}
+          onPress={handleSubmit}
+          disabled={!canSubmit}
+          activeOpacity={0.9}
+          accessible={true}
+          accessibilityLabel="Send prompt to AI editor"
+          accessibilityHint="Double tap to send your prompt to the AI editor"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canSubmit }}
         >
-          <Text variant="titleLarge" style={styles.modalTitle}>
-            Prompt History
-          </Text>
-          <ScrollView style={styles.historyList}>
-            {history.map((item) => (
-              <Button
-                key={item.id}
-                mode="outlined"
-                onPress={() => handleSelectHistory(item.prompt)}
-                style={styles.historyItem}
-              >
-                {item.prompt.substring(0, 100)}...
-              </Button>
-            ))}
-          </ScrollView>
-          <Button onPress={() => setHistoryVisible(false)}>Close</Button>
-        </Modal>
-      </Portal>
-
-      {/* Templates Modal */}
-      <Portal>
-        <Modal
-          visible={templatesVisible}
-          onDismiss={() => setTemplatesVisible(false)}
-          contentContainerStyle={styles.modalContent}
-        >
-          <PromptTemplates onSelectTemplate={handleSelectTemplate} />
-          <Button onPress={() => setTemplatesVisible(false)} style={styles.closeButton}>
-            Close
-          </Button>
-        </Modal>
-      </Portal>
-    </ScrollView>
+          <LinearGradient
+            colors={[theme.colors.primary, theme.colors.primaryContainer]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fab}
+          >
+            {isLoading ? (
+              <Icon name="hourglass-empty" size={24} color={theme.colors.onPrimary} fill />
+            ) : (
+              <Icon name="send" size={24} color={theme.colors.onPrimary} fill />
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
-  container: {
-    padding: 16,
-    backgroundColor: '#fff',
-    flexGrow: 1,
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 80, // Account for TopAppBar
+    paddingBottom: 120, // Account for FAB and bottom nav
   },
-  containerLandscape: {
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-  },
-  toolbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  toolbarLeft: {
-    flexDirection: 'row',
-  },
-  toolbarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  savingText: {
-    fontSize: 12,
-    color: '#666',
-    marginRight: 8,
-  },
-  savedText: {
-    fontSize: 12,
-    color: '#4CAF50',
-    marginRight: 8,
-  },
-  input: {
-    marginBottom: 8,
-    minHeight: 150,
-  },
-  inputLandscape: {
-    minHeight: 100,
-  },
-  charCountContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  charCount: {
-    fontSize: 12,
-    color: '#666',
-  },
-  charCountWarning: {
-    color: '#FF9800',
-    fontWeight: '600',
-  },
-  charCountError: {
-    color: '#F44336',
-    fontWeight: '600',
-  },
-  warningChip: {
-    backgroundColor: '#FFF3E0',
-  },
-  errorChip: {
-    backgroundColor: '#FFEBEE',
-  },
-  submitButton: {
+  contextArea: {
     marginTop: 16,
+    marginBottom: 32,
   },
-  buttonContent: {
-    paddingVertical: 8,
+  contextLabel: {
+    letterSpacing: 3.2,
+    marginBottom: 4,
   },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    margin: 20,
-    borderRadius: 8,
-    maxHeight: '80%',
+  contextTitle: {
+    letterSpacing: -0.5,
   },
-  modalTitle: {
-    marginBottom: 16,
-    fontWeight: '600',
+  templateChipsContainer: {
+    marginBottom: 24,
+    marginHorizontal: -16,
   },
-  historyList: {
-    maxHeight: 400,
-    marginBottom: 16,
+  templateChipsContent: {
+    paddingHorizontal: 16,
+    gap: 12,
   },
-  historyItem: {
-    marginBottom: 8,
-    justifyContent: 'flex-start',
+  templateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(64, 71, 79, 0.1)',
   },
-  closeButton: {
-    marginTop: 8,
+  templateChipLabel: {
+    fontSize: 12,
+  },
+  composerContainer: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(64, 71, 79, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.4,
+    shadowRadius: 40,
+    elevation: 20,
+  },
+  terminalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(64, 71, 79, 0.1)',
+  },
+  terminalDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  terminalLabel: {
+    marginLeft: 8,
+    letterSpacing: 2.4,
+  },
+  textareaContainer: {
+    padding: 24,
+  },
+  textarea: {
+    minHeight: 200,
+    fontSize: 18,
+    lineHeight: 28,
+    fontFamily: 'Inter_400Regular',
+  },
+  bottomToolbar: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  toolbarButtons: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  toolbarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  toolbarButtonLabel: {
+    letterSpacing: 1.4,
+  },
+  charCounter: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  charCounterText: {
+    letterSpacing: 1.6,
+  },
+  hintSection: {
+    marginTop: 24,
+    flexDirection: 'row',
+    gap: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  hintIcon: {
+    marginTop: 2,
+  },
+  hintTextContainer: {
+    flex: 1,
+  },
+  hintText: {
+    lineHeight: 20,
+  },
+  errorContainer: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  errorText: {
+    flex: 1,
+  },
+  fabContainer: {
+    position: 'absolute',
+    bottom: 110, // Above bottom nav
+    right: 24,
+    zIndex: 50,
+  },
+  fab: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.4,
+    shadowRadius: 40,
+    elevation: 20,
   },
 });

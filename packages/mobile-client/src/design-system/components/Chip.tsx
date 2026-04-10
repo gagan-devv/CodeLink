@@ -31,8 +31,8 @@ export type ChipVariant = 'default' | 'success' | 'error' | 'warning';
 
 /**
  * Chip size variants
- * - sm: Small chip (24px height)
- * - md: Medium chip (32px height) - default
+ * - sm: Small chip (44px height) - meets WCAG 2.1 AA minimum
+ * - md: Medium chip (44px height) - default, meets WCAG 2.1 AA minimum
  */
 export type ChipSize = 'sm' | 'md';
 
@@ -74,6 +74,18 @@ export interface ChipProps {
    * Custom style overrides
    */
   style?: StyleProp<ViewStyle>;
+
+  /**
+   * Accessibility label for screen readers
+   * If not provided, uses label text as accessibility label
+   */
+  accessibilityLabel?: string;
+
+  /**
+   * Accessibility hint for screen readers
+   * Provides additional context about what happens when chip is pressed
+   */
+  accessibilityHint?: string;
 }
 
 /**
@@ -87,6 +99,8 @@ export const Chip: React.FC<ChipProps> = ({
   size = 'md',
   onPress,
   style,
+  accessibilityLabel,
+  accessibilityHint,
 }) => {
   const { theme } = useDesignSystem();
 
@@ -106,25 +120,27 @@ export const Chip: React.FC<ChipProps> = ({
 
   /**
    * Get chip height based on size
+   * All sizes meet WCAG 2.1 AA minimum 44x44pt touch target (Requirement 14.8)
    */
   const getHeight = (): number => {
     switch (size) {
       case 'sm':
-        return 24;
+        return 44; // Increased from 24 to meet 44pt minimum touch target
       case 'md':
-        return 32;
+        return 44; // Increased from 32 to meet 44pt minimum touch target
     }
   };
 
   /**
    * Get horizontal padding based on size
+   * Adjusted for 44pt minimum touch target height
    */
   const getPaddingHorizontal = (): number => {
     switch (size) {
       case 'sm':
-        return theme.spacing.sm;
+        return theme.spacing.md; // 12px
       case 'md':
-        return theme.spacing.md;
+        return theme.spacing.lg; // 16px
     }
   };
 
@@ -142,13 +158,14 @@ export const Chip: React.FC<ChipProps> = ({
 
   /**
    * Get icon size based on chip size
+   * Adjusted for 44pt minimum touch target height
    */
   const getIconSize = (): number => {
     switch (size) {
       case 'sm':
-        return 14;
+        return 18; // Increased from 14 for better proportion
       case 'md':
-        return 16;
+        return 20; // Increased from 16 for better proportion
     }
   };
 
@@ -218,7 +235,7 @@ export const Chip: React.FC<ChipProps> = ({
     }
   };
 
-  const height = getHeight();
+  const minHeight = getHeight();
   const paddingHorizontal = getPaddingHorizontal();
   const fontSize = getFontSize();
   const iconSize = getIconSize();
@@ -229,8 +246,9 @@ export const Chip: React.FC<ChipProps> = ({
   const chipStyle: StyleProp<ViewStyle> = [
     styles.chip,
     {
-      height,
+      minHeight, // Use minHeight instead of height to allow growth with larger text (Requirement 14.9)
       paddingHorizontal,
+      paddingVertical: theme.spacing.xs, // Add vertical padding for text scaling
       backgroundColor,
       borderRadius: theme.borderRadius.full, // rounded-full
       borderWidth: borderColor ? 1 : 0,
@@ -277,7 +295,18 @@ export const Chip: React.FC<ChipProps> = ({
    */
   if (onPress) {
     return (
-      <TouchableOpacity activeOpacity={0.7} onPress={handlePress} style={chipStyle}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={handlePress}
+        style={chipStyle}
+        accessible={true}
+        accessibilityLabel={accessibilityLabel || label}
+        accessibilityHint={accessibilityHint}
+        accessibilityRole="button"
+        accessibilityState={{
+          selected,
+        }}
+      >
         {renderContent()}
       </TouchableOpacity>
     );
@@ -286,7 +315,16 @@ export const Chip: React.FC<ChipProps> = ({
   /**
    * Render chip as static view
    */
-  return <View style={chipStyle}>{renderContent()}</View>;
+  return (
+    <View
+      style={chipStyle}
+      accessible={true}
+      accessibilityLabel={accessibilityLabel || label}
+      accessibilityRole="text"
+    >
+      {renderContent()}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
