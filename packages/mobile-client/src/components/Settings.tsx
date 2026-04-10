@@ -45,15 +45,15 @@ const APP_VERSION = '0.1.0';
  * Settings screen component
  */
 export const Settings: React.FC = () => {
-  const { theme } = useDesignSystem();
+  const { theme, config, setConfig } = useDesignSystem();
   const { status } = useConnection();
   const { quality, latency } = useConnectionQuality();
 
   // State for settings
   const [relayServerUrl, setRelayServerUrl] = useState('http://localhost:8080');
   const [urlError, setUrlError] = useState<string | undefined>(undefined);
-  const [darkMode, setDarkMode] = useState(true);
-  const [highContrast, setHighContrast] = useState(false);
+  const [darkMode, setDarkMode] = useState(config.mode === 'dark');
+  const [highContrast, setHighContrast] = useState(config.highContrast);
   const [pushNotifications, setPushNotifications] = useState(false);
   const [soundEffects, setSoundEffects] = useState(true);
 
@@ -109,7 +109,14 @@ export const Settings: React.FC = () => {
 
     // Validate URL
     if (url && !validateUrl(url)) {
-      setUrlError('Invalid URL format. Must start with http:// or https://');
+      const errorMsg = 'Invalid URL format. Must start with http:// or https://';
+      setUrlError(errorMsg);
+      // Log validation errors (Requirement 17.11)
+      console.error('URL validation failed:', {
+        error: errorMsg,
+        providedUrl: url,
+        timestamp: new Date().toISOString(),
+      });
       return;
     }
 
@@ -128,6 +135,14 @@ export const Settings: React.FC = () => {
    */
   const handleDarkModeChange = async (enabled: boolean) => {
     setDarkMode(enabled);
+
+    // Update theme configuration
+    setConfig({
+      ...config,
+      mode: enabled ? 'dark' : 'light',
+    });
+
+    // Also save to legacy AsyncStorage key for backwards compatibility
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.DARK_MODE, String(enabled));
     } catch (error) {
@@ -140,6 +155,14 @@ export const Settings: React.FC = () => {
    */
   const handleHighContrastChange = async (enabled: boolean) => {
     setHighContrast(enabled);
+
+    // Update theme configuration
+    setConfig({
+      ...config,
+      highContrast: enabled,
+    });
+
+    // Also save to legacy AsyncStorage key for backwards compatibility
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.HIGH_CONTRAST, String(enabled));
     } catch (error) {
@@ -445,6 +468,10 @@ export const Settings: React.FC = () => {
                 <TouchableOpacity
                   style={styles.linkItem}
                   onPress={() => openLink('https://github.com/codelink/docs')}
+                  accessible={true}
+                  accessibilityLabel="Open documentation"
+                  accessibilityHint="Opens documentation in browser"
+                  accessibilityRole="link"
                 >
                   <Icon name="help" size={20} color="onSurface" />
                   <Text
@@ -459,6 +486,10 @@ export const Settings: React.FC = () => {
                 <TouchableOpacity
                   style={styles.linkItem}
                   onPress={() => openLink('https://github.com/codelink/support')}
+                  accessible={true}
+                  accessibilityLabel="Open support"
+                  accessibilityHint="Opens support page in browser"
+                  accessibilityRole="link"
                 >
                   <Icon name="info" size={20} color="onSurface" />
                   <Text
@@ -473,6 +504,10 @@ export const Settings: React.FC = () => {
                 <TouchableOpacity
                   style={styles.linkItem}
                   onPress={() => openLink('https://github.com/codelink')}
+                  accessible={true}
+                  accessibilityLabel="Open GitHub repository"
+                  accessibilityHint="Opens GitHub repository in browser"
+                  accessibilityRole="link"
                 >
                   <Icon name="code" size={20} color="onSurface" />
                   <Text

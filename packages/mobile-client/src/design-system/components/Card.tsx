@@ -64,6 +64,18 @@ export interface CardProps {
    * When provided, card becomes touchable with press feedback
    */
   onPress?: () => void;
+
+  /**
+   * Accessibility label for screen readers (only used when onPress is provided)
+   * Describes what the card represents or what happens when pressed
+   */
+  accessibilityLabel?: string;
+
+  /**
+   * Accessibility hint for screen readers (only used when onPress is provided)
+   * Provides additional context about what happens when card is pressed
+   */
+  accessibilityHint?: string;
 }
 
 /**
@@ -79,6 +91,8 @@ export const Card = React.memo<CardProps>(
     children,
     style,
     onPress,
+    accessibilityLabel,
+    accessibilityHint,
   }) => {
     const { theme } = useDesignSystem();
 
@@ -133,7 +147,15 @@ export const Card = React.memo<CardProps>(
      */
     if (onPress) {
       return (
-        <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={cardStyle}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={onPress}
+          style={cardStyle}
+          accessible={true}
+          accessibilityLabel={accessibilityLabel || 'Interactive card'}
+          accessibilityHint={accessibilityHint}
+          accessibilityRole="button"
+        >
           {children}
         </TouchableOpacity>
       );
@@ -153,7 +175,9 @@ export const Card = React.memo<CardProps>(
       prevProps.elevation === nextProps.elevation &&
       prevProps.onPress === nextProps.onPress &&
       prevProps.style === nextProps.style &&
-      prevProps.children === nextProps.children
+      prevProps.children === nextProps.children &&
+      prevProps.accessibilityLabel === nextProps.accessibilityLabel &&
+      prevProps.accessibilityHint === nextProps.accessibilityHint
     );
   }
 );

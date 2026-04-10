@@ -7,8 +7,13 @@
  * - Font weights (regular through extrabold)
  * - Line heights (tight, normal, relaxed)
  *
- * Requirements: 1.3
+ * Font sizes are scalable and respect system text size preferences using
+ * PixelRatio.getFontScale() for accessibility compliance.
+ *
+ * Requirements: 1.3, 14.9
  */
+
+import { PixelRatio } from 'react-native';
 
 /**
  * TypographyTokens interface defines all typography values used in the design system.
@@ -57,8 +62,51 @@ export interface TypographyTokens {
 }
 
 /**
+ * Base font sizes (before scaling) matching the Obsidian IDE aesthetic.
+ * These values will be multiplied by the system font scale for accessibility.
+ */
+const baseFontSizes = {
+  displayLg: 56, // 3.5rem
+  displayMd: 44.8, // 2.8rem
+  displaySm: 36, // 2.25rem
+  headlineLg: 32, // 2rem
+  headlineMd: 28, // 1.75rem
+  headlineSm: 24, // 1.5rem
+  titleLg: 22, // 1.375rem
+  titleMd: 18, // 1.125rem
+  titleSm: 14, // 0.875rem
+  bodyLg: 16, // 1rem
+  bodyMd: 14, // 0.875rem
+  bodySm: 12, // 0.75rem
+  labelLg: 14, // 0.875rem
+  labelMd: 12, // 0.75rem
+  labelSm: 11, // 0.6875rem
+};
+
+/**
+ * Gets the system font scale multiplier for accessibility.
+ * This respects user preferences for larger text sizes.
+ *
+ * @returns Font scale multiplier (typically 1.0 for default, higher for large text)
+ */
+export function getFontScale(): number {
+  return PixelRatio.getFontScale();
+}
+
+/**
+ * Scales a font size based on system text size preferences.
+ *
+ * @param baseSize - The base font size in pixels
+ * @returns Scaled font size respecting system preferences
+ */
+export function scaleFont(baseSize: number): number {
+  return baseSize * getFontScale();
+}
+
+/**
  * Default typography configuration matching the Obsidian IDE aesthetic.
  * Font families will be loaded via Expo Font with appropriate fallbacks.
+ * Font sizes are dynamically scaled based on system text size preferences.
  */
 export const defaultTypographyTokens: TypographyTokens = {
   fonts: {
@@ -68,21 +116,21 @@ export const defaultTypographyTokens: TypographyTokens = {
     mono: 'FiraCode', // Monospace for code (fallback to system)
   },
   sizes: {
-    displayLg: 56, // 3.5rem
-    displayMd: 44.8, // 2.8rem
-    displaySm: 36, // 2.25rem
-    headlineLg: 32, // 2rem
-    headlineMd: 28, // 1.75rem
-    headlineSm: 24, // 1.5rem
-    titleLg: 22, // 1.375rem
-    titleMd: 18, // 1.125rem
-    titleSm: 14, // 0.875rem
-    bodyLg: 16, // 1rem
-    bodyMd: 14, // 0.875rem
-    bodySm: 12, // 0.75rem
-    labelLg: 14, // 0.875rem
-    labelMd: 12, // 0.75rem
-    labelSm: 11, // 0.6875rem
+    displayLg: scaleFont(baseFontSizes.displayLg),
+    displayMd: scaleFont(baseFontSizes.displayMd),
+    displaySm: scaleFont(baseFontSizes.displaySm),
+    headlineLg: scaleFont(baseFontSizes.headlineLg),
+    headlineMd: scaleFont(baseFontSizes.headlineMd),
+    headlineSm: scaleFont(baseFontSizes.headlineSm),
+    titleLg: scaleFont(baseFontSizes.titleLg),
+    titleMd: scaleFont(baseFontSizes.titleMd),
+    titleSm: scaleFont(baseFontSizes.titleSm),
+    bodyLg: scaleFont(baseFontSizes.bodyLg),
+    bodyMd: scaleFont(baseFontSizes.bodyMd),
+    bodySm: scaleFont(baseFontSizes.bodySm),
+    labelLg: scaleFont(baseFontSizes.labelLg),
+    labelMd: scaleFont(baseFontSizes.labelMd),
+    labelSm: scaleFont(baseFontSizes.labelSm),
   },
   weights: {
     regular: 400, // Normal weight

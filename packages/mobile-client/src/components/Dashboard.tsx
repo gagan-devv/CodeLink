@@ -4,9 +4,11 @@ import { useDesignSystem } from '../design-system';
 import { Text } from '../design-system/typography/Text';
 import { Card } from '../design-system/components/Card';
 import { Icon } from '../design-system/components/Icon';
+import { Button } from '../design-system/components/Button';
 import { ProgressBar } from '../design-system/components/ProgressBar';
 import { StatusIndicator, ConnectionStatus } from '../design-system/components/StatusIndicator';
 import { TopAppBar } from '../navigation/TopAppBar';
+import { useLoadingAnnouncement } from '../hooks/useScreenReaderAnnouncement';
 
 /**
  * System metrics interface
@@ -36,6 +38,8 @@ export interface ActivityItem {
  */
 export interface DashboardProps {
   connectionStatus: ConnectionStatus;
+  connectionError?: Error | null;
+  onRetry?: () => void;
   metrics?: SystemMetrics;
   recentActivity?: ActivityItem[];
   onNavigateToDiffs: () => void;
@@ -59,6 +63,8 @@ export interface DashboardProps {
  */
 export const Dashboard: React.FC<DashboardProps> = ({
   connectionStatus,
+  connectionError = null,
+  onRetry,
   metrics = {
     uptime: 99.8,
     latency: 45,
@@ -75,6 +81,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const { theme } = useDesignSystem();
   const [isLargeScreen, setIsLargeScreen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Announce loading state for accessibility
+  // Requirement 14.11: Announce loading states
+  useLoadingAnnouncement(refreshing, 'Refreshing dashboard data', 'Dashboard refreshed');
 
   // Detect screen size for responsive layout (Requirement 13.5)
   useEffect(() => {
@@ -173,6 +183,41 @@ export const Dashboard: React.FC<DashboardProps> = ({
     <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
       {/* Top App Bar (Requirement 3.1) */}
       <TopAppBar connectionStatus={connectionStatus} />
+
+      {/* Connection Error Banner (Requirement 17.3, 17.9) */}
+      {connectionError && connectionStatus === 'disconnected' && (
+        <View
+          style={[
+            styles.errorBanner,
+            {
+              backgroundColor: `${theme.colors.errorContainer}26`,
+              borderBottomColor: theme.colors.error,
+            },
+          ]}
+        >
+          <Icon name="error" size={20} color="error" />
+          <View style={styles.errorContent}>
+            <Text variant="body-sm" weight="semibold" color="error">
+              Connection Failed
+            </Text>
+            <Text variant="body-sm" color="onSurfaceVariant" style={styles.errorMessage}>
+              {connectionError.message || 'Unable to connect to relay server'}
+            </Text>
+          </View>
+          {onRetry && (
+            <Button
+              variant="tertiary"
+              size="sm"
+              onPress={onRetry}
+              icon={<Icon name="refresh" size={16} color="secondary" />}
+              accessibilityLabel="Retry connection"
+              accessibilityHint="Attempts to reconnect to the relay server"
+            >
+              Retry
+            </Button>
+          )}
+        </View>
+      )}
 
       {/* Scrollable Content */}
       <ScrollView
@@ -343,6 +388,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               padding="lg"
               onPress={onNavigateToDiffs}
               style={styles.shortcutCard}
+              accessibilityLabel="Diff Viewer shortcut"
+              accessibilityHint="Double tap to navigate to diff viewer screen"
             >
               <Icon name="compare-arrows" size={32} color="primary" style={styles.shortcutIcon} />
               <Text variant="body-md" weight="bold" color="onSurface" style={styles.shortcutTitle}>
@@ -358,6 +405,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               padding="lg"
               onPress={onNavigateToCompose}
               style={styles.shortcutCard}
+              accessibilityLabel="Compose Prompt shortcut"
+              accessibilityHint="Double tap to navigate to compose prompt screen"
             >
               <Icon name="terminal" size={32} color="secondary" style={styles.shortcutIcon} />
               <Text variant="body-md" weight="bold" color="onSurface" style={styles.shortcutTitle}>
@@ -370,13 +419,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </View>
         </View>
 
-        {/* Recent Activity Section (Requirement 3.7, 15.3) */}
-        {recentActivity.length > 0 && (
-          <View style={styles.section}>
-            <Text variant="headline-md" weight="bold" color="onSurface" style={styles.sectionTitle}>
-              Recent Activity
-            </Text>
+        {/* Recent Activity Section (Requirement 3.7, 15.3, 23.1) */}
+        <View style={styles.section}>
+          <Text variant="headline-md" weight="bold" color="onSurface" style={styles.sectionTitle}>
+            Recent Activity
+          </Text>
 
+          {recentActivity.length > 0 ? (
             <Card variant="low" padding="lg" style={styles.activityCard}>
               <FlatList
                 data={recentActivity}
@@ -390,8 +439,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 )}
               />
             </Card>
-          </View>
-        )}
+          ) : (
+            <Card variant="low" padding="lg" style={styles.emptyActivityCard}>
+              <Icon name="history" size={48} color="onSurfaceVariant" />
+              <Text
+                variant="display-lg"
+                weight="bold"
+                color="onSurfaceVariant"
+                align="center"
+                style={styles.emptyStateHeadline}
+              >
+                No Recent Activity
+              </Text>
+              <Text
+                variant="body-md"
+                color="onSurfaceVariant"
+                align="center"
+                style={styles.emptyStateDescription}
+              >
+                Your recent commits, syncs, and deployments will appear here
+              </Text>
+            </Card>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -400,6 +470,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+  },
+  errorContent: {
+    flex: 1,
+    gap: 4,
+  },
+  errorMessage: {
+    marginTop: 2,
   },
   scrollView: {
     flex: 1,
@@ -500,6 +585,18 @@ const styles = StyleSheet.create({
   },
   activityCard: {
     minHeight: 200,
+  },
+  emptyActivityCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyStateHeadline: {
+    marginTop: 16,
+  },
+  emptyStateDescription: {
+    marginTop: 8,
+    maxWidth: 300,
   },
   activityItem: {
     flexDirection: 'row',

@@ -17,6 +17,7 @@ import { Icon, IconName } from '../design-system/components/Icon';
 import { TopAppBar } from '../navigation/TopAppBar';
 import { useDraftPrompt } from '../hooks/useDraftPrompt';
 import { usePromptHistory } from '../hooks/usePromptHistory';
+import { useLoadingAnnouncement } from '../hooks/useScreenReaderAnnouncement';
 
 /**
  * Prompt template definition
@@ -60,6 +61,10 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   const fabScale = useRef(new Animated.Value(1)).current;
 
   const MAX_CHARS = 2000;
+
+  // Announce loading state for accessibility
+  // Requirement 14.11: Announce loading states
+  useLoadingAnnouncement(isLoading, 'Sending prompt to AI editor', 'Prompt sent');
 
   // Template chips data
   // Requirement 5.2: Template chips (Refactor, Explain, Fix Bug, Write Tests, Documentation)
@@ -238,6 +243,10 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
               style={[styles.templateChip, { backgroundColor: theme.colors.surfaceContainerHigh }]}
               onPress={() => handleSelectTemplate(template)}
               activeOpacity={0.7}
+              accessible={true}
+              accessibilityLabel={`${template.label} template`}
+              accessibilityHint="Double tap to insert template into prompt"
+              accessibilityRole="button"
             >
               <Icon name={template.icon} size={16} color={template.iconColor} />
               <Text variant="label-md" weight="medium" style={styles.templateChipLabel}>
@@ -275,6 +284,10 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
             <TouchableOpacity
               onPress={handleClear}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessible={true}
+              accessibilityLabel="Clear prompt"
+              accessibilityHint="Double tap to clear the prompt text"
+              accessibilityRole="button"
             >
               <Icon name="close" size={18} color={theme.colors.onSurfaceVariant} />
             </TouchableOpacity>
@@ -310,6 +323,11 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                   onPress={handleClear}
                   disabled={prompt.length === 0}
                   activeOpacity={0.7}
+                  accessible={true}
+                  accessibilityLabel="Clear prompt"
+                  accessibilityHint="Double tap to clear all prompt text"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: prompt.length === 0 }}
                 >
                   <Icon
                     name="backspace"
@@ -332,6 +350,10 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
                   style={styles.toolbarButton}
                   onPress={handleAttach}
                   activeOpacity={0.7}
+                  accessible={true}
+                  accessibilityLabel="Attach file"
+                  accessibilityHint="Double tap to attach a file to the prompt"
+                  accessibilityRole="button"
                 >
                   <Icon name="attach-file" size={20} color={theme.colors.onSurfaceVariant} />
                   <Text
@@ -425,6 +447,11 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
           onPress={handleSubmit}
           disabled={!canSubmit}
           activeOpacity={0.9}
+          accessible={true}
+          accessibilityLabel="Send prompt to AI editor"
+          accessibilityHint="Double tap to send your prompt to the AI editor"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canSubmit }}
         >
           <LinearGradient
             colors={[theme.colors.primary, theme.colors.primaryContainer]}

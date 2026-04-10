@@ -39,3 +39,5 @@ coverage/
 /src/*/*.test.*
 
 /src/*/*.example.*
+/src/*/*.md
+/src/*/*/*.md

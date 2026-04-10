@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { AccessibilityInfo } from 'react-native';
 import { SocketManager, SocketManagerImpl } from '../services/SocketManager';
 
 /**
@@ -55,20 +56,40 @@ export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> =
     manager.onConnect(() => {
       setStatus('connected');
       setError(null);
+      // Requirement 14.11: Announce connection state changes
+      AccessibilityInfo.announceForAccessibility('Connected to relay server');
     });
 
     manager.onDisconnect(() => {
       setStatus('disconnected');
+      // Requirement 14.11: Announce connection state changes
+      AccessibilityInfo.announceForAccessibility('Disconnected from relay server');
     });
 
     manager.onError((err) => {
+      // Log network errors (Requirement 17.11)
+      console.error('Connection error:', {
+        error: err.message,
+        stack: err.stack,
+        timestamp: new Date().toISOString(),
+        serverUrl: serverUrlRef.current,
+      });
       setError(err);
       setStatus('disconnected');
     });
 
     // Initial connection
     setStatus('connecting');
+    // Requirement 14.11: Announce loading states
+    AccessibilityInfo.announceForAccessibility('Connecting to relay server');
     manager.connect(serverUrlRef.current).catch((err) => {
+      // Log network errors (Requirement 17.11)
+      console.error('Initial connection failed:', {
+        error: err.message,
+        stack: err.stack,
+        timestamp: new Date().toISOString(),
+        serverUrl: serverUrlRef.current,
+      });
       setError(err);
       setStatus('disconnected');
     });
@@ -85,7 +106,16 @@ export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> =
   const reconnect = () => {
     setStatus('connecting');
     setError(null);
+    // Requirement 14.11: Announce loading states
+    AccessibilityInfo.announceForAccessibility('Reconnecting to relay server');
     socketManager.current.connect(serverUrlRef.current).catch((err) => {
+      // Log network errors (Requirement 17.11)
+      console.error('Reconnection failed:', {
+        error: err.message,
+        stack: err.stack,
+        timestamp: new Date().toISOString(),
+        serverUrl: serverUrlRef.current,
+      });
       setError(err);
       setStatus('disconnected');
     });

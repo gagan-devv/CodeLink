@@ -49,6 +49,18 @@ export interface ToggleProps {
    * Custom style overrides
    */
   style?: StyleProp<ViewStyle>;
+
+  /**
+   * Accessibility label for screen readers
+   * If not provided, uses label text as accessibility label
+   */
+  accessibilityLabel?: string;
+
+  /**
+   * Accessibility hint for screen readers
+   * Provides additional context about what the toggle controls
+   */
+  accessibilityHint?: string;
 }
 
 /**
@@ -62,6 +74,8 @@ export const Toggle: React.FC<ToggleProps> = ({
   description,
   hapticFeedback = true,
   style,
+  accessibilityLabel,
+  accessibilityHint,
 }) => {
   const { theme } = useDesignSystem();
 
@@ -139,6 +153,14 @@ export const Toggle: React.FC<ToggleProps> = ({
         thumbColor={value ? theme.colors.onSecondary : theme.colors.onSurfaceVariant}
         ios_backgroundColor={theme.colors.surfaceContainerHighest}
         style={styles.switch}
+        accessible={true}
+        accessibilityLabel={accessibilityLabel || label || 'Toggle switch'}
+        accessibilityHint={accessibilityHint}
+        accessibilityRole="switch"
+        accessibilityState={{
+          disabled,
+          checked: value,
+        }}
       />
     </View>
   );

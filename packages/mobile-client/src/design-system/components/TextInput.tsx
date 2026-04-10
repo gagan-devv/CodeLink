@@ -17,6 +17,7 @@ import {
   ViewStyle,
   TextStyle,
   KeyboardTypeOptions,
+  PixelRatio,
 } from 'react-native';
 import { useDesignSystem } from '../theme/useDesignSystem';
 
@@ -112,6 +113,18 @@ export interface TextInputProps {
    * Callback when input loses focus
    */
   onBlur?: () => void;
+
+  /**
+   * Accessibility label for screen readers
+   * If not provided, uses label text as accessibility label
+   */
+  accessibilityLabel?: string;
+
+  /**
+   * Accessibility hint for screen readers
+   * Provides additional context about the input field
+   */
+  accessibilityHint?: string;
 }
 
 /**
@@ -135,6 +148,8 @@ export const TextInput: React.FC<TextInputProps> = ({
   inputStyle,
   onFocus,
   onBlur,
+  accessibilityLabel,
+  accessibilityHint,
 }) => {
   const { theme } = useDesignSystem();
   const [isFocused, setIsFocused] = useState(false);
@@ -282,6 +297,12 @@ export const TextInput: React.FC<TextInputProps> = ({
           editable={editable}
           onFocus={handleFocus}
           onBlur={handleBlur}
+          accessible={true}
+          accessibilityLabel={accessibilityLabel || label || placeholder || 'Text input'}
+          accessibilityHint={accessibilityHint}
+          accessibilityState={{
+            disabled: !editable,
+          }}
           style={[
             styles.input,
             {
@@ -298,7 +319,10 @@ export const TextInput: React.FC<TextInputProps> = ({
             },
             multiline && {
               minHeight:
-                numberOfLines * theme.typography.sizes.bodyMd * theme.typography.lineHeights.normal,
+                numberOfLines *
+                theme.typography.sizes.bodyMd *
+                theme.typography.lineHeights.normal *
+                PixelRatio.getFontScale(),
               textAlignVertical: 'top',
             },
             inputStyle,

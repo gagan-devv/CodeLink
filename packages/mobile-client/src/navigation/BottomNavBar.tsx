@@ -89,6 +89,7 @@ const NavItem: React.FC<{
       onPress={onPress}
       accessible={true}
       accessibilityLabel={`Navigate to ${item.label}`}
+      accessibilityHint={`Double tap to navigate to ${item.label.toLowerCase()} screen`}
       accessibilityRole="button"
       accessibilityState={{ selected: isActive }}
     >

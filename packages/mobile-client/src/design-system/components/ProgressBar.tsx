@@ -49,6 +49,12 @@ export interface ProgressBarProps {
    * Custom style overrides
    */
   style?: StyleProp<ViewStyle>;
+
+  /**
+   * Accessibility label for screen readers
+   * If not provided, uses progress percentage as accessibility label
+   */
+  accessibilityLabel?: string;
 }
 
 /**
@@ -61,6 +67,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   label,
   height = 8,
   style,
+  accessibilityLabel,
 }) => {
   const { theme } = useDesignSystem();
 
@@ -118,7 +125,17 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   const labelText = getLabelText();
 
   return (
-    <View style={[styles.container, style]}>
+    <View
+      style={[styles.container, style]}
+      accessible={true}
+      accessibilityLabel={accessibilityLabel || `Progress: ${Math.round(clampedProgress)} percent`}
+      accessibilityRole="progressbar"
+      accessibilityValue={{
+        min: 0,
+        max: 100,
+        now: clampedProgress,
+      }}
+    >
       {/* Progress bar */}
       <View
         style={[

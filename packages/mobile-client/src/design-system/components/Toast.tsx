@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   Platform,
   Dimensions,
+  AccessibilityInfo,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDesignSystem } from '../theme/useDesignSystem';
@@ -67,6 +68,16 @@ const Toast: React.FC<ToastProps> = ({ message, onDismiss }) => {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Announce toast message to screen readers
+    // Requirement 14.11: Announce toast notifications
+    const variantLabel =
+      message.variant === 'success'
+        ? 'Success'
+        : message.variant === 'error'
+          ? 'Error'
+          : 'Information';
+    AccessibilityInfo.announceForAccessibility(`${variantLabel}: ${message.message}`);
+
     // Slide in animation
     Animated.parallel([
       Animated.timing(translateY, {
@@ -174,6 +185,10 @@ const Toast: React.FC<ToastProps> = ({ message, onDismiss }) => {
       <TouchableOpacity
         onPress={handleDismiss}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessible={true}
+        accessibilityLabel="Dismiss notification"
+        accessibilityHint="Double tap to dismiss this notification"
+        accessibilityRole="button"
       >
         <Icon name="close" size={18} color={theme.colors.onSurfaceVariant} />
       </TouchableOpacity>

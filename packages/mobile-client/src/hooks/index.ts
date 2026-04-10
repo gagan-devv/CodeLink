@@ -22,3 +22,9 @@ export {
   type ConnectionQuality,
   type ConnectionMetrics,
 } from './useConnectionQuality';
+
+export {
+  useScreenReaderAnnouncement,
+  useScreenChangeAnnouncement,
+  useLoadingAnnouncement,
+} from './useScreenReaderAnnouncement';
