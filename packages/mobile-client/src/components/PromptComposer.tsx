@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Animated,
   KeyboardAvoidingView,
-  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -18,6 +19,7 @@ import { TopAppBar } from '../navigation/TopAppBar';
 import { useDraftPrompt } from '../hooks/useDraftPrompt';
 import { usePromptHistory } from '../hooks/usePromptHistory';
 import { useLoadingAnnouncement } from '../hooks/useScreenReaderAnnouncement';
+import { getKeyboardBehavior, getKeyboardVerticalOffset } from '../utils/platformAdaptations';
 
 /**
  * Prompt template definition
@@ -200,273 +202,304 @@ export const PromptComposer: React.FC<PromptComposerProps> = ({
   const isAtLimit = charCount >= MAX_CHARS;
   const canSubmit = prompt.trim().length > 0 && !isLoading && !isAtLimit;
 
+  // Dismiss keyboard when tapping outside
+  // Requirement 25.3: Dismiss keyboard when user taps outside input field
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      behavior={getKeyboardBehavior()}
+      keyboardVerticalOffset={getKeyboardVerticalOffset(true)}
     >
-      {/* Requirement 5.1: TopAppBar */}
-      <TopAppBar connectionStatus={connectionStatus} />
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <View style={styles.container}>
+          {/* Requirement 5.1: TopAppBar */}
+          <TopAppBar connectionStatus={connectionStatus} />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Requirement 5.1, 5.3: Active Context header with "Compose Prompt" title */}
-        <View style={styles.contextArea}>
-          <Text
-            variant="label-sm"
-            weight="bold"
-            color="primary"
-            uppercase
-            style={styles.contextLabel}
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
           >
-            Active Context
-          </Text>
-          <Text variant="headline-md" weight="extrabold" style={styles.contextTitle}>
-            Compose Prompt
-          </Text>
-        </View>
-
-        {/* Requirement 5.2, 5.3: Horizontal scrolling template chips container */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.templateChipsContainer}
-          contentContainerStyle={styles.templateChipsContent}
-        >
-          {templates.map((template) => (
-            <TouchableOpacity
-              key={template.id}
-              style={[styles.templateChip, { backgroundColor: theme.colors.surfaceContainerHigh }]}
-              onPress={() => handleSelectTemplate(template)}
-              activeOpacity={0.7}
-              accessible={true}
-              accessibilityLabel={`${template.label} template`}
-              accessibilityHint="Double tap to insert template into prompt"
-              accessibilityRole="button"
-            >
-              <Icon name={template.icon} size={16} color={template.iconColor} />
-              <Text variant="label-md" weight="medium" style={styles.templateChipLabel}>
-                {template.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Requirement 5.3: Main composer container with terminal-like header (colored dots) */}
-        <View
-          style={[styles.composerContainer, { backgroundColor: theme.colors.surfaceContainerLow }]}
-        >
-          {/* Terminal-like header with colored dots */}
-          <View
-            style={[
-              styles.terminalHeader,
-              { backgroundColor: theme.colors.surfaceContainerLowest },
-            ]}
-          >
-            <View style={styles.terminalDots}>
-              <View style={[styles.dot, { backgroundColor: `${theme.colors.error}66` }]} />
-              <View style={[styles.dot, { backgroundColor: `${theme.colors.tertiary}66` }]} />
-              <View style={[styles.dot, { backgroundColor: `${theme.colors.secondary}66` }]} />
+            {/* Requirement 5.1, 5.3: Active Context header with "Compose Prompt" title */}
+            <View style={styles.contextArea}>
               <Text
                 variant="label-sm"
-                weight="medium"
-                color="onSurfaceVariant"
+                weight="bold"
+                color="primary"
                 uppercase
-                style={styles.terminalLabel}
+                style={styles.contextLabel}
               >
-                New Instruction
+                Active Context
+              </Text>
+              <Text variant="headline-md" weight="extrabold" style={styles.contextTitle}>
+                Compose Prompt
               </Text>
             </View>
-            <TouchableOpacity
-              onPress={handleClear}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessible={true}
-              accessibilityLabel="Clear prompt"
-              accessibilityHint="Double tap to clear the prompt text"
-              accessibilityRole="button"
+
+            {/* Requirement 5.2, 5.3: Horizontal scrolling template chips container */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.templateChipsContainer}
+              contentContainerStyle={styles.templateChipsContent}
             >
-              <Icon name="close" size={18} color={theme.colors.onSurfaceVariant} />
-            </TouchableOpacity>
-          </View>
+              {templates.map((template) => (
+                <TouchableOpacity
+                  key={template.id}
+                  style={[
+                    styles.templateChip,
+                    { backgroundColor: theme.colors.surfaceContainerHigh },
+                  ]}
+                  onPress={() => handleSelectTemplate(template)}
+                  activeOpacity={0.7}
+                  accessible={true}
+                  accessibilityLabel={`${template.label} template`}
+                  accessibilityHint="Double tap to insert template into prompt"
+                  accessibilityRole="button"
+                >
+                  <Icon name={template.icon} size={16} color={template.iconColor} />
+                  <Text variant="label-md" weight="medium" style={styles.templateChipLabel}>
+                    {template.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-          {/* Requirement 5.4, 5.9: Multiline textarea with surfaceContainerLowest background */}
-          {/* Requirement 25.1, 25.8: Keyboard handling to keep textarea visible */}
-          <View
-            style={[
-              styles.textareaContainer,
-              { backgroundColor: theme.colors.surfaceContainerLowest },
-            ]}
-          >
-            <RNTextInput
-              style={[styles.textarea, { color: theme.colors.onSurface }]}
-              placeholder="Ask AI to edit your code..."
-              placeholderTextColor={`${theme.colors.onSurfaceVariant}66`}
-              value={prompt}
-              onChangeText={handleTextChange}
-              multiline
-              textAlignVertical="top"
-              editable={!isLoading}
-            />
-
-            {/* Requirement 5.6: Bottom toolbar with Clear and Attach buttons */}
-            {/* Requirement 5.5, 5.13: Character counter with error state when limit exceeded */}
+            {/* Requirement 5.3: Main composer container with terminal-like header (colored dots) */}
             <View
-              style={[styles.bottomToolbar, { borderTopColor: `${theme.colors.outlineVariant}1A` }]}
+              style={[
+                styles.composerContainer,
+                { backgroundColor: theme.colors.surfaceContainerLow },
+              ]}
             >
-              <View style={styles.toolbarButtons}>
-                <TouchableOpacity
-                  style={styles.toolbarButton}
-                  onPress={handleClear}
-                  disabled={prompt.length === 0}
-                  activeOpacity={0.7}
-                  accessible={true}
-                  accessibilityLabel="Clear prompt"
-                  accessibilityHint="Double tap to clear all prompt text"
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: prompt.length === 0 }}
-                >
-                  <Icon
-                    name="backspace"
-                    size={20}
-                    color={
-                      prompt.length === 0 ? theme.colors.onSurfaceVariant : theme.colors.primary
-                    }
-                  />
-                  <Text
-                    variant="label-sm"
-                    weight="bold"
-                    uppercase
-                    color={prompt.length === 0 ? 'onSurfaceVariant' : 'primary'}
-                    style={styles.toolbarButtonLabel}
-                  >
-                    Clear
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.toolbarButton}
-                  onPress={handleAttach}
-                  activeOpacity={0.7}
-                  accessible={true}
-                  accessibilityLabel="Attach file"
-                  accessibilityHint="Double tap to attach a file to the prompt"
-                  accessibilityRole="button"
-                >
-                  <Icon name="attach-file" size={20} color={theme.colors.onSurfaceVariant} />
-                  <Text
-                    variant="label-sm"
-                    weight="bold"
-                    uppercase
-                    color="onSurfaceVariant"
-                    style={styles.toolbarButtonLabel}
-                  >
-                    Attach
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              {/* Terminal-like header with colored dots */}
               <View
                 style={[
-                  styles.charCounter,
-                  {
-                    backgroundColor: `${theme.colors.surfaceContainerHighest}4D`,
-                  },
-                  isAtLimit && { backgroundColor: `${theme.colors.errorContainer}4D` },
+                  styles.terminalHeader,
+                  { backgroundColor: theme.colors.surfaceContainerLowest },
                 ]}
               >
-                <Text
-                  variant="label-sm"
-                  weight="bold"
-                  color={isAtLimit ? 'error' : 'onSurfaceVariant'}
-                  style={styles.charCounterText}
+                <View style={styles.terminalDots}>
+                  <View style={[styles.dot, { backgroundColor: `${theme.colors.error}66` }]} />
+                  <View style={[styles.dot, { backgroundColor: `${theme.colors.tertiary}66` }]} />
+                  <View style={[styles.dot, { backgroundColor: `${theme.colors.secondary}66` }]} />
+                  <Text
+                    variant="label-sm"
+                    weight="medium"
+                    color="onSurfaceVariant"
+                    uppercase
+                    style={styles.terminalLabel}
+                  >
+                    New Instruction
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={handleClear}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessible={true}
+                  accessibilityLabel="Clear prompt"
+                  accessibilityHint="Double tap to clear the prompt text"
+                  accessibilityRole="button"
                 >
-                  {charCount} / {MAX_CHARS}
+                  <Icon name="close" size={18} color={theme.colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Requirement 5.4, 5.9: Multiline textarea with surfaceContainerLowest background */}
+              {/* Requirement 25.1, 25.8: Keyboard handling to keep textarea visible */}
+              <View
+                style={[
+                  styles.textareaContainer,
+                  { backgroundColor: theme.colors.surfaceContainerLowest },
+                ]}
+              >
+                <RNTextInput
+                  style={[styles.textarea, { color: theme.colors.onSurface }]}
+                  placeholder="Ask AI to edit your code..."
+                  placeholderTextColor={`${theme.colors.onSurfaceVariant}66`}
+                  value={prompt}
+                  onChangeText={handleTextChange}
+                  multiline
+                  textAlignVertical="top"
+                  editable={!isLoading}
+                  autoCapitalize="sentences"
+                  autoCorrect={true}
+                  returnKeyType="default"
+                  blurOnSubmit={false}
+                  accessible={true}
+                  accessibilityLabel="Prompt text input"
+                  accessibilityHint="Enter your prompt for the AI editor"
+                />
+
+                {/* Requirement 5.6: Bottom toolbar with Clear and Attach buttons */}
+                {/* Requirement 5.5, 5.13: Character counter with error state when limit exceeded */}
+                <View
+                  style={[
+                    styles.bottomToolbar,
+                    { borderTopColor: `${theme.colors.outlineVariant}1A` },
+                  ]}
+                >
+                  <View style={styles.toolbarButtons}>
+                    <TouchableOpacity
+                      style={styles.toolbarButton}
+                      onPress={handleClear}
+                      disabled={prompt.length === 0}
+                      activeOpacity={0.7}
+                      accessible={true}
+                      accessibilityLabel="Clear prompt"
+                      accessibilityHint="Double tap to clear all prompt text"
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: prompt.length === 0 }}
+                    >
+                      <Icon
+                        name="backspace"
+                        size={20}
+                        color={
+                          prompt.length === 0 ? theme.colors.onSurfaceVariant : theme.colors.primary
+                        }
+                      />
+                      <Text
+                        variant="label-sm"
+                        weight="bold"
+                        uppercase
+                        color={prompt.length === 0 ? 'onSurfaceVariant' : 'primary'}
+                        style={styles.toolbarButtonLabel}
+                      >
+                        Clear
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.toolbarButton}
+                      onPress={handleAttach}
+                      activeOpacity={0.7}
+                      accessible={true}
+                      accessibilityLabel="Attach file"
+                      accessibilityHint="Double tap to attach a file to the prompt"
+                      accessibilityRole="button"
+                    >
+                      <Icon name="attach-file" size={20} color={theme.colors.onSurfaceVariant} />
+                      <Text
+                        variant="label-sm"
+                        weight="bold"
+                        uppercase
+                        color="onSurfaceVariant"
+                        style={styles.toolbarButtonLabel}
+                      >
+                        Attach
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View
+                    style={[
+                      styles.charCounter,
+                      {
+                        backgroundColor: `${theme.colors.surfaceContainerHighest}4D`,
+                      },
+                      isAtLimit && { backgroundColor: `${theme.colors.errorContainer}4D` },
+                    ]}
+                  >
+                    <Text
+                      variant="label-sm"
+                      weight="bold"
+                      color={isAtLimit ? 'error' : 'onSurfaceVariant'}
+                      style={styles.charCounterText}
+                    >
+                      {charCount} / {MAX_CHARS}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* Requirement 5.8: Pro tip hint section with lightbulb icon */}
+            <View
+              style={[
+                styles.hintSection,
+                {
+                  backgroundColor: `${theme.colors.primaryContainer}0D`,
+                  borderColor: `${theme.colors.primaryContainer}1A`,
+                },
+              ]}
+            >
+              <Icon
+                name="lightbulb"
+                size={20}
+                color={theme.colors.primary}
+                style={styles.hintIcon}
+              />
+              <View style={styles.hintTextContainer}>
+                <Text variant="body-sm" color="onSurfaceVariant" style={styles.hintText}>
+                  <Text variant="body-sm" weight="bold" color="primary">
+                    Pro Tip:{' '}
+                  </Text>
+                  Mention specific functions or file names to help the AI understand the scope of
+                  your requested changes more accurately.
                 </Text>
               </View>
             </View>
-          </View>
-        </View>
 
-        {/* Requirement 5.8: Pro tip hint section with lightbulb icon */}
-        <View
-          style={[
-            styles.hintSection,
-            {
-              backgroundColor: `${theme.colors.primaryContainer}0D`,
-              borderColor: `${theme.colors.primaryContainer}1A`,
-            },
-          ]}
-        >
-          <Icon name="lightbulb" size={20} color={theme.colors.primary} style={styles.hintIcon} />
-          <View style={styles.hintTextContainer}>
-            <Text variant="body-sm" color="onSurfaceVariant" style={styles.hintText}>
-              <Text variant="body-sm" weight="bold" color="primary">
-                Pro Tip:{' '}
-              </Text>
-              Mention specific functions or file names to help the AI understand the scope of your
-              requested changes more accurately.
-            </Text>
-          </View>
-        </View>
+            {/* Error display */}
+            {error && (
+              <View
+                style={[
+                  styles.errorContainer,
+                  {
+                    backgroundColor: `${theme.colors.errorContainer}1A`,
+                    borderColor: `${theme.colors.error}33`,
+                  },
+                ]}
+              >
+                <Icon name="error" size={20} color={theme.colors.error} />
+                <Text variant="body-sm" color="error" style={styles.errorText}>
+                  {error}
+                </Text>
+              </View>
+            )}
+          </ScrollView>
 
-        {/* Error display */}
-        {error && (
-          <View
+          {/* Requirement 5.7, 5.10: Floating action button (FAB) with send icon */}
+          {/* Requirement 12.6: Gradient background (primary to primaryContainer) and scale animation */}
+          <Animated.View
             style={[
-              styles.errorContainer,
+              styles.fabContainer,
               {
-                backgroundColor: `${theme.colors.errorContainer}1A`,
-                borderColor: `${theme.colors.error}33`,
+                transform: [{ scale: fabScale }],
+                opacity: canSubmit ? 1 : 0.5,
               },
             ]}
           >
-            <Icon name="error" size={20} color={theme.colors.error} />
-            <Text variant="body-sm" color="error" style={styles.errorText}>
-              {error}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Requirement 5.7, 5.10: Floating action button (FAB) with send icon */}
-      {/* Requirement 12.6: Gradient background (primary to primaryContainer) and scale animation */}
-      <Animated.View
-        style={[
-          styles.fabContainer,
-          {
-            transform: [{ scale: fabScale }],
-            opacity: canSubmit ? 1 : 0.5,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          onPressIn={handleFABPressIn}
-          onPressOut={handleFABPressOut}
-          onPress={handleSubmit}
-          disabled={!canSubmit}
-          activeOpacity={0.9}
-          accessible={true}
-          accessibilityLabel="Send prompt to AI editor"
-          accessibilityHint="Double tap to send your prompt to the AI editor"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canSubmit }}
-        >
-          <LinearGradient
-            colors={[theme.colors.primary, theme.colors.primaryContainer]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.fab}
-          >
-            {isLoading ? (
-              <Icon name="hourglass-empty" size={24} color={theme.colors.onPrimary} fill />
-            ) : (
-              <Icon name="send" size={24} color={theme.colors.onPrimary} fill />
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
+            <TouchableOpacity
+              onPressIn={handleFABPressIn}
+              onPressOut={handleFABPressOut}
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+              activeOpacity={0.9}
+              accessible={true}
+              accessibilityLabel="Send prompt to AI editor"
+              accessibilityHint="Double tap to send your prompt to the AI editor"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSubmit }}
+            >
+              <LinearGradient
+                colors={[theme.colors.primary, theme.colors.primaryContainer]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.fab}
+              >
+                {isLoading ? (
+                  <Icon name="hourglass-empty" size={24} color={theme.colors.onPrimary} fill />
+                ) : (
+                  <Icon name="send" size={24} color={theme.colors.onPrimary} fill />
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 };

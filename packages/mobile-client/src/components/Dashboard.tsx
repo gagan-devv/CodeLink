@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, FlatList, Dimensions, RefreshControl } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView, FlatList, RefreshControl } from 'react-native';
 import { useDesignSystem } from '../design-system';
 import { Text } from '../design-system/typography/Text';
 import { Card } from '../design-system/components/Card';
@@ -9,6 +9,7 @@ import { ProgressBar } from '../design-system/components/ProgressBar';
 import { StatusIndicator, ConnectionStatus } from '../design-system/components/StatusIndicator';
 import { TopAppBar } from '../navigation/TopAppBar';
 import { useLoadingAnnouncement } from '../hooks/useScreenReaderAnnouncement';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 /**
  * System metrics interface
@@ -79,24 +80,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onRefresh,
 }) => {
   const { theme } = useDesignSystem();
-  const [isLargeScreen, setIsLargeScreen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Get responsive layout configuration
+  // Requirements 13.1, 13.2, 13.5, 13.6, 13.9
+  const layout = useResponsiveLayout();
 
   // Announce loading state for accessibility
   // Requirement 14.11: Announce loading states
   useLoadingAnnouncement(refreshing, 'Refreshing dashboard data', 'Dashboard refreshed');
-
-  // Detect screen size for responsive layout (Requirement 13.5)
-  useEffect(() => {
-    const updateLayout = () => {
-      const { width } = Dimensions.get('window');
-      setIsLargeScreen(width >= 768);
-    };
-
-    updateLayout();
-    const subscription = Dimensions.addEventListener('change', updateLayout);
-    return () => subscription?.remove();
-  }, []);
 
   /**
    * Handle refresh (Requirement 3.1)
@@ -239,12 +231,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </Text>
 
           {/* Bento Grid Layout (Requirement 3.8, 13.6) */}
-          <View style={[styles.bentoGrid, isLargeScreen && styles.bentoGridLarge]}>
+          <View
+            style={[
+              styles.bentoGrid,
+              {
+                flexDirection: layout.bentoGrid.columns === 1 ? 'column' : 'row',
+                gap: layout.bentoGrid.gap,
+              },
+            ]}
+          >
             {/* Large card: Uptime (Requirement 3.3) */}
             <Card
               variant="low"
               padding="lg"
-              style={[styles.bentoCard, isLargeScreen && styles.bentoCardLarge]}
+              style={[styles.bentoCard, { flex: layout.bentoGrid.largeCardSpan }]}
             >
               <Text variant="label-sm" color="onSurfaceVariant" uppercase style={styles.cardLabel}>
                 Uptime

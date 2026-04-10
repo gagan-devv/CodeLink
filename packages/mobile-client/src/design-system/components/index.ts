@@ -28,3 +28,5 @@ export { Skeleton } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';
 export { ToastContainer, showToast } from './Toast';
 export type { ToastMessage, ToastVariant } from './Toast';
+export { GlassContainer } from './GlassContainer';
+export type { GlassContainerProps } from './GlassContainer';

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, SafeAreaView } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as PaperProvider, BottomNavigation, Badge } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import type { InjectPromptResponse } from '@codelink/protocol';
 
 // Components
@@ -40,6 +40,12 @@ import { useCustomFonts } from './src/design-system/typography/fontLoading';
 
 // Utils
 import { isInjectPromptResponse, isSyncFullContextMessage } from './src/utils/messageValidation';
+import {
+  getStatusBarStyle,
+  registerBackButtonHandler,
+  isAndroid,
+  triggerHapticFeedback,
+} from './src/utils/platformAdaptations';
 
 /**
  * Main application content with navigation
@@ -94,11 +100,11 @@ const AppContent: React.FC = () => {
         });
       }
 
-      // Haptic feedback
+      // Haptic feedback (Requirements 22.3, 22.4)
       if (response.payload.success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        triggerHapticFeedback('success');
       } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        triggerHapticFeedback('error');
       }
 
       // Clear response after 4 seconds
@@ -129,16 +135,35 @@ const AppContent: React.FC = () => {
     } catch (error) {
       setIsSubmitting(false);
       setPromptError(error instanceof Error ? error.message : 'Failed to submit prompt');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      triggerHapticFeedback('error');
     }
   };
 
   // Handle reconnection (currently unused but kept for future use)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _handleReconnect = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await triggerHapticFeedback('medium');
     reconnect();
   };
+
+  // Handle Android hardware back button
+  // Requirement 26.7: Android hardware back button support
+  useEffect(() => {
+    if (!isAndroid()) return;
+
+    const backHandler = () => {
+      // If not on dashboard, go back to dashboard
+      if (index !== 0) {
+        setIndex(0);
+        return true; // Prevent default back behavior
+      }
+      // If on dashboard, allow default behavior (exit app)
+      return false;
+    };
+
+    const cleanup = registerBackButtonHandler(backHandler);
+    return cleanup;
+  }, [index]);
 
   // Define navigation routes
   const [routes] = useState([
@@ -177,7 +202,7 @@ const AppContent: React.FC = () => {
         onNavigateToCompose={() => setIndex(1)}
         onNavigateToDiffs={() => setIndex(2)}
         onRefresh={async () => {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          await triggerHapticFeedback('light');
         }}
       />
     </View>
@@ -247,16 +272,18 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <BottomNavigation
-        navigationState={{ index, routes }}
-        onIndexChange={setIndex}
-        renderScene={renderScene}
-        renderIcon={renderIcon}
-        barStyle={{ backgroundColor: theme.colors.surface }}
-      />
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <BottomNavigation
+          navigationState={{ index, routes }}
+          onIndexChange={setIndex}
+          renderScene={renderScene}
+          renderIcon={renderIcon}
+          barStyle={{ backgroundColor: theme.colors.surface }}
+        />
+        <StatusBar style={getStatusBarStyle(isDark)} />
+      </View>
+    </SafeAreaProvider>
   );
 };
 

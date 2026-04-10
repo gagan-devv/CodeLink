@@ -10,6 +10,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useDesignSystem } from '../design-system';
 import { Text } from '../design-system/typography/Text';
@@ -168,17 +169,8 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ activeRoute, onNavig
         },
       ]}
     >
-      {/* 
-        Glassmorphism backdrop with expo-blur
-        
-        To enable:
-        1. Install: npm install expo-blur --legacy-peer-deps
-        2. Uncomment the import at the top of this file
-        3. Uncomment the BlurView below
-        
-        See INSTALL_EXPO_BLUR.md for details
-      */}
-      {/* <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} /> */}
+      {/* Glassmorphism backdrop with expo-blur (Requirements 11.1, 11.4, 11.5) */}
+      <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
 
       <View style={styles.itemsContainer}>
         {NAV_ITEMS.map((item) => {
