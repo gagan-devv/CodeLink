@@ -61,7 +61,7 @@ export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> =
     manager.onConnect(() => {
       setStatus('connected');
       setError(null);
-      
+
       // Send ping message to identify as mobile client
       try {
         const pingMessage = {
@@ -70,12 +70,15 @@ export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> =
           type: 'ping' as const,
           source: 'mobile' as const,
         };
-        console.log('[useConnection] Sending ping message to identify as mobile client:', pingMessage);
+        console.log(
+          '[useConnection] Sending ping message to identify as mobile client:',
+          pingMessage
+        );
         manager.sendMessage(pingMessage);
       } catch (err) {
         console.error('[useConnection] Failed to send ping message:', err);
       }
-      
+
       // Requirement 14.11: Announce connection state changes
       AccessibilityInfo.announceForAccessibility('Connected to relay server');
     });

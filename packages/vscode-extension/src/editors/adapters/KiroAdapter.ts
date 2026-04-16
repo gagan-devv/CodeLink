@@ -94,14 +94,14 @@ export class KiroAdapter implements IEditorAdapter {
     try {
       // Copy prompt to clipboard
       await vscode.env.clipboard.writeText(prompt);
-      
+
       // Show notification to user
       const action = await vscode.window.showInformationMessage(
         'Prompt copied to clipboard. Paste it into Kiro chat to continue.',
         'Open Chat',
         'Dismiss'
       );
-      
+
       // If user clicks "Open Chat", try to focus the chat (if possible)
       if (action === 'Open Chat') {
         // Try to execute any command that might open/focus the chat

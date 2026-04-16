@@ -82,7 +82,10 @@ export class SocketManagerImpl implements SocketManager {
         this.socket.on('message', (data: unknown) => {
           console.log('[SocketManager] Received message event, data type:', typeof data);
           console.log('[SocketManager] Raw data:', data);
-          console.log('[SocketManager] Number of registered handlers:', this.messageHandlers.length);
+          console.log(
+            '[SocketManager] Number of registered handlers:',
+            this.messageHandlers.length
+          );
           try {
             // Parse JSON string from relay server
             const message = JSON.parse(data as string) as ProtocolMessage;

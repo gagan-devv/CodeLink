@@ -10,14 +10,14 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-    View,
-    ScrollView,
-    StyleSheet,
-    KeyboardAvoidingView,
-    Keyboard,
-    TouchableWithoutFeedback,
-    Linking,
-    TouchableOpacity,
+  View,
+  ScrollView,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Keyboard,
+  TouchableWithoutFeedback,
+  Linking,
+  TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDesignSystem } from '../design-system/theme/useDesignSystem';
@@ -34,10 +34,10 @@ import { DEFAULT_RELAY_SERVER_URL } from '../config';
 
 // AsyncStorage keys
 const STORAGE_KEYS = {
-    DARK_MODE: '@codelink/dark_mode',
-    HIGH_CONTRAST: '@codelink/high_contrast',
-    PUSH_NOTIFICATIONS: '@codelink/push_notifications',
-    SOUND_EFFECTS: '@codelink/sound_effects',
+  DARK_MODE: '@codelink/dark_mode',
+  HIGH_CONTRAST: '@codelink/high_contrast',
+  PUSH_NOTIFICATIONS: '@codelink/push_notifications',
+  SOUND_EFFECTS: '@codelink/sound_effects',
 };
 
 // App version from package.json
@@ -47,576 +47,576 @@ const APP_VERSION = '0.1.0';
  * Settings screen component
  */
 export interface SettingsProps {
-    relayServerUrl: string;
-    onRelayServerUrlChange: (url: string) => Promise<void>;
+  relayServerUrl: string;
+  onRelayServerUrlChange: (url: string) => Promise<void>;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
-    relayServerUrl: activeRelayServerUrl,
-    onRelayServerUrlChange,
+  relayServerUrl: activeRelayServerUrl,
+  onRelayServerUrlChange,
 }) => {
-    const { theme, config, setConfig } = useDesignSystem();
-    const { status } = useConnection();
-    const { quality, latency } = useConnectionQuality();
+  const { theme, config, setConfig } = useDesignSystem();
+  const { status } = useConnection();
+  const { quality, latency } = useConnectionQuality();
 
-    // State for settings
-    const [relayServerUrl, setRelayServerUrl] = useState(
-        activeRelayServerUrl || DEFAULT_RELAY_SERVER_URL
-    );
-    const [urlError, setUrlError] = useState<string | undefined>(undefined);
-    const [darkMode, setDarkMode] = useState(config.mode === 'dark');
-    const [highContrast, setHighContrast] = useState(config.highContrast);
-    const [pushNotifications, setPushNotifications] = useState(false);
-    const [soundEffects, setSoundEffects] = useState(true);
+  // State for settings
+  const [relayServerUrl, setRelayServerUrl] = useState(
+    activeRelayServerUrl || DEFAULT_RELAY_SERVER_URL
+  );
+  const [urlError, setUrlError] = useState<string | undefined>(undefined);
+  const [darkMode, setDarkMode] = useState(config.mode === 'dark');
+  const [highContrast, setHighContrast] = useState(config.highContrast);
+  const [pushNotifications, setPushNotifications] = useState(false);
+  const [soundEffects, setSoundEffects] = useState(true);
 
-    /**
-     * Load saved preferences on mount
-     */
-    useEffect(() => {
-        loadPreferences();
-    }, []);
+  /**
+   * Load saved preferences on mount
+   */
+  useEffect(() => {
+    loadPreferences();
+  }, []);
 
-    useEffect(() => {
-        setRelayServerUrl(activeRelayServerUrl || DEFAULT_RELAY_SERVER_URL);
-    }, [activeRelayServerUrl]);
+  useEffect(() => {
+    setRelayServerUrl(activeRelayServerUrl || DEFAULT_RELAY_SERVER_URL);
+  }, [activeRelayServerUrl]);
 
-    /**
-     * Load preferences from AsyncStorage
-     */
-    const loadPreferences = async () => {
-        try {
-            const [savedDarkMode, savedHighContrast, savedPushNotifications, savedSoundEffects] =
-                await Promise.all([
-                    AsyncStorage.getItem(STORAGE_KEYS.DARK_MODE),
-                    AsyncStorage.getItem(STORAGE_KEYS.HIGH_CONTRAST),
-                    AsyncStorage.getItem(STORAGE_KEYS.PUSH_NOTIFICATIONS),
-                    AsyncStorage.getItem(STORAGE_KEYS.SOUND_EFFECTS),
-                ]);
+  /**
+   * Load preferences from AsyncStorage
+   */
+  const loadPreferences = async () => {
+    try {
+      const [savedDarkMode, savedHighContrast, savedPushNotifications, savedSoundEffects] =
+        await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.DARK_MODE),
+          AsyncStorage.getItem(STORAGE_KEYS.HIGH_CONTRAST),
+          AsyncStorage.getItem(STORAGE_KEYS.PUSH_NOTIFICATIONS),
+          AsyncStorage.getItem(STORAGE_KEYS.SOUND_EFFECTS),
+        ]);
 
-            if (savedDarkMode !== null) setDarkMode(savedDarkMode === 'true');
-            if (savedHighContrast !== null) setHighContrast(savedHighContrast === 'true');
-            if (savedPushNotifications !== null) setPushNotifications(savedPushNotifications === 'true');
-            if (savedSoundEffects !== null) setSoundEffects(savedSoundEffects === 'true');
-        } catch (error) {
-            console.error('Failed to load preferences:', error);
-        }
-    };
+      if (savedDarkMode !== null) setDarkMode(savedDarkMode === 'true');
+      if (savedHighContrast !== null) setHighContrast(savedHighContrast === 'true');
+      if (savedPushNotifications !== null) setPushNotifications(savedPushNotifications === 'true');
+      if (savedSoundEffects !== null) setSoundEffects(savedSoundEffects === 'true');
+    } catch (error) {
+      console.error('Failed to load preferences:', error);
+    }
+  };
 
-    /**
-     * Validate URL format
-     */
-    const validateUrl = (url: string): boolean => {
-        const urlPattern = /^(https?|wss?):\/\/.+/;
-        return urlPattern.test(url);
-    };
+  /**
+   * Validate URL format
+   */
+  const validateUrl = (url: string): boolean => {
+    const urlPattern = /^(https?|wss?):\/\/.+/;
+    return urlPattern.test(url);
+  };
 
-    /**
-     * Handle relay server URL input changes locally.
-     */
-    const handleUrlChange = (url: string) => {
-        setRelayServerUrl(url);
-        if (urlError) {
-            setUrlError(undefined);
-        }
-    };
+  /**
+   * Handle relay server URL input changes locally.
+   */
+  const handleUrlChange = (url: string) => {
+    setRelayServerUrl(url);
+    if (urlError) {
+      setUrlError(undefined);
+    }
+  };
 
-    /**
-     * Validate, persist, and apply a relay server URL change.
-     */
-    const handleUrlBlur = async () => {
-        const normalizedUrl = relayServerUrl.trim();
+  /**
+   * Validate, persist, and apply a relay server URL change.
+   */
+  const handleUrlBlur = async () => {
+    const normalizedUrl = relayServerUrl.trim();
 
-        if (normalizedUrl.length === 0) {
-            setRelayServerUrl(activeRelayServerUrl);
-            setUrlError(undefined);
-            return;
-        }
+    if (normalizedUrl.length === 0) {
+      setRelayServerUrl(activeRelayServerUrl);
+      setUrlError(undefined);
+      return;
+    }
 
-        if (!validateUrl(normalizedUrl)) {
-            const errorMsg = 'Invalid URL format. Must start with ws://, wss://, http://, or https://';
-            setUrlError(errorMsg);
-            // Log validation errors (Requirement 17.11)
-            console.error('URL validation failed:', {
-                error: errorMsg,
-                providedUrl: normalizedUrl,
-                timestamp: new Date().toISOString(),
-            });
-            return;
-        }
+    if (!validateUrl(normalizedUrl)) {
+      const errorMsg = 'Invalid URL format. Must start with ws://, wss://, http://, or https://';
+      setUrlError(errorMsg);
+      // Log validation errors (Requirement 17.11)
+      console.error('URL validation failed:', {
+        error: errorMsg,
+        providedUrl: normalizedUrl,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
 
-        setUrlError(undefined);
+    setUrlError(undefined);
 
-        if (normalizedUrl === activeRelayServerUrl) {
-            setRelayServerUrl(normalizedUrl);
-            return;
-        }
+    if (normalizedUrl === activeRelayServerUrl) {
+      setRelayServerUrl(normalizedUrl);
+      return;
+    }
 
-        try {
-            await onRelayServerUrlChange(normalizedUrl);
-            setRelayServerUrl(normalizedUrl);
-        } catch (error) {
-            console.error('Failed to apply relay server URL:', error);
-            setUrlError('Failed to apply relay server URL');
-            setRelayServerUrl(activeRelayServerUrl);
-        }
-    };
+    try {
+      await onRelayServerUrlChange(normalizedUrl);
+      setRelayServerUrl(normalizedUrl);
+    } catch (error) {
+      console.error('Failed to apply relay server URL:', error);
+      setUrlError('Failed to apply relay server URL');
+      setRelayServerUrl(activeRelayServerUrl);
+    }
+  };
 
-    /**
-     * Handle dark mode toggle
-     */
-    const handleDarkModeChange = async (enabled: boolean) => {
-        setDarkMode(enabled);
+  /**
+   * Handle dark mode toggle
+   */
+  const handleDarkModeChange = async (enabled: boolean) => {
+    setDarkMode(enabled);
 
-        // Update theme configuration
-        setConfig({
-            ...config,
-            mode: enabled ? 'dark' : 'light',
-        });
+    // Update theme configuration
+    setConfig({
+      ...config,
+      mode: enabled ? 'dark' : 'light',
+    });
 
-        // Also save to legacy AsyncStorage key for backwards compatibility
-        try {
-            await AsyncStorage.setItem(STORAGE_KEYS.DARK_MODE, String(enabled));
-        } catch (error) {
-            console.error('Failed to save dark mode preference:', error);
-        }
-    };
+    // Also save to legacy AsyncStorage key for backwards compatibility
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.DARK_MODE, String(enabled));
+    } catch (error) {
+      console.error('Failed to save dark mode preference:', error);
+    }
+  };
 
-    /**
-     * Handle high contrast toggle
-     */
-    const handleHighContrastChange = async (enabled: boolean) => {
-        setHighContrast(enabled);
+  /**
+   * Handle high contrast toggle
+   */
+  const handleHighContrastChange = async (enabled: boolean) => {
+    setHighContrast(enabled);
 
-        // Update theme configuration
-        setConfig({
-            ...config,
-            highContrast: enabled,
-        });
+    // Update theme configuration
+    setConfig({
+      ...config,
+      highContrast: enabled,
+    });
 
-        // Also save to legacy AsyncStorage key for backwards compatibility
-        try {
-            await AsyncStorage.setItem(STORAGE_KEYS.HIGH_CONTRAST, String(enabled));
-        } catch (error) {
-            console.error('Failed to save high contrast preference:', error);
-        }
-    };
+    // Also save to legacy AsyncStorage key for backwards compatibility
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.HIGH_CONTRAST, String(enabled));
+    } catch (error) {
+      console.error('Failed to save high contrast preference:', error);
+    }
+  };
 
-    /**
-     * Handle push notifications toggle
-     */
-    const handlePushNotificationsChange = async (enabled: boolean) => {
-        setPushNotifications(enabled);
-        try {
-            await AsyncStorage.setItem(STORAGE_KEYS.PUSH_NOTIFICATIONS, String(enabled));
-        } catch (error) {
-            console.error('Failed to save push notifications preference:', error);
-        }
-    };
+  /**
+   * Handle push notifications toggle
+   */
+  const handlePushNotificationsChange = async (enabled: boolean) => {
+    setPushNotifications(enabled);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.PUSH_NOTIFICATIONS, String(enabled));
+    } catch (error) {
+      console.error('Failed to save push notifications preference:', error);
+    }
+  };
 
-    /**
-     * Handle sound effects toggle
-     */
-    const handleSoundEffectsChange = async (enabled: boolean) => {
-        setSoundEffects(enabled);
-        try {
-            await AsyncStorage.setItem(STORAGE_KEYS.SOUND_EFFECTS, String(enabled));
-        } catch (error) {
-            console.error('Failed to save sound effects preference:', error);
-        }
-    };
+  /**
+   * Handle sound effects toggle
+   */
+  const handleSoundEffectsChange = async (enabled: boolean) => {
+    setSoundEffects(enabled);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.SOUND_EFFECTS, String(enabled));
+    } catch (error) {
+      console.error('Failed to save sound effects preference:', error);
+    }
+  };
 
-    /**
-     * Open external link
-     */
-    const openLink = (url: string) => {
-        Linking.openURL(url).catch((err) => console.error('Failed to open URL:', err));
-    };
+  /**
+   * Open external link
+   */
+  const openLink = (url: string) => {
+    Linking.openURL(url).catch((err) => console.error('Failed to open URL:', err));
+  };
 
-    /**
-     * Get connection status label
-     */
-    const getStatusLabel = (): string => {
-        switch (status) {
-            case 'connected':
-                return 'Connected';
-            case 'disconnected':
-                return 'Disconnected';
-            case 'connecting':
-                return 'Connecting';
-        }
-    };
+  /**
+   * Get connection status label
+   */
+  const getStatusLabel = (): string => {
+    switch (status) {
+      case 'connected':
+        return 'Connected';
+      case 'disconnected':
+        return 'Disconnected';
+      case 'connecting':
+        return 'Connecting';
+    }
+  };
 
-    /**
-     * Get quality label
-     */
-    const getQualityLabel = (): string => {
-        switch (quality) {
-            case 'excellent':
-                return 'Excellent';
-            case 'good':
-                return 'Good';
-            case 'fair':
-                return 'Fair';
-            case 'poor':
-                return 'Poor';
-            case 'offline':
-                return 'Offline';
-        }
-    };
+  /**
+   * Get quality label
+   */
+  const getQualityLabel = (): string => {
+    switch (quality) {
+      case 'excellent':
+        return 'Excellent';
+      case 'good':
+        return 'Good';
+      case 'fair':
+        return 'Fair';
+      case 'poor':
+        return 'Poor';
+      case 'offline':
+        return 'Offline';
+    }
+  };
 
-    return (
-        <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
-            {/* Top App Bar */}
-            <TopAppBar connectionStatus={status} />
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
+      {/* Top App Bar */}
+      <TopAppBar connectionStatus={status} />
 
-            <KeyboardAvoidingView
-                behavior={getKeyboardBehavior()}
-                style={styles.keyboardAvoid}
-                keyboardVerticalOffset={getKeyboardVerticalOffset(true)}
+      <KeyboardAvoidingView
+        behavior={getKeyboardBehavior()}
+        style={styles.keyboardAvoid}
+        keyboardVerticalOffset={getKeyboardVerticalOffset(true)}
+      >
+        <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+          <View style={styles.keyboardAvoid}>
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-                <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-                    <View style={styles.keyboardAvoid}>
-                        <ScrollView
-                            style={styles.scrollView}
-                            contentContainerStyle={styles.scrollContent}
-                            keyboardShouldPersistTaps="handled"
-                            showsVerticalScrollIndicator={false}
-                        >
-                            {/* Header */}
-                            <View style={[styles.header, { paddingHorizontal: theme.spacing.lg }]}>
-                                <Text variant="headline-lg" weight="bold" color="onSurface">
-                                    Settings
-                                </Text>
-                                <Text
-                                    variant="body-md"
-                                    color="onSurfaceVariant"
-                                    style={{ marginTop: theme.spacing.xs }}
-                                >
-                                    Configure your development environment
-                                </Text>
-                            </View>
+              {/* Header */}
+              <View style={[styles.header, { paddingHorizontal: theme.spacing.lg }]}>
+                <Text variant="headline-lg" weight="bold" color="onSurface">
+                  Settings
+                </Text>
+                <Text
+                  variant="body-md"
+                  color="onSurfaceVariant"
+                  style={{ marginTop: theme.spacing.xs }}
+                >
+                  Configure your development environment
+                </Text>
+              </View>
 
-                            {/* Connectivity Bento Cards */}
-                            <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
-                                <View style={styles.bentoGrid}>
-                                    {/* Status Card */}
-                                    <Card
-                                        variant="low"
-                                        padding="md"
-                                        borderRadius="lg"
-                                        style={[styles.bentoCard, styles.bentoCardSmall]}
-                                    >
-                                        <Text variant="label-sm" color="onSurfaceVariant" uppercase>
-                                            Status
-                                        </Text>
-                                        <Text
-                                            variant="title-lg"
-                                            weight="bold"
-                                            color={status === 'connected' ? 'secondary' : 'error'}
-                                            style={{ marginTop: theme.spacing.xs }}
-                                        >
-                                            {getStatusLabel()}
-                                        </Text>
-                                    </Card>
+              {/* Connectivity Bento Cards */}
+              <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
+                <View style={styles.bentoGrid}>
+                  {/* Status Card */}
+                  <Card
+                    variant="low"
+                    padding="md"
+                    borderRadius="lg"
+                    style={[styles.bentoCard, styles.bentoCardSmall]}
+                  >
+                    <Text variant="label-sm" color="onSurfaceVariant" uppercase>
+                      Status
+                    </Text>
+                    <Text
+                      variant="title-lg"
+                      weight="bold"
+                      color={status === 'connected' ? 'secondary' : 'error'}
+                      style={{ marginTop: theme.spacing.xs }}
+                    >
+                      {getStatusLabel()}
+                    </Text>
+                  </Card>
 
-                                    {/* Latency Card */}
-                                    <Card
-                                        variant="low"
-                                        padding="md"
-                                        borderRadius="lg"
-                                        style={[styles.bentoCard, styles.bentoCardSmall]}
-                                    >
-                                        <Text variant="label-sm" color="onSurfaceVariant" uppercase>
-                                            Latency
-                                        </Text>
-                                        <Text
-                                            variant="title-lg"
-                                            weight="bold"
-                                            color="onSurface"
-                                            style={{ marginTop: theme.spacing.xs }}
-                                        >
-                                            {latency !== null ? `${latency}ms` : '--'}
-                                        </Text>
-                                    </Card>
+                  {/* Latency Card */}
+                  <Card
+                    variant="low"
+                    padding="md"
+                    borderRadius="lg"
+                    style={[styles.bentoCard, styles.bentoCardSmall]}
+                  >
+                    <Text variant="label-sm" color="onSurfaceVariant" uppercase>
+                      Latency
+                    </Text>
+                    <Text
+                      variant="title-lg"
+                      weight="bold"
+                      color="onSurface"
+                      style={{ marginTop: theme.spacing.xs }}
+                    >
+                      {latency !== null ? `${latency}ms` : '--'}
+                    </Text>
+                  </Card>
 
-                                    {/* Active Instance Card */}
-                                    <Card
-                                        variant="low"
-                                        padding="md"
-                                        borderRadius="lg"
-                                        style={[styles.bentoCard, styles.bentoCardLarge]}
-                                    >
-                                        <Text variant="label-sm" color="onSurfaceVariant" uppercase>
-                                            Active Instance
-                                        </Text>
-                                        <Text
-                                            variant="title-md"
-                                            weight="semibold"
-                                            color="onSurface"
-                                            style={{ marginTop: theme.spacing.xs }}
-                                        >
-                                            localhost:8080
-                                        </Text>
-                                    </Card>
+                  {/* Active Instance Card */}
+                  <Card
+                    variant="low"
+                    padding="md"
+                    borderRadius="lg"
+                    style={[styles.bentoCard, styles.bentoCardLarge]}
+                  >
+                    <Text variant="label-sm" color="onSurfaceVariant" uppercase>
+                      Active Instance
+                    </Text>
+                    <Text
+                      variant="title-md"
+                      weight="semibold"
+                      color="onSurface"
+                      style={{ marginTop: theme.spacing.xs }}
+                    >
+                      localhost:8080
+                    </Text>
+                  </Card>
 
-                                    {/* Load Card */}
-                                    <Card
-                                        variant="low"
-                                        padding="md"
-                                        borderRadius="lg"
-                                        style={[styles.bentoCard, styles.bentoCardSmall]}
-                                    >
-                                        <Text variant="label-sm" color="onSurfaceVariant" uppercase>
-                                            Quality
-                                        </Text>
-                                        <Text
-                                            variant="title-lg"
-                                            weight="bold"
-                                            color="onSurface"
-                                            style={{ marginTop: theme.spacing.xs }}
-                                        >
-                                            {getQualityLabel()}
-                                        </Text>
-                                    </Card>
-                                </View>
-                            </View>
+                  {/* Load Card */}
+                  <Card
+                    variant="low"
+                    padding="md"
+                    borderRadius="lg"
+                    style={[styles.bentoCard, styles.bentoCardSmall]}
+                  >
+                    <Text variant="label-sm" color="onSurfaceVariant" uppercase>
+                      Quality
+                    </Text>
+                    <Text
+                      variant="title-lg"
+                      weight="bold"
+                      color="onSurface"
+                      style={{ marginTop: theme.spacing.xs }}
+                    >
+                      {getQualityLabel()}
+                    </Text>
+                  </Card>
+                </View>
+              </View>
 
-                            {/* Infrastructure Section */}
-                            <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
-                                <Text
-                                    variant="label-lg"
-                                    color="onSurfaceVariant"
-                                    uppercase
-                                    style={{ marginBottom: theme.spacing.md }}
-                                >
-                                    Infrastructure
-                                </Text>
-                                <Card variant="low" padding="lg" borderRadius="lg">
-                                    <TextInput
-                                        value={relayServerUrl}
-                                        onChangeText={handleUrlChange}
-                                        onBlur={handleUrlBlur}
-                                        label="Relay Server URL"
-                                        placeholder="http://localhost:8080"
-                                        keyboardType="url"
-                                        autoCapitalize="none"
-                                        autoCorrect={false}
-                                        error={urlError}
-                                    />
-                                </Card>
-                            </View>
+              {/* Infrastructure Section */}
+              <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
+                <Text
+                  variant="label-lg"
+                  color="onSurfaceVariant"
+                  uppercase
+                  style={{ marginBottom: theme.spacing.md }}
+                >
+                  Infrastructure
+                </Text>
+                <Card variant="low" padding="lg" borderRadius="lg">
+                  <TextInput
+                    value={relayServerUrl}
+                    onChangeText={handleUrlChange}
+                    onBlur={handleUrlBlur}
+                    label="Relay Server URL"
+                    placeholder="http://localhost:8080"
+                    keyboardType="url"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    error={urlError}
+                  />
+                </Card>
+              </View>
 
-                            {/* Appearance Section */}
-                            <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
-                                <Text
-                                    variant="label-lg"
-                                    color="onSurfaceVariant"
-                                    uppercase
-                                    style={{ marginBottom: theme.spacing.md }}
-                                >
-                                    Appearance
-                                </Text>
-                                <Card variant="low" padding="lg" borderRadius="lg">
-                                    <Toggle
-                                        value={darkMode}
-                                        onValueChange={handleDarkModeChange}
-                                        label="Dark Mode"
-                                        description="Use dark theme for the interface"
-                                        hapticFeedback
-                                    />
-                                    <View style={{ height: theme.spacing.lg }} />
-                                    <Toggle
-                                        value={highContrast}
-                                        onValueChange={handleHighContrastChange}
-                                        label="High Contrast"
-                                        description="Increase contrast for better visibility"
-                                        hapticFeedback
-                                    />
-                                </Card>
-                            </View>
+              {/* Appearance Section */}
+              <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
+                <Text
+                  variant="label-lg"
+                  color="onSurfaceVariant"
+                  uppercase
+                  style={{ marginBottom: theme.spacing.md }}
+                >
+                  Appearance
+                </Text>
+                <Card variant="low" padding="lg" borderRadius="lg">
+                  <Toggle
+                    value={darkMode}
+                    onValueChange={handleDarkModeChange}
+                    label="Dark Mode"
+                    description="Use dark theme for the interface"
+                    hapticFeedback
+                  />
+                  <View style={{ height: theme.spacing.lg }} />
+                  <Toggle
+                    value={highContrast}
+                    onValueChange={handleHighContrastChange}
+                    label="High Contrast"
+                    description="Increase contrast for better visibility"
+                    hapticFeedback
+                  />
+                </Card>
+              </View>
 
-                            {/* Communication Section */}
-                            <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
-                                <Text
-                                    variant="label-lg"
-                                    color="onSurfaceVariant"
-                                    uppercase
-                                    style={{ marginBottom: theme.spacing.md }}
-                                >
-                                    Communication
-                                </Text>
-                                <Card variant="low" padding="lg" borderRadius="lg">
-                                    <Toggle
-                                        value={pushNotifications}
-                                        onValueChange={handlePushNotificationsChange}
-                                        label="Push Notifications"
-                                        description="Receive notifications for important events"
-                                        hapticFeedback
-                                    />
-                                    <View style={{ height: theme.spacing.lg }} />
-                                    <Toggle
-                                        value={soundEffects}
-                                        onValueChange={handleSoundEffectsChange}
-                                        label="Sound Effects"
-                                        description="Play sounds for interactions"
-                                        hapticFeedback
-                                    />
-                                </Card>
-                            </View>
+              {/* Communication Section */}
+              <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
+                <Text
+                  variant="label-lg"
+                  color="onSurfaceVariant"
+                  uppercase
+                  style={{ marginBottom: theme.spacing.md }}
+                >
+                  Communication
+                </Text>
+                <Card variant="low" padding="lg" borderRadius="lg">
+                  <Toggle
+                    value={pushNotifications}
+                    onValueChange={handlePushNotificationsChange}
+                    label="Push Notifications"
+                    description="Receive notifications for important events"
+                    hapticFeedback
+                  />
+                  <View style={{ height: theme.spacing.lg }} />
+                  <Toggle
+                    value={soundEffects}
+                    onValueChange={handleSoundEffectsChange}
+                    label="Sound Effects"
+                    description="Play sounds for interactions"
+                    hapticFeedback
+                  />
+                </Card>
+              </View>
 
-                            {/* About Section */}
-                            <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
-                                <Text
-                                    variant="label-lg"
-                                    color="onSurfaceVariant"
-                                    uppercase
-                                    style={{ marginBottom: theme.spacing.md }}
-                                >
-                                    About
-                                </Text>
-                                <Card variant="low" padding="lg" borderRadius="lg">
-                                    {/* App Icon and Version */}
-                                    <View style={styles.aboutHeader}>
-                                        <View
-                                            style={[
-                                                styles.appIcon,
-                                                {
-                                                    backgroundColor: theme.colors.primaryContainer,
-                                                    borderRadius: theme.borderRadius.lg,
-                                                },
-                                            ]}
-                                        >
-                                            <Icon name="terminal" size={32} color="primary" />
-                                        </View>
-                                        <View style={{ marginLeft: theme.spacing.md }}>
-                                            <Text variant="title-lg" weight="bold" color="onSurface">
-                                                CodeLink
-                                            </Text>
-                                            <Text variant="body-sm" color="onSurfaceVariant">
-                                                Version {APP_VERSION}
-                                            </Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Links */}
-                                    <View style={{ marginTop: theme.spacing.xl }}>
-                                        <TouchableOpacity
-                                            style={styles.linkItem}
-                                            onPress={() => openLink('https://github.com/codelink/docs')}
-                                            accessible={true}
-                                            accessibilityLabel="Open documentation"
-                                            accessibilityHint="Opens documentation in browser"
-                                            accessibilityRole="link"
-                                        >
-                                            <Icon name="help" size={20} color="onSurface" />
-                                            <Text
-                                                variant="body-md"
-                                                color="onSurface"
-                                                style={{ marginLeft: theme.spacing.md }}
-                                            >
-                                                Documentation
-                                            </Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity
-                                            style={styles.linkItem}
-                                            onPress={() => openLink('https://github.com/codelink/support')}
-                                            accessible={true}
-                                            accessibilityLabel="Open support"
-                                            accessibilityHint="Opens support page in browser"
-                                            accessibilityRole="link"
-                                        >
-                                            <Icon name="info" size={20} color="onSurface" />
-                                            <Text
-                                                variant="body-md"
-                                                color="onSurface"
-                                                style={{ marginLeft: theme.spacing.md }}
-                                            >
-                                                Support
-                                            </Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity
-                                            style={styles.linkItem}
-                                            onPress={() => openLink('https://github.com/codelink')}
-                                            accessible={true}
-                                            accessibilityLabel="Open GitHub repository"
-                                            accessibilityHint="Opens GitHub repository in browser"
-                                            accessibilityRole="link"
-                                        >
-                                            <Icon name="code" size={20} color="onSurface" />
-                                            <Text
-                                                variant="body-md"
-                                                color="onSurface"
-                                                style={{ marginLeft: theme.spacing.md }}
-                                            >
-                                                GitHub
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </Card>
-                            </View>
-
-                            {/* Bottom padding for safe area */}
-                            <View style={{ height: 100 }} />
-                        </ScrollView>
+              {/* About Section */}
+              <View style={[styles.section, { paddingHorizontal: theme.spacing.lg }]}>
+                <Text
+                  variant="label-lg"
+                  color="onSurfaceVariant"
+                  uppercase
+                  style={{ marginBottom: theme.spacing.md }}
+                >
+                  About
+                </Text>
+                <Card variant="low" padding="lg" borderRadius="lg">
+                  {/* App Icon and Version */}
+                  <View style={styles.aboutHeader}>
+                    <View
+                      style={[
+                        styles.appIcon,
+                        {
+                          backgroundColor: theme.colors.primaryContainer,
+                          borderRadius: theme.borderRadius.lg,
+                        },
+                      ]}
+                    >
+                      <Icon name="terminal" size={32} color="primary" />
                     </View>
-                </TouchableWithoutFeedback>
-            </KeyboardAvoidingView>
-        </View>
-    );
+                    <View style={{ marginLeft: theme.spacing.md }}>
+                      <Text variant="title-lg" weight="bold" color="onSurface">
+                        CodeLink
+                      </Text>
+                      <Text variant="body-sm" color="onSurfaceVariant">
+                        Version {APP_VERSION}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Links */}
+                  <View style={{ marginTop: theme.spacing.xl }}>
+                    <TouchableOpacity
+                      style={styles.linkItem}
+                      onPress={() => openLink('https://github.com/codelink/docs')}
+                      accessible={true}
+                      accessibilityLabel="Open documentation"
+                      accessibilityHint="Opens documentation in browser"
+                      accessibilityRole="link"
+                    >
+                      <Icon name="help" size={20} color="onSurface" />
+                      <Text
+                        variant="body-md"
+                        color="onSurface"
+                        style={{ marginLeft: theme.spacing.md }}
+                      >
+                        Documentation
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.linkItem}
+                      onPress={() => openLink('https://github.com/codelink/support')}
+                      accessible={true}
+                      accessibilityLabel="Open support"
+                      accessibilityHint="Opens support page in browser"
+                      accessibilityRole="link"
+                    >
+                      <Icon name="info" size={20} color="onSurface" />
+                      <Text
+                        variant="body-md"
+                        color="onSurface"
+                        style={{ marginLeft: theme.spacing.md }}
+                      >
+                        Support
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.linkItem}
+                      onPress={() => openLink('https://github.com/codelink')}
+                      accessible={true}
+                      accessibilityLabel="Open GitHub repository"
+                      accessibilityHint="Opens GitHub repository in browser"
+                      accessibilityRole="link"
+                    >
+                      <Icon name="code" size={20} color="onSurface" />
+                      <Text
+                        variant="body-md"
+                        color="onSurface"
+                        style={{ marginLeft: theme.spacing.md }}
+                      >
+                        GitHub
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              </View>
+
+              {/* Bottom padding for safe area */}
+              <View style={{ height: 100 }} />
+            </ScrollView>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    keyboardAvoid: {
-        flex: 1,
-    },
-    scrollView: {
-        flex: 1,
-    },
-    scrollContent: {
-        paddingBottom: 32,
-    },
-    header: {
-        paddingTop: 24,
-        paddingBottom: 16,
-    },
-    section: {
-        marginTop: 24,
-    },
-    bentoGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    bentoCard: {
-        minHeight: 80,
-    },
-    bentoCardSmall: {
-        flex: 1,
-        minWidth: '30%',
-    },
-    bentoCardLarge: {
-        flex: 2,
-        minWidth: '60%',
-    },
-    aboutHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    appIcon: {
-        width: 56,
-        height: 56,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    linkItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        minHeight: 44,
-    },
+  container: {
+    flex: 1,
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 32,
+  },
+  header: {
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  section: {
+    marginTop: 24,
+  },
+  bentoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  bentoCard: {
+    minHeight: 80,
+  },
+  bentoCardSmall: {
+    flex: 1,
+    minWidth: '30%',
+  },
+  bentoCardLarge: {
+    flex: 2,
+    minWidth: '60%',
+  },
+  aboutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  appIcon: {
+    width: 56,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  linkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    minHeight: 44,
+  },
 });

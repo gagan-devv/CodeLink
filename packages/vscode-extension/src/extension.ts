@@ -53,45 +53,51 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   // Register diagnostic command to list Kiro commands
-  const listKiroCommandsDisposable = vscode.commands.registerCommand('codelink.listKiroCommands', async () => {
-    try {
-      const allCommands = await vscode.commands.getCommands(true);
-      const kiroCommands = allCommands.filter(cmd => cmd.startsWith('kiro.'));
-      
-      outputChannel.appendLine('=== KIRO COMMANDS DIAGNOSTIC ===');
-      outputChannel.appendLine(`Total Kiro commands found: ${kiroCommands.length}`);
-      outputChannel.appendLine('');
-      
-      const chatCommands = kiroCommands.filter(cmd => 
-        cmd.includes('chat') || 
-        cmd.includes('send') || 
-        cmd.includes('message') ||
-        cmd.includes('submit') ||
-        cmd.includes('prompt')
-      );
-      
-      outputChannel.appendLine('=== CHAT-RELATED COMMANDS ===');
-      if (chatCommands.length > 0) {
-        chatCommands.forEach(cmd => {
-          outputChannel.appendLine(`  - ${cmd}`);
+  const listKiroCommandsDisposable = vscode.commands.registerCommand(
+    'codelink.listKiroCommands',
+    async () => {
+      try {
+        const allCommands = await vscode.commands.getCommands(true);
+        const kiroCommands = allCommands.filter((cmd) => cmd.startsWith('kiro.'));
+
+        outputChannel.appendLine('=== KIRO COMMANDS DIAGNOSTIC ===');
+        outputChannel.appendLine(`Total Kiro commands found: ${kiroCommands.length}`);
+        outputChannel.appendLine('');
+
+        const chatCommands = kiroCommands.filter(
+          (cmd) =>
+            cmd.includes('chat') ||
+            cmd.includes('send') ||
+            cmd.includes('message') ||
+            cmd.includes('submit') ||
+            cmd.includes('prompt')
+        );
+
+        outputChannel.appendLine('=== CHAT-RELATED COMMANDS ===');
+        if (chatCommands.length > 0) {
+          chatCommands.forEach((cmd) => {
+            outputChannel.appendLine(`  - ${cmd}`);
+          });
+        } else {
+          outputChannel.appendLine('  No chat-related commands found');
+        }
+
+        outputChannel.appendLine('');
+        outputChannel.appendLine('=== ALL KIRO COMMANDS ===');
+        kiroCommands.forEach((cmd, index) => {
+          outputChannel.appendLine(`  ${index + 1}. ${cmd}`);
         });
-      } else {
-        outputChannel.appendLine('  No chat-related commands found');
+
+        outputChannel.show();
+        vscode.window.showInformationMessage(
+          `Found ${kiroCommands.length} Kiro commands. Check CodeLink output channel for complete list.`
+        );
+      } catch (error) {
+        outputChannel.appendLine(`Error listing Kiro commands: ${error}`);
+        vscode.window.showErrorMessage('Failed to list Kiro commands');
       }
-      
-      outputChannel.appendLine('');
-      outputChannel.appendLine('=== ALL KIRO COMMANDS ===');
-      kiroCommands.forEach((cmd, index) => {
-        outputChannel.appendLine(`  ${index + 1}. ${cmd}`);
-      });
-      
-      outputChannel.show();
-      vscode.window.showInformationMessage(`Found ${kiroCommands.length} Kiro commands. Check CodeLink output channel for complete list.`);
-    } catch (error) {
-      outputChannel.appendLine(`Error listing Kiro commands: ${error}`);
-      vscode.window.showErrorMessage('Failed to list Kiro commands');
     }
-  });
+  );
 
   context.subscriptions.push(disposable);
   context.subscriptions.push(listKiroCommandsDisposable);
@@ -130,11 +136,15 @@ async function initializeModules(context: vscode.ExtensionContext): Promise<void
         outputChannel.appendLine(
           `  - ${editorId}: installed (${result.availableCommands?.length || 0} commands)`
         );
-        
+
         // Log all available commands for Kiro to help with debugging
-        if (editorId === 'kiro' && result.availableCommands && result.availableCommands.length > 0) {
+        if (
+          editorId === 'kiro' &&
+          result.availableCommands &&
+          result.availableCommands.length > 0
+        ) {
           outputChannel.appendLine(`    Available Kiro commands:`);
-          result.availableCommands.slice(0, 10).forEach(cmd => {
+          result.availableCommands.slice(0, 10).forEach((cmd) => {
             outputChannel.appendLine(`      - ${cmd}`);
           });
           if (result.availableCommands.length > 10) {
