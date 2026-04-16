@@ -422,13 +422,29 @@ npm run build
 
 ## Development Instructions
 
-### Running All Components
+### Quick Start - Run All Services
+
+Use the development script to start all services with one command:
+
+```bash
+./scripts/dev-all.sh
+```
+
+This will start:
+- Relay Server on http://localhost:8080
+- Mobile Client on http://localhost:8081
+
+See [scripts/README.md](scripts/README.md) for more options and troubleshooting.
+
+### Alternative - Using npm Workspaces
 
 Start all components in development mode:
 
 ```bash
 npm run dev
 ```
+
+**Note:** This only compiles TypeScript in watch mode. To actually run the services, see "Running Components Individually" below.
 
 ### Running Components Individually
 

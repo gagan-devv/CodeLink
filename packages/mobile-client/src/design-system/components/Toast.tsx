@@ -227,7 +227,7 @@ export const ToastContainer: React.FC = () => {
   }, []);
 
   return (
-    <View style={styles.container} pointerEvents="box-none">
+    <View style={[styles.container, styles.pointerEventsBoxNone]}>
       {toasts.map((toast) => (
         <Toast key={toast.id} message={toast} onDismiss={removeToast} />
       ))}
@@ -253,6 +253,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     zIndex: 9999,
+  },
+  pointerEventsBoxNone: {
+    pointerEvents: 'box-none',
   },
   toast: {
     flexDirection: 'row',

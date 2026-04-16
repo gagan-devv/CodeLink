@@ -50,8 +50,6 @@ export default defineConfig({
     },
     globals: true,
     testTimeout: 10000,
-    // Disable source map resolution to prevent loading TypeScript sources
-    sourcemap: false,
     // Use jsdom for React Native component tests
     environmentMatchGlobs: [
       ['tests/unit/mobile-client/**', 'jsdom']
@@ -60,18 +58,10 @@ export default defineConfig({
     server: {
       deps: {
         inline: [
-          'react-native',
           '@testing-library/react-native',
-        ],
-        // Don't externalize @testing-library/react-native so it gets transformed
-        external: []
+        ]
       }
-    },
-    // Explicitly exclude node_modules from transformation except those we inline
-    exclude: [
-      ...['node_modules/**'],
-      'tests/unit/mobile-client/components.test.tsx'
-    ]
+    }
   },
   resolve: {
     alias: {
@@ -81,6 +71,8 @@ export default defineConfig({
       // Resolve React from root node_modules (monorepo setup)
       'react': path.resolve(__dirname, './node_modules/react'),
       'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
+      // Explicitly resolve @testing-library/react-native from root node_modules
+      '@testing-library/react-native': path.resolve(__dirname, './node_modules/@testing-library/react-native/build/index.js')
     },
     conditions: ['import', 'module', 'browser', 'default'],
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json']

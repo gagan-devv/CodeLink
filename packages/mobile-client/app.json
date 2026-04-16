@@ -29,7 +29,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "relayServerUrl": "ws://localhost:3000"
+      "relayServerUrl": "http://localhost:8080"
     }
   }
 }

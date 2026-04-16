@@ -8,15 +8,23 @@
  */
 
 import { useMemo } from 'react';
-import type { StackNavigationOptions } from '@react-navigation/stack';
 import { supportsSwipeBack, getNavigationGestureConfig } from '../utils/platformAdaptations';
+
+interface PlatformNavigationOptions {
+  gestureEnabled: boolean;
+  gestureDirection: string;
+  animation: 'slide_from_right';
+  animationDuration: number;
+  animationTypeForReplace: 'push';
+  headerShown: boolean;
+}
 
 /**
  * Hook to get platform-specific navigation options
  *
  * @returns Navigation options configured for the current platform
  */
-export const usePlatformNavigation = (): Partial<StackNavigationOptions> => {
+export const usePlatformNavigation = (): PlatformNavigationOptions => {
   const navigationOptions = useMemo(() => {
     const gestureConfig = getNavigationGestureConfig();
 

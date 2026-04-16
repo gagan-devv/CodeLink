@@ -123,64 +123,68 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   };
 
   const labelText = getLabelText();
+  const shouldRenderLabel = labelText.length > 0;
 
-  return (
+  const trackElement = (
     <View
-      style={[styles.container, style]}
-      accessible={true}
-      accessibilityLabel={accessibilityLabel || `Progress: ${Math.round(clampedProgress)} percent`}
-      accessibilityRole="progressbar"
-      accessibilityValue={{
-        min: 0,
-        max: 100,
-        now: clampedProgress,
-      }}
+      style={[
+        styles.track,
+        {
+          height,
+          backgroundColor,
+          borderRadius: height / 2,
+        },
+      ]}
     >
-      {/* Progress bar */}
       <View
         style={[
-          styles.track,
+          styles.fill,
           {
-            height,
-            backgroundColor,
+            width: `${clampedProgress}%`,
+            backgroundColor: progressColor,
             borderRadius: height / 2,
           },
         ]}
-      >
-        <View
-          style={[
-            styles.fill,
-            {
-              width: `${clampedProgress}%`,
-              backgroundColor: progressColor,
-              borderRadius: height / 2,
-            },
-          ]}
-        />
-      </View>
-
-      {/* Optional label */}
-      {labelText && (
-        <Text
-          style={[
-            styles.label,
-            {
-              color: theme.colors.onSurfaceVariant,
-              fontFamily: theme.typography.fonts.label,
-              fontSize: theme.typography.sizes.labelSm,
-              fontWeight: String(theme.typography.weights.medium) as
-                | '400'
-                | '500'
-                | '600'
-                | '700'
-                | '800',
-            },
-          ]}
-        >
-          {labelText}
-        </Text>
-      )}
+      />
     </View>
+  );
+
+  const labelElement = shouldRenderLabel ? (
+    <Text
+      style={[
+        styles.label,
+        {
+          color: theme.colors.onSurfaceVariant,
+          fontFamily: theme.typography.fonts.label,
+          fontSize: theme.typography.sizes.labelSm,
+          fontWeight: String(theme.typography.weights.medium) as
+            | '400'
+            | '500'
+            | '600'
+            | '700'
+            | '800',
+        },
+      ]}
+    >
+      {labelText}
+    </Text>
+  ) : null;
+
+  return React.createElement(
+    View,
+    {
+      style: [styles.container, style],
+      accessible: true,
+      accessibilityLabel: accessibilityLabel || `Progress: ${Math.round(clampedProgress)} percent`,
+      accessibilityRole: 'progressbar',
+      accessibilityValue: {
+        min: 0,
+        max: 100,
+        now: clampedProgress,
+      },
+    },
+    trackElement,
+    labelElement
   );
 };
 

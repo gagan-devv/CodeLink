@@ -51,6 +51,17 @@ export class WebSocketClient {
     this.socket.on('connect', () => {
       this.isConnecting = false;
       this.reconnectAttempts = 0;
+      
+      // Send ping message to identify as extension client
+      const pingMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
+        timestamp: Date.now(),
+        type: 'ping',
+        source: 'extension',
+      };
+      this.socket!.emit('message', JSON.stringify(pingMessage));
+      console.log('[WebSocketClient] Sent ping message with source: extension');
+      
       this.flushMessageQueue();
 
       // Re-bind message handlers

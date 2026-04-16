@@ -18,6 +18,10 @@
       {
         "command": "codelink.hello",
         "title": "CodeLink: Hello World"
+      },
+      {
+        "command": "codelink.listKiroCommands",
+        "title": "CodeLink: List Kiro Commands"
       }
     ]
   },
@@ -42,9 +46,9 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
-    "@types/node": "^25.3.0",
+    "@types/node": "^20.0.0",
     "@types/vscode": "^1.80.0",
-    "typescript": "^5.0.0",
+    "typescript": "~5.9.2",
     "vitest": "^4.0.18"
   }
 }

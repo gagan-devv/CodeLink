@@ -6,6 +6,10 @@ dist/
 *.vsix
 .vscode
 .kiro
+.codex
+.env
+.env.*
+packages/mobile-client/.env
 
 # Test directory (centralized testing infrastructure)
 tests/

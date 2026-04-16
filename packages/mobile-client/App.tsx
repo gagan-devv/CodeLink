@@ -33,7 +33,12 @@ import {
 } from './src/hooks';
 
 // Config
-import { getConfig } from './src/config';
+import {
+  getConfig,
+  loadRelayServerUrlOverride,
+  saveRelayServerUrlOverride,
+  updateConfig,
+} from './src/config';
 
 // Design System
 import { useCustomFonts } from './src/design-system/typography/fontLoading';
@@ -50,7 +55,12 @@ import {
 /**
  * Main application content with navigation
  */
-const AppContent: React.FC = () => {
+interface AppContentProps {
+  relayServerUrl: string;
+  onRelayServerUrlChange: (url: string) => Promise<void>;
+}
+
+const AppContent: React.FC<AppContentProps> = ({ relayServerUrl, onRelayServerUrlChange }) => {
   const { status, error, socketManager, reconnect } = useConnection();
   const { theme, isDark } = useTheme();
   const { updateHistoryItem } = usePromptHistory();
@@ -72,16 +82,23 @@ const AppContent: React.FC = () => {
 
   // Set up message routing from SocketManager to handlers
   useEffect(() => {
+    console.log('[App] Setting up message routing and handlers');
+
     // Handle incoming messages
     const messageHandler = (message: unknown) => {
+      console.log('[App] Received message:', message);
+
       // Route INJECT_PROMPT_RESPONSE to PromptManager
       if (isInjectPromptResponse(message)) {
+        console.log('[App] Routing INJECT_PROMPT_RESPONSE to PromptManager');
         promptManager.handleResponse(message);
       }
 
       // Route SYNC_FULL_CONTEXT to DiffMessageHandler
       if (isSyncFullContextMessage(message)) {
-        diffHandler.handleMessage(message);
+        console.log('[App] Routing SYNC_FULL_CONTEXT to DiffMessageHandler');
+        const handled = diffHandler.handleMessage(message);
+        console.log('[App] DiffMessageHandler.handleMessage returned:', handled);
       }
     };
 
@@ -113,15 +130,22 @@ const AppContent: React.FC = () => {
       }, 4000);
     });
 
-    // Set up DiffMessageHandler state change listener
+    // Set up DiffMessageHandler state change listener with functional state update
     diffHandler.onStateChange((state) => {
-      setDiffState(state);
+      console.log('[App] DiffMessageHandler state changed:', state);
+      // Use functional state update to avoid stale closure issues
+      setDiffState(() => {
+        console.log('[App] Updating diffState with new state');
+        return state;
+      });
     });
 
     // Set up DiffMessageHandler error listener
     diffHandler.onError((error) => {
-      console.error('Diff handler error:', error);
+      console.error('[App] Diff handler error:', error);
     });
+
+    console.log('[App] Message routing and handlers setup complete');
   }, [socketManager, promptManager, diffHandler, currentPromptId, updateHistoryItem]);
 
   // Handle prompt submission
@@ -233,7 +257,7 @@ const AppContent: React.FC = () => {
 
   const SettingsScene: React.FC = () => (
     <View style={styles.scene}>
-      <Settings />
+      <Settings relayServerUrl={relayServerUrl} onRelayServerUrlChange={onRelayServerUrlChange} />
     </View>
   );
 
@@ -292,12 +316,33 @@ const AppContent: React.FC = () => {
  */
 export default function App() {
   const config = getConfig();
+  const [relayServerUrl, setRelayServerUrl] = useState(config.relayServerUrl);
+  const [isRelayConfigLoading, setIsRelayConfigLoading] = useState(true);
 
   // Load custom fonts
   const { fontsLoaded, fontError } = useCustomFonts();
 
+  useEffect(() => {
+    loadRelayServerUrlOverride()
+      .then((savedRelayServerUrl) => {
+        if (savedRelayServerUrl) {
+          updateConfig({ relayServerUrl: savedRelayServerUrl });
+          setRelayServerUrl(savedRelayServerUrl);
+        }
+      })
+      .finally(() => {
+        setIsRelayConfigLoading(false);
+      });
+  }, []);
+
+  const handleRelayServerUrlChange = async (nextRelayServerUrl: string) => {
+    await saveRelayServerUrlOverride(nextRelayServerUrl);
+    updateConfig({ relayServerUrl: nextRelayServerUrl });
+    setRelayServerUrl(nextRelayServerUrl);
+  };
+
   // Show loading screen while fonts are loading
-  if (!fontsLoaded) {
+  if (!fontsLoaded || isRelayConfigLoading) {
     return <AppLoading message="Loading fonts..." />;
   }
 
@@ -310,8 +355,11 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <PaperProvider>
-          <ConnectionStatusProvider serverUrl={config.relayServerUrl}>
-            <AppContent />
+          <ConnectionStatusProvider serverUrl={relayServerUrl}>
+            <AppContent
+              relayServerUrl={relayServerUrl}
+              onRelayServerUrlChange={handleRelayServerUrlChange}
+            />
           </ConnectionStatusProvider>
         </PaperProvider>
       </ThemeProvider>

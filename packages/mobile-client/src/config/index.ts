@@ -1,4 +1,9 @@
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export const RELAY_SERVER_URL_STORAGE_KEY = '@codelink/relay_server_url';
+// Use http:// for Socket.IO client to connect to the relay server reliably
+export const DEFAULT_RELAY_SERVER_URL = 'http://localhost:8080';
 
 /**
  * Application configuration interface
@@ -23,6 +28,11 @@ export interface AppConfig {
  * Priority: Environment variable > app.json extra > default
  */
 const getRelayServerUrl = (): string => {
+  // Expo statically exposes EXPO_PUBLIC_* vars to app code
+  if (process.env.EXPO_PUBLIC_RELAY_SERVER_URL) {
+    return process.env.EXPO_PUBLIC_RELAY_SERVER_URL;
+  }
+
   // Check for environment variable (for development/testing)
   if (process.env.RELAY_SERVER_URL) {
     return process.env.RELAY_SERVER_URL;
@@ -35,7 +45,7 @@ const getRelayServerUrl = (): string => {
   }
 
   // Fallback to default
-  return 'ws://localhost:8080';
+  return DEFAULT_RELAY_SERVER_URL;
 };
 
 /**
@@ -72,6 +82,30 @@ export const defaultConfig: AppConfig = {
  */
 export const getConfig = (): AppConfig => {
   return defaultConfig;
+};
+
+/**
+ * Load any user-saved relay URL override from AsyncStorage.
+ */
+export const loadRelayServerUrlOverride = async (): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(RELAY_SERVER_URL_STORAGE_KEY);
+  } catch (error) {
+    console.error('Failed to load relay server URL override:', error);
+    return null;
+  }
+};
+
+/**
+ * Persist a user-saved relay URL override for this device.
+ */
+export const saveRelayServerUrlOverride = async (url: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(RELAY_SERVER_URL_STORAGE_KEY, url);
+  } catch (error) {
+    console.error('Failed to save relay server URL override:', error);
+    throw error;
+  }
 };
 
 /**

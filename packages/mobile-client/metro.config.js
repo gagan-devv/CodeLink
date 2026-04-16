@@ -15,21 +15,7 @@ config.resolver.nodeModulesPaths = [
     path.resolve(workspaceRoot, 'node_modules'),
 ];
 
-// 3. Force Metro to resolve (sub)dependencies only from the `nodeModulesPaths`
-config.resolver.disableHierarchicalLookup = true;
-
-// 4. Disable HMR for web to avoid errors
-config.server = {
-  ...config.server,
-  enhanceMiddleware: (middleware) => {
-    return (req, res, next) => {
-      // Disable HMR for web platform
-      if (req.url && req.url.includes('platform=web')) {
-        req.url = req.url.replace(/&hot=true/g, '&hot=false');
-      }
-      return middleware(req, res, next);
-    };
-  },
-};
+// 3. Keep hierarchical lookup enabled so package-local nested dependencies
+// (for example Expo's own pretty-format version) resolve correctly.
 
 module.exports = config;

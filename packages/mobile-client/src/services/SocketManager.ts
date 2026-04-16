@@ -80,11 +80,16 @@ export class SocketManagerImpl implements SocketManager {
         });
 
         this.socket.on('message', (data: unknown) => {
+          console.log('[SocketManager] Received message event, data type:', typeof data);
+          console.log('[SocketManager] Raw data:', data);
+          console.log('[SocketManager] Number of registered handlers:', this.messageHandlers.length);
           try {
             // Parse JSON string from relay server
             const message = JSON.parse(data as string) as ProtocolMessage;
+            console.log('[SocketManager] Parsed message:', message);
             this.notifyMessageHandlers(message);
           } catch (error) {
+            console.error('[SocketManager] Error parsing message:', error);
             const err = error instanceof Error ? error : new Error('Message parsing failed');
             this.notifyErrorHandlers(err);
           }
@@ -235,8 +240,10 @@ export class SocketManagerImpl implements SocketManager {
    * Notifies all registered message handlers
    */
   private notifyMessageHandlers(message: ProtocolMessage): void {
-    this.messageHandlers.forEach((handler) => {
+    console.log('[SocketManager] Notifying', this.messageHandlers.length, 'message handlers');
+    this.messageHandlers.forEach((handler, index) => {
       try {
+        console.log('[SocketManager] Calling handler', index);
         handler(message);
       } catch (error) {
         console.error('Error in message handler:', error);

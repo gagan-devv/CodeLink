@@ -9,7 +9,7 @@
  */
 
 import React, { type ReactNode } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 /**
@@ -17,7 +17,7 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
  */
 export interface ResponsiveContainerProps {
   children: ReactNode;
-  style?: string | undefined;
+  style?: StyleProp<ViewStyle>;
 }
 
 /**

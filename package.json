@@ -8,6 +8,8 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "dev": "npm run dev --workspaces --if-present",
+    "sim:mobile": "node scripts/test-mobile-client.js",
+    "sim:ext": "node scripts/send-diff-as-extension.js",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
@@ -38,7 +40,7 @@
     "eslint": "^8.0.0",
     "fast-check": "^4.6.0",
     "prettier": "^3.0.0",
-    "typescript": "^5.0.0",
+    "typescript": "~5.9.2",
     "vitest": "^4.1.0"
   },
   "overrides": {

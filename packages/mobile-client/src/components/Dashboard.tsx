@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, FlatList, RefreshControl } from 'react-na
 import { useDesignSystem } from '../design-system';
 import { Text } from '../design-system/typography/Text';
 import { Card } from '../design-system/components/Card';
-import { Icon } from '../design-system/components/Icon';
+import { Icon, type IconName } from '../design-system/components/Icon';
 import { Button } from '../design-system/components/Button';
 import { ProgressBar } from '../design-system/components/ProgressBar';
 import { StatusIndicator, ConnectionStatus } from '../design-system/components/StatusIndicator';
@@ -134,7 +134,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   /**
    * Get activity type icon (Requirement 3.7)
    */
-  const getActivityIcon = (type: string): string => {
+  const getActivityIcon = (type: ActivityItem['type']): IconName => {
     switch (type) {
       case 'commit':
         return 'check-circle';
@@ -258,7 +258,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </Card>
 
             {/* Small cards: Latency and Load (Requirement 3.3) */}
-            <View style={[styles.bentoColumn, isLargeScreen && styles.bentoColumnSmall]}>
+            <View style={[styles.bentoColumn, layout.isLargeScreen && styles.bentoColumnSmall]}>
               <Card variant="low" padding="md" style={styles.bentoCard}>
                 <Text
                   variant="label-sm"

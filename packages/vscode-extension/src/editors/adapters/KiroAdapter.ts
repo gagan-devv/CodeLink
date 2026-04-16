@@ -55,6 +55,9 @@ export class KiroAdapter implements IEditorAdapter {
       const commands = await vscode.commands.getCommands(true);
       const kiroCommands = commands.filter((cmd) => cmd.startsWith('kiro.'));
 
+      // Log all Kiro commands for debugging
+      console.log('[KiroAdapter] Available Kiro commands:', kiroCommands);
+
       // We are always installed since we ARE Kiro
       return {
         isInstalled: true,
@@ -72,8 +75,14 @@ export class KiroAdapter implements IEditorAdapter {
   /**
    * Inject a prompt into Kiro's chat panel.
    *
-   * Uses Kiro's public command to send a message to the chat interface.
-   * The command name follows the pattern used by other AI editors.
+   * IMPORTANT: Kiro currently does not expose a general-purpose command for
+   * sending arbitrary messages to the chat. The only chat-related command
+   * available is `kiro.chatToFixPBT` which is specific to PBT fixes.
+   *
+   * This implementation uses a clipboard-based workaround:
+   * 1. Copies the prompt to clipboard
+   * 2. Shows a notification to the user
+   * 3. User can paste the prompt into Kiro chat manually
    *
    * Safety: Uses public VS Code command API. Falls back gracefully if
    * the command doesn't exist or fails to execute.
@@ -83,24 +92,43 @@ export class KiroAdapter implements IEditorAdapter {
    */
   async injectPrompt(prompt: string): Promise<PromptInjectionResult> {
     try {
-      // Use Kiro's public command to send a message
-      // This command should be registered by the Kiro extension
-      await vscode.commands.executeCommand('kiro.chat.sendMessage', {
-        message: prompt,
-      });
+      // Copy prompt to clipboard
+      await vscode.env.clipboard.writeText(prompt);
+      
+      // Show notification to user
+      const action = await vscode.window.showInformationMessage(
+        'Prompt copied to clipboard. Paste it into Kiro chat to continue.',
+        'Open Chat',
+        'Dismiss'
+      );
+      
+      // If user clicks "Open Chat", try to focus the chat (if possible)
+      if (action === 'Open Chat') {
+        // Try to execute any command that might open/focus the chat
+        // Since there's no direct chat command, we'll try the PBT command
+        // which at least opens the chat interface
+        try {
+          await vscode.commands.executeCommand('kiro.chatToFixPBT');
+        } catch {
+          // Ignore error if command fails
+        }
+      }
 
       return {
         success: true,
-        commandUsed: 'kiro.chat.sendMessage',
+        commandUsed: 'clipboard-workaround',
       };
     } catch (error) {
-      // Safety: Never throw, always return error result with context
+      // Clipboard approach failed, return error
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       return {
         success: false,
-        error: `Failed to inject prompt into Kiro: ${errorMessage}`,
-        commandUsed: 'kiro.chat.sendMessage',
+        error:
+          `Kiro does not expose a command for sending chat messages. ` +
+          `Attempted clipboard workaround failed: ${errorMessage}. ` +
+          `Please manually paste the prompt into Kiro chat.`,
+        commandUsed: 'clipboard-workaround (failed)',
       };
     }
   }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { SocketManager, SocketManagerImpl } from '../services/SocketManager';
+import { DEFAULT_RELAY_SERVER_URL } from '../config';
 
 /**
  * Connection status type
@@ -33,8 +34,7 @@ export interface ConnectionStatusProviderProps {
 /**
  * Default relay server URL
  */
-// const DEFAULT_SERVER_URL = process.env.RELAY_SERVER_URL || 'http://localhost:8080';
-const DEFAULT_SERVER_URL = 'http://localhost:8080';
+const DEFAULT_SERVER_URL = DEFAULT_RELAY_SERVER_URL;
 
 /**
  * ConnectionStatusProvider manages global connection state and provides
@@ -48,6 +48,11 @@ export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> =
   const [error, setError] = useState<Error | null>(null);
   const socketManager = useRef<SocketManager>(new SocketManagerImpl());
   const serverUrlRef = useRef(serverUrl);
+  const hasHandledInitialServerUrl = useRef(false);
+
+  useEffect(() => {
+    serverUrlRef.current = serverUrl;
+  }, [serverUrl]);
 
   useEffect(() => {
     const manager = socketManager.current;
@@ -56,6 +61,21 @@ export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> =
     manager.onConnect(() => {
       setStatus('connected');
       setError(null);
+      
+      // Send ping message to identify as mobile client
+      try {
+        const pingMessage = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: Date.now(),
+          type: 'ping' as const,
+          source: 'mobile' as const,
+        };
+        console.log('[useConnection] Sending ping message to identify as mobile client:', pingMessage);
+        manager.sendMessage(pingMessage);
+      } catch (err) {
+        console.error('[useConnection] Failed to send ping message:', err);
+      }
+      
       // Requirement 14.11: Announce connection state changes
       AccessibilityInfo.announceForAccessibility('Connected to relay server');
     });
@@ -100,6 +120,30 @@ export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> =
     };
   }, []);
 
+  useEffect(() => {
+    const manager = socketManager.current;
+
+    if (!hasHandledInitialServerUrl.current) {
+      hasHandledInitialServerUrl.current = true;
+      return;
+    }
+
+    setStatus('connecting');
+    setError(null);
+    AccessibilityInfo.announceForAccessibility('Reconnecting to relay server');
+    manager.disconnect();
+    manager.connect(serverUrl).catch((err) => {
+      console.error('Relay server URL update failed:', {
+        error: err.message,
+        stack: err.stack,
+        timestamp: new Date().toISOString(),
+        serverUrl,
+      });
+      setError(err);
+      setStatus('disconnected');
+    });
+  }, [serverUrl]);
+
   /**
    * Manually trigger reconnection
    */
@@ -108,6 +152,7 @@ export const ConnectionStatusProvider: React.FC<ConnectionStatusProviderProps> =
     setError(null);
     // Requirement 14.11: Announce loading states
     AccessibilityInfo.announceForAccessibility('Reconnecting to relay server');
+    socketManager.current.disconnect();
     socketManager.current.connect(serverUrlRef.current).catch((err) => {
       // Log network errors (Requirement 17.11)
       console.error('Reconnection failed:', {

@@ -97,7 +97,7 @@ export const PromptTemplates: React.FC<PromptTemplatesProps> = ({ onSelectTempla
             <Card.Content>
               <View style={styles.templateHeader}>
                 <Text variant="titleSmall">{template.title}</Text>
-                <Chip size="small">{template.category}</Chip>
+                <Chip compact>{template.category}</Chip>
               </View>
               <Text variant="bodySmall" style={styles.description}>
                 {template.description}
