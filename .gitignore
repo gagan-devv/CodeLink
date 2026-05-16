@@ -56,3 +56,7 @@ packages/mobile/dist/
 
 # Go workspace sum
 go.work.sum
+
+# RSA 
+dev-private.pem
+dev-public.pem
