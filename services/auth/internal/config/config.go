@@ -12,16 +12,18 @@ type Config struct {
 	HMACSecret       string
 	JWTPrivateKeyPEM string
 	JWTIssuer        string
+	RelayWSS         string
 }
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		Port: getEnv("AUTH_PORT", "8081"),
-		PostgresURL: os.Getenv("POSTGRES_URL"),
-		RedisURL: os.Getenv("REDIS_URL"),
-		HMACSecret: os.Getenv("AUTH_HMAC_SECRET"),
+		Port:             getEnv("AUTH_PORT", "8081"),
+		PostgresURL:      os.Getenv("POSTGRES_URL"),
+		RedisURL:         os.Getenv("REDIS_URL"),
+		HMACSecret:       os.Getenv("AUTH_HMAC_SECRET"),
 		JWTPrivateKeyPEM: os.Getenv("AUTH_PRIVATE_KEY_PEM"),
-		JWTIssuer: getEnv("AUTH_JWT_ISSUER", "auth.codelink.io"),
+		JWTIssuer:        getEnv("AUTH_JWT_ISSUER", "auth.codelink.io"),
+		RelayWSS: getEnv("RELAY_WSS_URL", "ws://localhost:8082/ws"),
 	}
 	if err := cfg.validate(); err != nil {
 		return nil, err
