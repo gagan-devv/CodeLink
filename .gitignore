@@ -36,3 +36,23 @@ CI_CD_IMPROVEMENTS_SUMMARY.md
 
 # DESIGN FILES
 design/
+# Build artifacts
+coverage/
+logs/
+*.tsbuildinfo
+
+# Go binaries
+services/auth/bin/
+services/relay/bin/
+
+# Env files
+infra/.env
+*.pem
+
+# Expo / React Native
+packages/mobile/.expo/
+packages/mobile/node_modules/
+packages/mobile/dist/
+
+# Go workspace sum
+go.work.sum

@@ -1,31 +1,32 @@
 {
   "name": "codelink",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/protocol",
+    "packages/vscode-extension",
+    "packages/mobile"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "dev": "npm run dev --workspaces --if-present",
-    "lint": "eslint . --ext .ts,.tsx",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+
+    "lint": "eslint . --ext .ts,.tsx --ignore-path .eslintignore",
+    "lint:fix": "eslint . --ext .ts,.tsx --ignore-path .eslintignore --fix",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
-    "typecheck": "npm run typecheck:protocol && npm run typecheck:relay && npm run typecheck:vscode",
+
+    "typecheck": "npm run typecheck:protocol && npm run typecheck:vscode && npm run typecheck:mobile",
     "typecheck:protocol": "cd packages/protocol && tsc --noEmit",
-    "typecheck:relay": "cd packages/relay-server && tsc --noEmit",
     "typecheck:vscode": "cd packages/vscode-extension && tsc --noEmit",
-    "typecheck:mobile": "cd packages/mobile-client && tsc --noEmit",
+    "typecheck:mobile": "cd packages/mobile && tsc --noEmit",
+
     "test": "vitest run",
-    "test:unit": "vitest run tests/unit",
-    "test:integration": "vitest run tests/integration",
-    "test:property": "vitest run tests/property",
-    "test:performance": "vitest run tests/performance",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ci": "vitest run --coverage --reporter=verbose",
-    "verify:coverage": "node tests/setup/test-coverage-formats.js",
+    "test:go": "go test ./services/...",
+    "test:go:verbose": "go test -v ./services/...",
+
     "precommit": "npm run lint && npm run typecheck && npm run format:check"
   },
   "devDependencies": {
@@ -34,17 +35,9 @@
     "@typescript-eslint/parser": "^6.0.0",
     "@vitest/coverage-v8": "^4.1.0",
     "@vitest/ui": "^4.1.0",
-    "babel-preset-expo": "^54.0.10",
     "eslint": "^8.0.0",
-    "fast-check": "^4.6.0",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0",
     "vitest": "^4.1.0"
-  },
-  "overrides": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "@types/react": "19.0.12",
-    "@types/react-dom": "19.0.2"
   }
 }
