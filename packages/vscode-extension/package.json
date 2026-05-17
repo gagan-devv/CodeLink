@@ -1,33 +1,40 @@
 {
   "name": "codelink-extension",
   "displayName": "CodeLink",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "publisher": "codelink",
-  "engines": {
-    "vscode": "^1.80.0"
-  },
-  "categories": [
-    "Other"
-  ],
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
   "main": "./dist/extension.js",
-  "activationEvents": [
-    "*"
-  ],
+  "activationEvents": ["onStartupFinished"],
   "contributes": {
     "commands": [
       {
-        "command": "codelink.hello",
-        "title": "CodeLink: Hello World"
+        "command": "codelink.startPairing",
+        "title": "CodeLink: Pair Mobile Device"
+      },
+      {
+        "command": "codelink.revokeSession",
+        "title": "CodeLink: Revoke Mobile Session"
+      },
+      {
+        "command": "codelink.showStatus",
+        "title": "CodeLink: Show Connection Status"
       }
-    ]
-  },
-  "configuration": {
-    "title": "CodeLink",
-    "properties": {
-      "codelink.relayServerUrl": {
-        "type": "string",
-        "default": "http://localhost:8080",
-        "description": "URL of the CodeLink Relay Server"
+    ],
+    "configuration": {
+      "title": "CodeLink",
+      "properties": {
+        "codelink.authServiceUrl": {
+          "type": "string",
+          "default": "http://localhost:8081",
+          "description": "URL of the CodeLink Auth Service"
+        },
+        "codelink.relayServiceUrl": {
+          "type": "string",
+          "default": "ws://localhost:8082",
+          "description": "WebSocket URL of the CodeLink Relay Service"
+        }
       }
     }
   },
@@ -38,12 +45,17 @@
   },
   "dependencies": {
     "@codelink/protocol": "*",
+    "diff-match-patch": "^1.0.5",
+    "qrcode": "^1.5.4",
     "simple-git": "^3.25.0",
-    "socket.io-client": "^4.8.3"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/node": "^25.3.0",
+    "@types/diff-match-patch": "^1.0.36",
+    "@types/node": "^20.0.0",
+    "@types/qrcode": "^1.5.5",
     "@types/vscode": "^1.80.0",
+    "@types/ws": "^8.5.13",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
   }
