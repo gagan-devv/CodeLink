@@ -18,7 +18,7 @@ var ErrSessionNotFound = errors.New("sessoin not found")
 const (
 	pendingTTL = 90 * time.Second
 	activeTTL  = 8 * time.Hour
-	revokedTTL = 30 * time.Second
+	revokedTTL = 2 * time.Minute
 )
 
 type redisSession struct {
