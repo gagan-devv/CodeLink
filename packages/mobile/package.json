@@ -9,9 +9,11 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@codelink/protocol": "^2.0.0",
     "@expo/metro-runtime": "~55.0.11",
     "babel-preset-expo": "^55.0.21",
     "diff-match-patch": "^1.0.5",
+    "eas-cli": "^18.13.1",
     "expo": "~55.0.24",
     "expo-camera": "~55.0.18",
     "expo-router": "~55.0.14",

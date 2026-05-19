@@ -6,7 +6,11 @@
     "scheme": "codelink",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "plugins": [
       "expo-router",
       "expo-secure-store",
@@ -17,10 +21,24 @@
         }
       ]
     ],
-    "ios": { "bundleIdentifier": "io.codelink.app" },
+    "ios": {
+      "bundleIdentifier": "io.codelink.app"
+    },
     "android": {
       "package": "io.codelink.app",
-      "adaptiveIcon": { "backgroundColor": "#0a0a0a" }
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0a"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fbcaaefe-5e2b-40fd-8e50-3c4f846a52fd"
+      }
     }
   }
 }

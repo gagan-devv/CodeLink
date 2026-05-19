@@ -3,10 +3,16 @@
   "displayName": "CodeLink",
   "version": "2.0.0",
   "publisher": "codelink",
-  "engines": { "vscode": "^1.80.0" },
-  "categories": ["Other"],
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "main": "./dist/extension.js",
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "commands": [
       {
@@ -44,7 +50,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@codelink/protocol": "*",
+    "@codelink/protocol": "^2.0.0",
     "diff-match-patch": "^1.0.5",
     "qrcode": "^1.5.4",
     "simple-git": "^3.25.0",
