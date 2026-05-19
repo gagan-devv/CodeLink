@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import * as crypto from 'crypto';
+import { buildEnvelope, MessageType } from '@codelink/protocol'
 
 interface WsClientOptions {
   onMessage: (type: string, payload: unknown, id: string) => void;
@@ -69,15 +70,8 @@ export class WsClient {
         });
     }
 
-    send(type: string, payload: unknown): void {
-        const envelope = JSON.stringify({
-            v: 1,
-            id: crypto.randomUUID(),
-            ts: Date.now(),
-            seq: ++this.outSeq,
-            type,
-            payload,
-        });
+    send(type: MessageType, payload: unknown): void {
+        const envelope = JSON.stringify(buildEnvelope(type as any, payload as any));
 
         if (this.ws?.readyState === WebSocket.OPEN) {
             this.ws.send(envelope);

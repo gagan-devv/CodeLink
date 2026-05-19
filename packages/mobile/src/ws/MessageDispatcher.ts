@@ -4,6 +4,12 @@ import { useSessionStore }   from '../store/useSessionStore';
 import { usePromptStore }    from '../store/usePromptStore';
 import { clearStoredSession } from '../api/authClient';
 import { wsManager }         from './WsManager';
+import {
+  isFileSnapshotPayload,
+  isFilePatchPayload,
+  isInjectPromptPayload,
+  parseEnvelope
+} from '@codelink/protocol'
 
 export function handleMessage(type: string, payload: unknown, id: string): void {
   switch (type) {
@@ -14,11 +20,8 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
     }
 
     case 'FILE_SNAPSHOT': {
-      const p = payload as {
-        fileName: string; content: string;
-        encoding: 'utf8' | 'gzip+base64';
-        seq: number; isDirty: boolean;
-      };
+      if (!isFileSnapshotPayload(payload)) { return; }
+      const p = payload;
       const content = p.encoding === 'utf8'
         ? p.content
         : decodeGzip(p.content);
@@ -30,10 +33,8 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
     }
 
     case 'FILE_PATCH': {
-      const p = payload as {
-        fileName: string; patches: string;
-        fromSeq: number; toSeq: number; isDirty: boolean;
-      };
+      if (!isFilePatchPayload(payload)) { return; }
+      const p = payload;
       const result = patchEngine.applyPatch(p.fileName, p.patches, p.fromSeq, p.toSeq);
 
       if ('gap' in result) {

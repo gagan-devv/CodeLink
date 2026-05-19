@@ -1,4 +1,4 @@
-// React Native exposes WebSocket globally — no import needed.
+import { buildEnvelope, MessageType } from '@codelink/protocol';
 
 type MessageHandler    = (type: string, payload: unknown, id: string) => void;
 type ConnectionHandler = () => void;
@@ -49,15 +49,9 @@ class WsManagerClass {
     this.ws.onerror = () => { this.ws?.close(); };
   }
 
-  send(type: string, payload: unknown): void {
+  send(type: MessageType, payload: unknown): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        v:   1,
-        id:  Math.random().toString(36).slice(2),
-        ts:  Date.now(),
-        type,
-        payload,
-      }));
+      this.ws.send(JSON.stringify(buildEnvelope(type as any, payload as any)));
     }
   }
 

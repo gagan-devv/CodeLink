@@ -14,6 +14,7 @@ import { SnapshotEngine } from './diff/SnapshotEngine';
 import { PatchEncoder } from './diff/PatchEncoder';
 import { error } from 'node:console';
 import { PairingWebviewPanel } from './pairing/PairingWebviewPanel';
+import { isInjectPromptPayload, isSnapshotRequestPayload } from '@codelink/protocol'
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     
@@ -54,6 +55,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         onMessage: async (type, payload, id) => {
             switch (type) {
                 case 'SNAPSHOT_REQUEST': {
+                    const p = payload as { fileName: string; reason: string };
+                    if (!isSnapshotRequestPayload(payload)) { return; }
                     const { fileName } = payload as { fileName: string };
                     await fileWatcher.handleSnapshotRequest(fileName);
                     break;
@@ -61,6 +64,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 case 'PATCH_ACK':
                     break;
                 case 'INJECT_PROMPT': {
+                    if (!isInjectPromptPayload(payload)) { return; }
                     const { prompt } = payload as { prompt: string };
                     const adapter = await registry.getBestAdapter();
                     if (!adapter) {
