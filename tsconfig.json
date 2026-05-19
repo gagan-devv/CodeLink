@@ -4,6 +4,7 @@
     "outDir": "./dist",
     "rootDir": ".",
     "jsx": "react",
+    "ignoreDeprecations": "6.0",
     "types": ["vitest/globals", "node"],
     "paths": {
       "@testing-library/react-native": [
