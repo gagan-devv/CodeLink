@@ -12,7 +12,6 @@ import { FileWatcher } from './diff/FileWatcher';
 import { GitIntegrationModuleImpl } from './git/GitIntegrationModule';
 import { SnapshotEngine } from './diff/SnapshotEngine';
 import { PatchEncoder } from './diff/PatchEncoder';
-import { error } from 'node:console';
 import { PairingWebviewPanel } from './pairing/PairingWebviewPanel';
 import { isInjectPromptPayload, isSnapshotRequestPayload } from '@codelink/protocol'
 
@@ -55,7 +54,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         onMessage: async (type, payload, id) => {
             switch (type) {
                 case 'SNAPSHOT_REQUEST': {
-                    const p = payload as { fileName: string; reason: string };
                     if (!isSnapshotRequestPayload(payload)) { return; }
                     const { fileName } = payload as { fileName: string };
                     await fileWatcher.handleSnapshotRequest(fileName);

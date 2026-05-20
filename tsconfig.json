@@ -4,7 +4,6 @@
     "outDir": "./dist",
     "rootDir": ".",
     "jsx": "react",
-    "ignoreDeprecations": "6.0",
     "types": ["vitest/globals", "node"],
     "paths": {
       "@testing-library/react-native": [
@@ -20,5 +19,10 @@
     "packages/vscode-extension/src/**/*",
     "packages/mobile-client/src/**/*"
   ],
-  "exclude": ["node_modules/@testing-library/react-native/src"]
+  "exclude": ["node_modules/@testing-library/react-native/src"],
+  "files": [],
+  "references": [
+    { "path": "./packages/protocol" },
+    { "path": "./packages/vscode-extension" }
+  ]
 }

@@ -6,8 +6,7 @@ import { joinSession, getDeviceId } from '../src/api/authClient';
 import { wsManager }       from '../src/ws/WsManager';
 import { handleMessage }   from '../src/ws/MessageDispatcher';
 import { useSessionStore } from '../src/store/useSessionStore';
-
-const AUTH_URL = 'http://localhost:8081'; // Change to your deployed URL
+import { AUTH_URL } from '../src/api/config';
 
 export default function PairingScreen() {
   const [permission, requestPermission] = useCameraPermissions();

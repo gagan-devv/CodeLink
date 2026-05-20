@@ -75,84 +75,137 @@ A shared TypeScript package that defines the message types and interfaces used f
 │                    │   - Broadcast to mobile  │                         │
 │                    └──────────────────────────┘                         │
 └──────────────────────────────────────────────────────┬──────────────────┘
-                                                       │
-                                                       │ Forward to all
-                                                       │ mobile clients
-                                                       ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          Mobile Client (PWA)                             │
-│                                                                          │
-│  ┌──────────────────┐    ┌─────────────────────────────────────┐      │
-│  │ WebSocket Client │───▶│         Diff Viewer                  │      │
-│  │ - Receive msg    │    │ - Render unified diff                │      │
-│  │ - Parse payload  │    │ - Show dirty indicator               │      │
-│  │ - Handle errors  │    │ - Display timestamp                  │      │
-│  └──────────────────┘    │ - Mobile-optimized layout            │      │
-│                          └─────────────────────────────────────┘      │
-└─────────────────────────────────────────────────────────────────────────┘
+                                                      # CodeLink
 
-External Dependencies:
-┌─────────────────┐         ┌─────────────────┐
-│ Git Repository  │         │  File System    │
-│ - HEAD content  │         │ - Current files │
-└─────────────────┘         └─────────────────┘
-        ▲                            ▲
-        │                            │
-        └────────────────────────────┘
-              Used by VS Code Extension
-```
+                                                      CodeLink enables AI-assisted code editing via a mobile interface while keeping editing and approvals local to the developer's machine.
 
-**Data Flow**:
+                                                      This README has been updated to reflect the actual repository layout and to provide clear local and production deployment guidance.
 
-1. User edits file in VS Code
-2. File Watcher detects change (after 1000ms debounce)
-3. Git Integration Module fetches HEAD version from Git repository
-4. Git Integration Module reads current file from disk
-5. Diff Generator compares HEAD vs current and creates FileContextPayload
-6. WebSocket Client sends SYNC_FULL_CONTEXT message to Relay Server
-7. Relay Server broadcasts message to all connected Mobile Clients
-8. Mobile Client receives message and renders diff in Diff Viewer
+                                                      **Repo layout (important folders)**
+                                                      - `services/auth` — Auth microservice (Go)
+                                                      - `services/relay` — Relay websocket service (Go)
+                                                      - `infra/docker-compose.yml` — local dev orchestration (Postgres, Redis, auth, relay)
+                                                      - `packages/mobile` — Expo mobile app / PWA (client)
+                                                      - `packages/vscode-extension` — VS Code extension
+                                                      - `packages/protocol` — Shared TypeScript protocol package (library)
 
-## Core Principles
+                                                      **High-level data flow**
 
-- **No Cloud IDE**: All code editing happens in your local VS Code instance
-- **No Repository Sync**: No automatic syncing or pushing to remote repositories
-- **Human Approval Required**: All code changes must be explicitly approved by the developer
-- **Unified Diff as Primary UI**: Code changes are presented as unified diffs for easy review
+                                                      1. The VS Code extension produces diffs and/or prompt injection messages.
+                                                      2. The extension connects to the relay service (WebSocket) and authenticates using tokens issued by the auth service.
+                                                      3. The relay routes messages between the extension (host) and mobile clients.
+                                                      4. The mobile client connects to the relay and displays diffs / allows prompt injection.
 
-## Features
+                                                      ## Components & how to deploy them
 
-### Editor Adapter System
+                                                      **Auth service** (`services/auth`)
+                                                      - Language: Go
+                                                      - Container: `services/auth/Dockerfile`
+                                                      - Default HTTP port: `8081`
+                                                      - Required env vars (must be set in production):
+                                                        - `POSTGRES_URL` — e.g. `postgres://user:pass@host:5432/db`
+                                                        - `REDIS_URL` — e.g. `redis://host:6379`
+                                                        - `AUTH_HMAC_SECRET` — at least 32 bytes
+                                                        - `AUTH_PRIVATE_KEY_PEM` — RSA private key PEM for signing JWTs
+                                                        - optional: `AUTH_JWT_ISSUER`, `AUTH_PORT`, `RELAY_WSS_URL`
 
-CodeLink integrates with multiple AI code editors through a capability-driven adapter system. This allows you to send prompts from your mobile device to any supported AI editor running in VS Code.
+                                                      **Relay service** (`services/relay`)
+                                                      - Language: Go
+                                                      - Container: `services/relay/Dockerfile`
+                                                      - Default HTTP / WS port: `8082`
+                                                      - Required env vars:
+                                                        - `REDIS_URL`
+                                                        - `AUTH_PUBLIC_KEY_PEM` — RSA public key PEM for validating tokens issued by auth
+                                                        - optional: `AUTH_JWT_ISSUER`, `RELAY_PORT`
 
-#### Supported Editors
+                                                      **Database & cache**
+                                                      - PostgreSQL and Redis are used by the auth and relay services. For local dev the quick option is to use `infra/docker-compose.yml`.
 
-| Editor          | Prompt Injection | Chat History | Token Streaming | Diff Artifacts | Sync Level   |
-| --------------- | ---------------- | ------------ | --------------- | -------------- | ------------ |
-| **Continue**    | ✅               | ✅           | ✅              | ✅             | Full         |
-| **Kiro**        | ✅               | ✅           | ✅              | ✅             | Partial      |
-| **Cursor**      | ✅               | ❌           | ❌              | ❌             | Control-Only |
-| **Antigravity** | ✅               | ❌           | ❌              | ❌             | Control-Only |
+                                                      **Mobile client** (`packages/mobile`)
+                                                      - Expo app (PWA + native builds)
+                                                      - Configurable via env:
+                                                        - `EXPO_PUBLIC_AUTH_URL` (default `http://localhost:8081`)
+                                                        - `EXPO_PUBLIC_RELAY_URL` (default `ws://localhost:8082`)
+                                                      - Run locally with Expo for debugging or build via EAS for production
 
-#### How It Works
+                                                      **VS Code extension** (`packages/vscode-extension`)
+                                                      - Built with TypeScript and packaged as a VSIX for installation.
+                                                      - Extension settings:
+                                                        - `codelink.authServiceUrl` (default `http://localhost:8081`)
+                                                        - `codelink.relayServiceUrl` (default `ws://localhost:8082`)
 
-The Editor Adapter System automatically detects which AI editors are installed in your VS Code environment and selects the best available option based on capabilities:
 
-```
-Mobile Client (send prompt)
-    ↓
-Relay Server (route message)
-    ↓
-VS Code Extension (receive INJECT_PROMPT)
-    ↓
-Editor Registry (select best adapter)
-    ↓
-Editor Adapter (inject via VS Code command)
-    ↓
-AI Editor (display prompt in chat panel)
-```
+                                                      ## Local development (recommended quickstart)
 
+                                                      This repo includes a docker-compose file (`infra/docker-compose.yml`) that will start Postgres, Redis, the auth service and the relay service for local testing.
+
+                                                      From the repo root:
+
+                                                      ```bash
+                                                      # build and start backend services (postgres, redis, auth, relay)
+                                                      docker compose -f infra/docker-compose.yml up --build
+                                                      ```
+
+                                                      After compose is up:
+
+                                                      ```bash
+                                                      # Build workspace TypeScript packages
+                                                      npm run build
+
+                                                      # Start mobile client (in another terminal)
+                                                      cd packages/mobile
+                                                      npm start   # or `expo start`
+
+                                                      # Build the VS Code extension (in another terminal)
+                                                      cd packages/vscode-extension
+                                                      npm run build
+                                                      ```
+
+                                                      Notes:
+                                                      - The compose setup exposes services on the host at the standard ports (`8081` for auth, `8082` for relay, `5432` for Postgres, `6379` for Redis).
+                                                      - Ensure `EXPO_PUBLIC_AUTH_URL` and `EXPO_PUBLIC_RELAY_URL` in `packages/mobile` point to the running services (or set them via `.env` / environment when running Expo).
+
+                                                      ## Production deployment suggestions
+
+                                                      You can deploy components independently. Typical mapping:
+
+                                                      - Auth: container (Docker) behind a load balancer, connected to managed Postgres & Redis.
+                                                      - Relay: container (Docker) or horizontally scalable cluster; ensure sticky sessions if using WebSocket proxying (or use websocket-aware load balancer / ingress). Relay needs access to the auth public key for JWT validation and to Redis for session revocation/state.
+                                                      - Mobile client: deploy PWA static assets to any static host / CDN, or build native binaries using EAS and distribute via app stores.
+                                                      - VS Code extension: package as a VSIX and publish to the Visual Studio Marketplace, or install locally during development.
+
+                                                      Deployment tips:
+
+                                                      - For Docker Compose production-like deploys, create an override compose file with proper secrets and volumes, and don't use compose for large-scale production.
+                                                      - For Kubernetes, deploy Postgres and Redis as managed services or StatefulSets, deploy auth and relay as Deployments, and use an Ingress with websocket support (NGINX or cloud provider) for the relay.
+                                                      - Keep `AUTH_HMAC_SECRET` and JWT private keys in a secrets manager.
+
+                                                      ## Useful commands
+
+                                                      - Build all TypeScript packages: `npm run build`
+                                                      - Run Go unit tests (all services): `npm run test:go`
+                                                      - Lint & format: `npm run lint` / `npm run format`
+
+                                                      ## Files to inspect
+                                                      - Compose file: [infra/docker-compose.yml](infra/docker-compose.yml)
+                                                      - Auth service: [services/auth](services/auth)
+                                                      - Relay service: [services/relay](services/relay)
+                                                      - Mobile client: [packages/mobile](packages/mobile)
+                                                      - VS Code extension: [packages/vscode-extension](packages/vscode-extension)
+
+                                                      ## Notes & caveats
+
+                                                      - The original README referenced `packages/relay-server` and `packages/mobile-client`; the real structure is `services/relay` and `packages/mobile`. This README reflects the current source layout.
+                                                      - Before deploying, verify environment variables and keys required by `services/auth/internal/config/config.go` and `services/relay/internal/config/config.go`.
+
+                                                      ---
+
+                                                      If you want, I can now:
+                                                      - generate Kubernetes manifests (Helm or k8s YAML)
+                                                      - add a docker-compose.override.yml for production secrets
+                                                      - create an Expo/EAS publish guide or build scripts
+
+                                                      Tell me which of the above you'd like next.
 #### Key Capabilities
 
 - **Automatic Detection**: Discovers installed editors by querying VS Code commands

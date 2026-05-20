@@ -74,6 +74,7 @@ func main() {
 
 	// Router
 	r := gin.Default()
+	r.Use(corsMiddleware())
 	r.GET("/healthz", func(c *gin.Context) { c.Status(http.StatusOK)})
 
 	v1 := r.Group("/v1")
@@ -96,4 +97,18 @@ func main() {
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("server: %v", err)
 	}
+}
+
+func corsMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        c.Header("Access-Control-Allow-Origin",  "*")
+        c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        c.Header("Access-Control-Allow-Headers", "Content-Type, X-Laptop-Id, X-Laptop-Sig")
+
+        if c.Request.Method == http.MethodOptions {
+            c.AbortWithStatus(http.StatusNoContent)
+            return
+        }
+        c.Next()
+    }
 }

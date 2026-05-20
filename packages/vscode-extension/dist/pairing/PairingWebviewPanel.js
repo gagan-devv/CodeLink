@@ -1,8 +1,41 @@
-import * as vscode from 'vscode';
-import * as qrcode from 'qrcode';
-import { SessionManager } from '../auth/SessionManager';
-import { WsClient } from '../websocket/WsClient';
-
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PairingWebviewPanel = void 0;
+const vscode = __importStar(require("vscode"));
+const qrcode = __importStar(require("qrcode"));
 /**
  * VS Code Webview panel that displays the QR code for mobile pairing.
  *
@@ -14,99 +47,74 @@ import { WsClient } from '../websocket/WsClient';
  *   5. On success: connects WsClient, shows "Paired ✓", offers Revoke button
  *   6. On timeout: auto-refreshes (new QR)
  */
-
-export class PairingWebviewPanel {
-    private static instance: PairingWebviewPanel | undefined;
-
-    private readonly panel: vscode.WebviewPanel;
-    private disposed = false;
-
-    static createOrShow(
-        context: vscode.ExtensionContext,
-        sessionManager: SessionManager,
-        wsClient: WsClient
-    ): void {
+class PairingWebviewPanel {
+    static createOrShow(context, sessionManager, wsClient) {
         if (PairingWebviewPanel.instance) {
             PairingWebviewPanel.instance.panel.reveal();
             return;
         }
-
-        const panel = vscode.window.createWebviewPanel(
-            'codelinkPairing',
-            'CodeLink - Pair Mobile',
-            vscode.ViewColumn.Beside,
-            { enableScripts: true, retainContextWhenHidden: true },
-        );
-
-        PairingWebviewPanel.instance = new PairingWebviewPanel(
-            panel, context, sessionManager, wsClient,
-        );
+        const panel = vscode.window.createWebviewPanel('codelinkPairing', 'CodeLink - Pair Mobile', vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
+        PairingWebviewPanel.instance = new PairingWebviewPanel(panel, context, sessionManager, wsClient);
     }
-
-    private constructor(
-        panel: vscode.WebviewPanel,
-        private readonly context: vscode.ExtensionContext,
-        private readonly sessionManager: SessionManager,
-        private readonly wsClient: WsClient,
-    ) {
+    constructor(panel, context, sessionManager, wsClient) {
+        this.context = context;
+        this.sessionManager = sessionManager;
+        this.wsClient = wsClient;
+        this.disposed = false;
         this.panel = panel;
-
         panel.onDidDispose(() => {
             this.disposed = true;
             PairingWebviewPanel.instance = undefined;
         }, null, context.subscriptions);
-
         panel.webview.onDidReceiveMessage(msg => {
             if (msg.command === 'revoke') {
                 this.sessionManager.revokeSession();
-            } else if (msg.command === 'refresh') {
+            }
+            else if (msg.command === 'refresh') {
                 this.startPairingFlow();
             }
         });
-
         this.startPairingFlow();
     }
-
-    private async startPairingFlow(): Promise<void> {
-        if (this.disposed) { return; }
-
+    async startPairingFlow() {
+        if (this.disposed) {
+            return;
+        }
         try {
             this.panel.webview.html = this.loadingHtml('Creating Session...');
-
             const { sessionId, qrPayload, expiresAt } = await this.sessionManager.createSession();
-
             const qrDataUrl = await qrcode.toDataURL(qrPayload, { width: 280, margin: 2 });
-
-            if (this.disposed) { return; }
+            if (this.disposed) {
+                return;
+            }
             this.panel.webview.html = this.pairingHtml(qrDataUrl, expiresAt, qrPayload);
-
-            const session = await this.sessionManager.waitForMobile(sessionId, 90_000);
-
-            if (this.disposed) { return; }
-
+            const session = await this.sessionManager.waitForMobile(sessionId, 90000);
+            if (this.disposed) {
+                return;
+            }
             this.wsClient.connect(session.relayWssUrl, session.laptopToken);
             this.panel.webview.html = this.pairedHtml(session.sessionId);
-        
-        } catch (err: unknown) {
-            if (this.disposed) { return; }
+        }
+        catch (err) {
+            if (this.disposed) {
+                return;
+            }
             const msg = err instanceof Error ? err.message : String(err);
-
             if (msg.includes('timed out')) {
                 this.startPairingFlow();
-            } else {
+            }
+            else {
                 this.panel.webview.html = this.errorHtml(msg);
             }
         }
     }
-
     // HTML Templates
-  private loadingHtml(message: string): string {
-    return this.wrap(`<p class="muted">${message}</p>`);
-  }
-
-  private pairingHtml(qrDataUrl: string, expiresAt: number, qrPayload: string): string {
-    const secondsLeft = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
-    return this.wrap(`
+    loadingHtml(message) {
+        return this.wrap(`<p class="muted">${message}</p>`);
+    }
+    pairingHtml(qrDataUrl, expiresAt, qrPayload) {
+        const secondsLeft = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+        return this.wrap(`
       <h2>Scan with your phone</h2>
       <img src="${qrDataUrl}" width="280" height="280" alt="QR code" />
       <p class="muted">Code expires in <span id="countdown">${secondsLeft}</span>s</p>
@@ -126,10 +134,9 @@ export class PairingWebviewPanel {
         function refresh() { vscode.postMessage({ command: 'refresh' }); }
       </script>
     `);
-  }
-
-  private pairedHtml(sessionId: string): string {
-    return this.wrap(`
+    }
+    pairedHtml(sessionId) {
+        return this.wrap(`
       <h2>✓ Mobile paired</h2>
       <p class="muted">Session: ${sessionId.slice(0, 16)}…</p>
       <button onclick="revoke()">Revoke session</button>
@@ -138,10 +145,9 @@ export class PairingWebviewPanel {
         function revoke() { vscode.postMessage({ command: 'revoke' }); }
       </script>
     `);
-  }
-
-  private errorHtml(message: string): string {
-    return this.wrap(`
+    }
+    errorHtml(message) {
+        return this.wrap(`
       <h2>⚠ Error</h2>
       <p class="muted">${message}</p>
       <button onclick="refresh()">Try again</button>
@@ -150,10 +156,9 @@ export class PairingWebviewPanel {
         function refresh() { vscode.postMessage({ command: 'refresh' }); }
       </script>
     `);
-  }
-
-  private wrap(body: string): string {
-    return `<!DOCTYPE html>
+    }
+    wrap(body) {
+        return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -171,5 +176,7 @@ export class PairingWebviewPanel {
 </head>
 <body>${body}</body>
 </html>`;
-  }
+    }
 }
+exports.PairingWebviewPanel = PairingWebviewPanel;
+//# sourceMappingURL=PairingWebviewPanel.js.map
