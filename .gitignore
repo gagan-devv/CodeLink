@@ -1,38 +1,37 @@
 node_modules/
-dist/
 *.log
 .DS_Store
 .vscode-test/
 *.vsix
-.vscode
 .kiro
 
 # Test directory (centralized testing infrastructure)
 tests/
 coverage/
 
-docs/
-MANUAL_TESTING_EDITOR_ADAPTERS.md
-QUICK_START_TESTING.md
-
-# ANDORID TESTING MANUALS 
-ANDROID_TESTING_GUIDE.md
-ANDROID_TESTING_NOTES.md
-ANDROID_TESTING_VERIFICATION.md
-QUICK_START_ANDROID_TESTING.md
-README_ANDROID_TESTING.md
-
-# IOS TESING MANUAL 
-IOS_TESTING_GUIDE.md
-IOS_TESTING_VERIFICATION.md
-QUICK_START_IOS_TESTING.md
-PROJECT_ANALYSIS.md
-TESTING_SPEC_SUMMARY.md
-CI_CD_SETUP.md
-COVERAGE_VERIFICATION.md
-STITCH_UI_DESIGN_PROMPT.md
-QUICK_REFERENCE.md
-CI_CD_IMPROVEMENTS_SUMMARY.md
-
 # DESIGN FILES
 design/
+# Build artifacts
+coverage/
+logs/
+*.tsbuildinfo
+
+# Go binaries
+services/auth/bin/
+services/relay/bin/
+
+# Env files
+infra/.env
+*.pem
+
+# Expo / React Native
+packages/mobile/.expo/
+packages/mobile/node_modules/
+packages/mobile/dist/
+
+# Go workspace sum
+go.work.sum
+
+# RSA 
+dev-private.pem
+dev-public.pem

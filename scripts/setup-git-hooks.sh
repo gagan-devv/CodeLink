@@ -1,36 +1,44 @@
 #!/bin/bash
-# Setup script for Git hooks
-# Run this script to install pre-commit hooks for the CodeLink project
 
-set -e
+# Ensure we are in the repository root
+cd "$(dirname "$0")/.."
 
-echo "🔧 Setting up Git hooks for CodeLink..."
-echo ""
+# Determine the correct git hooks directory (especially in worktrees)
+HOOKS_DIR=$(git rev-parse --git-path hooks 2>/dev/null)
 
-# Check if .git directory exists
-if [ ! -d ".git" ]; then
-    echo "❌ Error: .git directory not found. Are you in the repository root?"
-    exit 1
+if [ -z "$HOOKS_DIR" ]; then
+  # Fallback to standard .git/hooks if git command fails
+  HOOKS_DIR=".git/hooks"
 fi
 
+HOOK_FILE="$HOOKS_DIR/pre-commit"
+
+echo "Setting up CodeLink pre-commit git hook in $HOOKS_DIR..."
+
 # Create hooks directory if it doesn't exist
-mkdir -p .git/hooks
+mkdir -p "$HOOKS_DIR"
 
-# Copy pre-commit hook
-echo "📋 Installing pre-commit hook..."
-cp .github/pre-commit-hook.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
-echo "✅ Pre-commit hook installed"
-echo ""
+# Write the hook script
+cat << 'EOF' > "$HOOK_FILE"
+#!/bin/bash
 
-echo "✨ Git hooks setup complete!"
-echo ""
-echo "The pre-commit hook will now run automatically before each commit."
-echo "It will check:"
-echo "  - ESLint (code quality)"
-echo "  - TypeScript compilation (type safety)"
-echo "  - Prettier formatting (code style)"
-echo ""
-echo "To bypass the hook (not recommended), use: git commit --no-verify"
-echo ""
-echo "To manually run pre-commit checks: npm run precommit"
+echo "Running pre-commit hooks (lint, typecheck, format check)..."
+
+# Run precommit command
+npm run precommit
+
+RESULT=$?
+
+if [ $RESULT -ne 0 ]; then
+  echo "❌ Pre-commit checks failed! Please fix the errors before committing."
+  exit 1
+fi
+
+echo "✅ Pre-commit checks passed!"
+exit 0
+EOF
+
+# Make it executable
+chmod +x "$HOOK_FILE"
+
+echo "✅ Pre-commit git hook successfully installed!"

@@ -1,150 +1,161 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MessageType,
-  PingMessage,
-  PongMessage,
-  FileContextPayload,
-  SyncFullContextMessage,
-  InjectPromptMessage,
-  InjectPromptResponse,
+  PROTOCOL_VERSION,
+  isMessageEnvelope,
+  isFileSnapshotPayload,
+  isFilePatchPayload,
+  isInjectPromptPayload,
+  buildEnvelope,
+  parseEnvelope,
+  isSnapshotRequestPayload,
+  ALL_CAPABILITIES,
 } from './index';
 
-describe('Protocol Package - Smoke Tests', () => {
-  describe('MessageType Enum', () => {
-    it('should have all required message types', () => {
-      expect(MessageType.PING).toBe('PING');
-      expect(MessageType.PONG).toBe('PONG');
-      expect(MessageType.SYNC_FULL_CONTEXT).toBe('SYNC_FULL_CONTEXT');
-      expect(MessageType.INJECT_PROMPT).toBe('INJECT_PROMPT');
-      expect(MessageType.INJECT_PROMPT_RESPONSE).toBe('INJECT_PROMPT_RESPONSE');
-    });
+// ── isMessageEnvelope ─────────────────────────────────────────────────────────
+
+describe('isMessageEnvelope', () => {
+  it('accepts a valid envelope', () => {
+    expect(isMessageEnvelope({
+      v:       PROTOCOL_VERSION,
+      id:      'abc-123',
+      ts:      Date.now(),
+      type:    'FILE_SNAPSHOT',
+      payload: {},
+    })).toBe(true);
   });
 
-  describe('PingMessage', () => {
-    it('should create a valid ping message', () => {
-      const ping: PingMessage = {
-        id: 'test-id',
-        timestamp: Date.now(),
-        type: 'ping',
-        source: 'extension',
-      };
-
-      expect(ping.id).toBe('test-id');
-      expect(ping.type).toBe('ping');
-      expect(ping.source).toBe('extension');
-      expect(typeof ping.timestamp).toBe('number');
-    });
+  it('rejects wrong protocol version', () => {
+    expect(isMessageEnvelope({
+      v: 99, id: 'x', ts: 0, type: 'PING', payload: {},
+    })).toBe(false);
   });
 
-  describe('PongMessage', () => {
-    it('should create a valid pong message', () => {
-      const pong: PongMessage = {
-        id: 'pong-id',
-        timestamp: Date.now(),
-        type: 'pong',
-        originalId: 'ping-id',
-      };
-
-      expect(pong.id).toBe('pong-id');
-      expect(pong.type).toBe('pong');
-      expect(pong.originalId).toBe('ping-id');
-      expect(typeof pong.timestamp).toBe('number');
-    });
+  it('rejects missing payload', () => {
+    expect(isMessageEnvelope({
+      v: PROTOCOL_VERSION, id: 'x', ts: 0, type: 'PING',
+    })).toBe(false);
   });
 
-  describe('FileContextPayload', () => {
-    it('should create a valid file context payload', () => {
-      const payload: FileContextPayload = {
-        fileName: 'src/test.ts',
-        originalFile: 'original content',
-        modifiedFile: 'modified content',
-        isDirty: true,
-        timestamp: Date.now(),
-      };
+  it('rejects null', ()  => expect(isMessageEnvelope(null)).toBe(false));
+  it('rejects string', () => expect(isMessageEnvelope('hello')).toBe(false));
+});
 
-      expect(payload.fileName).toBe('src/test.ts');
-      expect(payload.originalFile).toBe('original content');
-      expect(payload.modifiedFile).toBe('modified content');
-      expect(payload.isDirty).toBe(true);
-      expect(typeof payload.timestamp).toBe('number');
-    });
+// ── isFileSnapshotPayload ─────────────────────────────────────────────────────
+
+describe('isFileSnapshotPayload', () => {
+  const valid = {
+    fileName: 'src/main.ts',
+    content:  'console.log("hello")',
+    encoding: 'utf8' as const,
+    seq:      1,
+    isDirty:  false,
+    gitHead:  true,
+    timestamp: Date.now(),
+  };
+
+  it('accepts a valid payload',        () => expect(isFileSnapshotPayload(valid)).toBe(true));
+  it('accepts gzip+base64 encoding',   () => expect(isFileSnapshotPayload({ ...valid, encoding: 'gzip+base64' })).toBe(true));
+  it('rejects invalid encoding',       () => expect(isFileSnapshotPayload({ ...valid, encoding: 'ascii' })).toBe(false));
+  it('rejects missing fileName',       () => expect(isFileSnapshotPayload({ ...valid, fileName: undefined })).toBe(false));
+  it('rejects non-number seq',         () => expect(isFileSnapshotPayload({ ...valid, seq: '1' })).toBe(false));
+});
+
+// ── isFilePatchPayload ────────────────────────────────────────────────────────
+
+describe('isFilePatchPayload', () => {
+  const valid = {
+    fileName: 'src/main.ts',
+    patches:  '@@ -1,4 +1,5 @@\n hello\n+world\n',
+    fromSeq:  1,
+    toSeq:    2,
+    isDirty:  true,
+    timestamp: Date.now(),
+  };
+
+  it('accepts a valid payload',  () => expect(isFilePatchPayload(valid)).toBe(true));
+  it('rejects missing patches',  () => expect(isFilePatchPayload({ ...valid, patches: undefined })).toBe(false));
+  it('rejects string fromSeq',   () => expect(isFilePatchPayload({ ...valid, fromSeq: '1' })).toBe(false));
+  it('rejects null',             () => expect(isFilePatchPayload(null)).toBe(false));
+});
+
+// ── isInjectPromptPayload ─────────────────────────────────────────────────────
+
+describe('isInjectPromptPayload', () => {
+  it('accepts a valid payload',   () => expect(isInjectPromptPayload({ prompt: 'Refactor this' })).toBe(true));
+  it('accepts optional fields',   () => expect(isInjectPromptPayload({ prompt: 'x', targetFile: 'src/a.ts' })).toBe(true));
+  it('rejects empty prompt',      () => expect(isInjectPromptPayload({ prompt: '' })).toBe(false));
+  it('rejects missing prompt',    () => expect(isInjectPromptPayload({})).toBe(false));
+});
+
+// ── isSnapshotRequestPayload ─────────────────────────────────────────────────────
+describe('isSnapshotRequestPayload', () => {
+  it('accepts valid payload',      () => expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'gap' })).toBe(true));
+  it('accepts all reason values',  () => {
+    expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'corruption' })).toBe(true);
+    expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'reconnect' })).toBe(true);
+  });
+  it('rejects invalid reason',     () => expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'unknown' })).toBe(false));
+  it('rejects empty fileName',     () => expect(isSnapshotRequestPayload({ fileName: '', reason: 'gap' })).toBe(false));
+  it('rejects null',               () => expect(isSnapshotRequestPayload(null)).toBe(false));
+});
+
+// ── buildEnvelope ─────────────────────────────────────────────────────────────
+
+describe('buildEnvelope', () => {
+  it('produces a valid envelope', () => {
+    const env = buildEnvelope('PING', { source: 'host' });
+    expect(env.v).toBe(PROTOCOL_VERSION);
+    expect(env.type).toBe('PING');
+    expect(env.payload).toEqual({ source: 'host' });
+    expect(typeof env.id).toBe('string');
+    expect(typeof env.ts).toBe('number');
+    expect(typeof env.seq).toBe('number');
   });
 
-  describe('SyncFullContextMessage', () => {
-    it('should create a valid sync full context message', () => {
-      const message: SyncFullContextMessage = {
-        id: 'sync-id',
-        timestamp: Date.now(),
-        type: 'SYNC_FULL_CONTEXT',
-        payload: {
-          fileName: 'src/test.ts',
-          originalFile: 'original',
-          modifiedFile: 'modified',
-          isDirty: false,
-          timestamp: Date.now(),
-        },
-      };
-
-      expect(message.id).toBe('sync-id');
-      expect(message.type).toBe('SYNC_FULL_CONTEXT');
-      expect(message.payload.fileName).toBe('src/test.ts');
-      expect(typeof message.timestamp).toBe('number');
-    });
+  it('increments seq on each call', () => {
+    const a = buildEnvelope('PING', { source: 'host' });
+    const b = buildEnvelope('PING', { source: 'client' });
+    expect(b.seq).toBeGreaterThan(a.seq!);
   });
 
-  describe('InjectPromptMessage', () => {
-    it('should create a valid inject prompt message', () => {
-      const message: InjectPromptMessage = {
-        id: 'prompt-id',
-        timestamp: Date.now(),
-        type: 'INJECT_PROMPT',
-        payload: {
-          prompt: 'Test prompt',
-        },
-      };
-
-      expect(message.id).toBe('prompt-id');
-      expect(message.type).toBe('INJECT_PROMPT');
-      expect(message.payload.prompt).toBe('Test prompt');
-      expect(typeof message.timestamp).toBe('number');
-    });
+  it('includes ack when provided', () => {
+    const env = buildEnvelope('PONG', { originalId: 'abc' }, { ack: 'abc' });
+    expect(env.ack).toBe('abc');
   });
 
-  describe('InjectPromptResponse', () => {
-    it('should create a valid inject prompt response (success)', () => {
-      const response: InjectPromptResponse = {
-        id: 'response-id',
-        timestamp: Date.now(),
-        type: 'INJECT_PROMPT_RESPONSE',
-        originalId: 'prompt-id',
-        payload: {
-          success: true,
-          editorUsed: 'continue',
-        },
-      };
+  it('omits ack when not provided', () => {
+    const env = buildEnvelope('PING', { source: 'host' });
+    expect(env.ack).toBeUndefined();
+  });
+});
 
-      expect(response.id).toBe('response-id');
-      expect(response.type).toBe('INJECT_PROMPT_RESPONSE');
-      expect(response.originalId).toBe('prompt-id');
-      expect(response.payload.success).toBe(true);
-      expect(response.payload.editorUsed).toBe('continue');
-    });
+// ── parseEnvelope ─────────────────────────────────────────────────────────────
 
-    it('should create a valid inject prompt response (error)', () => {
-      const response: InjectPromptResponse = {
-        id: 'response-id',
-        timestamp: Date.now(),
-        type: 'INJECT_PROMPT_RESPONSE',
-        originalId: 'prompt-id',
-        payload: {
-          success: false,
-          error: 'No editor found',
-        },
-      };
+describe('parseEnvelope', () => {
+  it('parses a valid JSON envelope', () => {
+    const env = buildEnvelope('EDITOR_FOCUS', { fileName: 'a.ts', cursorLine: 5, cursorCol: 3 });
+    const json = JSON.stringify(env);
+    const parsed = parseEnvelope(json);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.type).toBe('EDITOR_FOCUS');
+  });
 
-      expect(response.id).toBe('response-id');
-      expect(response.payload.success).toBe(false);
-      expect(response.payload.error).toBe('No editor found');
-    });
+  it('returns null for malformed JSON', () => {
+    expect(parseEnvelope('not json')).toBeNull();
+  });
+
+  it('returns null for valid JSON but invalid envelope', () => {
+    expect(parseEnvelope(JSON.stringify({ foo: 'bar' }))).toBeNull();
+  });
+});
+
+// ── ALL_CAPABILITIES ──────────────────────────────────────────────────────────
+
+describe('ALL_CAPABILITIES', () => {
+  it('includes all expected capabilities', () => {
+    expect(ALL_CAPABILITIES).toContain('diff:snapshot');
+    expect(ALL_CAPABILITIES).toContain('diff:patch');
+    expect(ALL_CAPABILITIES).toContain('prompt:inject');
+    expect(ALL_CAPABILITIES).toContain('session:revoke');
   });
 });

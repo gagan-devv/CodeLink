@@ -19,5 +19,7 @@
     "packages/vscode-extension/src/**/*",
     "packages/mobile-client/src/**/*"
   ],
-  "exclude": ["node_modules/@testing-library/react-native/src"]
+  "exclude": ["node_modules/@testing-library/react-native/src"],
+  "files": [],
+  "references": [{ "path": "./packages/protocol" }, { "path": "./packages/vscode-extension" }]
 }
