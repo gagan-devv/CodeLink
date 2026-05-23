@@ -1,30 +1,32 @@
-import { buildEnvelope, MessageType } from '@codelink/protocol';
+import { buildEnvelope, MessageType, PayloadFor } from '@codelink/protocol';
 
-type MessageHandler    = (type: string, payload: unknown, id: string) => void;
+type MessageHandler = (type: string, payload: unknown, id: string) => void;
 type ConnectionHandler = () => void;
 
 class WsManagerClass {
-  private ws:             WebSocket | null = null;
-  private url:            string | null    = null;
-  private token:          string | null    = null;
-  private reconnectDelay  = 1_000;
-  private readonly MAX    = 30_000;
+  private ws: WebSocket | null = null;
+  private url: string | null = null;
+  private token: string | null = null;
+  private reconnectDelay = 1_000;
+  private readonly MAX = 30_000;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
 
-  onMessage:      MessageHandler    = () => {};
-  onConnected:    ConnectionHandler = () => {};
+  onMessage: MessageHandler = () => {};
+  onConnected: ConnectionHandler = () => {};
   onDisconnected: ConnectionHandler = () => {};
 
   connect(url: string, token: string): void {
-    this.url             = url;
-    this.token           = token;
+    this.url = url;
+    this.token = token;
     this.intentionalClose = false;
     this._open();
   }
 
   private _open(): void {
-    if (!this.url || !this.token) { return; }
+    if (!this.url || !this.token) {
+      return;
+    }
 
     const wsUrl = `${this.url}?token=${encodeURIComponent(this.token)}`;
     this.ws = new WebSocket(wsUrl);
@@ -38,26 +40,34 @@ class WsManagerClass {
       try {
         const e = JSON.parse(data) as { type: string; payload: unknown; id: string };
         this.onMessage(e.type, e.payload, e.id ?? '');
-      } catch { /* malformed — ignore */ }
+      } catch {
+        /* malformed — ignore */
+      }
     };
 
     this.ws.onclose = () => {
       this.onDisconnected();
-      if (!this.intentionalClose) { this._scheduleReconnect(); }
+      if (!this.intentionalClose) {
+        this._scheduleReconnect();
+      }
     };
 
-    this.ws.onerror = () => { this.ws?.close(); };
+    this.ws.onerror = () => {
+      this.ws?.close();
+    };
   }
 
-  send(type: MessageType, payload: unknown): void {
+  send<T extends MessageType>(type: T, payload: PayloadFor<T>): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(buildEnvelope(type as any, payload as any)));
+      this.ws.send(JSON.stringify(buildEnvelope(type, payload)));
     }
   }
 
   disconnect(): void {
     this.intentionalClose = true;
-    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
     this.ws?.close(1000, 'user action');
     this.ws = null;
   }

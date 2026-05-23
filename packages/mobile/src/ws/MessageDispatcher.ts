@@ -1,30 +1,24 @@
-import { patchEngine }       from '../diff/PatchEngine';
-import { useDiffStore }      from '../store/useDiffStore';
-import { useSessionStore }   from '../store/useSessionStore';
-import { usePromptStore }    from '../store/usePromptStore';
+import { patchEngine } from '../diff/PatchEngine';
+import { useDiffStore } from '../store/useDiffStore';
+import { useSessionStore } from '../store/useSessionStore';
+import { usePromptStore } from '../store/usePromptStore';
 import { clearStoredSession } from '../api/authClient';
-import { wsManager }         from './WsManager';
-import {
-  isFileSnapshotPayload,
-  isFilePatchPayload,
-  isInjectPromptPayload,
-  parseEnvelope
-} from '@codelink/protocol'
+import { wsManager } from './WsManager';
+import { isFileSnapshotPayload, isFilePatchPayload } from '@codelink/protocol';
 
 export function handleMessage(type: string, payload: unknown, id: string): void {
   switch (type) {
-
     case 'HANDSHAKE_ACK': {
       useSessionStore.getState().setConnected(id);
       break;
     }
 
     case 'FILE_SNAPSHOT': {
-      if (!isFileSnapshotPayload(payload)) { return; }
+      if (!isFileSnapshotPayload(payload)) {
+        return;
+      }
       const p = payload;
-      const content = p.encoding === 'utf8'
-        ? p.content
-        : decodeGzip(p.content);
+      const content = p.encoding === 'utf8' ? p.content : decodeGzip(p.content);
 
       patchEngine.applySnapshot(p.fileName, content, p.seq);
       useDiffStore.getState().setFile(p.fileName, content, p.isDirty, p.seq);
@@ -33,7 +27,9 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
     }
 
     case 'FILE_PATCH': {
-      if (!isFilePatchPayload(payload)) { return; }
+      if (!isFilePatchPayload(payload)) {
+        return;
+      }
       const p = payload;
       const result = patchEngine.applyPatch(p.fileName, p.patches, p.fromSeq, p.toSeq);
 
@@ -58,8 +54,10 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
 
     case 'PROMPT_RESPONSE': {
       const p = payload as {
-        originalId: string; success: boolean;
-        editorUsed?: string; error?: string;
+        originalId: string;
+        success: boolean;
+        editorUsed?: string;
+        error?: string;
       };
       usePromptStore.getState().resolvePrompt(p.originalId, p.success, p.editorUsed, p.error);
       break;

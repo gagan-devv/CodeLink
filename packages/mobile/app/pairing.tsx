@@ -3,44 +3,45 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { joinSession, getDeviceId } from '../src/api/authClient';
-import { wsManager }       from '../src/ws/WsManager';
-import { handleMessage }   from '../src/ws/MessageDispatcher';
+import { wsManager } from '../src/ws/WsManager';
+import { handleMessage } from '../src/ws/MessageDispatcher';
 import { useSessionStore } from '../src/store/useSessionStore';
 import { AUTH_URL } from '../src/api/config';
 
 export default function PairingScreen() {
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanned,  setScanned]  = useState(false);
-  const [joining,  setJoining]  = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const router = useRouter();
 
   const handleScan = async ({ data }: { data: string }) => {
-    if (scanned || joining) { return; }
+    if (scanned || joining) {
+      return;
+    }
     setScanned(true);
     setJoining(true);
     setErrorMsg(null);
 
     try {
       // Decode URL-safe base64 payload from VS Code QR
-      const padded  = data + '='.repeat((4 - (data.length % 4)) % 4);
+      const padded = data + '='.repeat((4 - (data.length % 4)) % 4);
       const decoded = JSON.parse(atob(padded.replace(/-/g, '+').replace(/_/g, '/'))) as {
         sessionId: string;
         challenge: string;
-        relayWss:  string;
+        relayWss: string;
       };
 
       const deviceId = await getDeviceId();
-      const session  = await joinSession(AUTH_URL, decoded.sessionId, decoded.challenge, deviceId);
+      const session = await joinSession(AUTH_URL, decoded.sessionId, decoded.challenge, deviceId);
 
-      wsManager.onMessage      = handleMessage;
-      wsManager.onConnected    = () => {
+      wsManager.onMessage = handleMessage;
+      wsManager.onConnected = () => {
         useSessionStore.getState().setConnected(session.sessionId);
         router.replace('/(tabs)');
       };
       wsManager.onDisconnected = () => {};
       wsManager.connect(session.relayWss, session.mobileToken);
-
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Unknown error');
       setJoining(false);
@@ -50,7 +51,11 @@ export default function PairingScreen() {
 
   // ── Permission states ────────────────────────────────────────────────────
   if (!permission) {
-    return <View style={s.center}><ActivityIndicator color="#0078d4" /></View>;
+    return (
+      <View style={s.center}>
+        <ActivityIndicator color="#0078d4" />
+      </View>
+    );
   }
 
   if (!permission.granted) {
@@ -101,23 +106,48 @@ export default function PairingScreen() {
 }
 
 const s = StyleSheet.create({
-  root:     { flex: 1, backgroundColor: '#000' },
-  center:   { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: '#1e1e1e' },
-  overlay:  {
+  root: { flex: 1, backgroundColor: '#000' },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    backgroundColor: '#1e1e1e',
+  },
+  overlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 28,
   },
-  title:    { color: '#fff', fontSize: 24, fontWeight: '700', textAlign: 'center' },
-  subtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 22 },
-  command:  { color: '#4fc3f7', fontFamily: 'monospace' },
-  frame:    {
-    width: 260, height: 260, marginTop: 28,
-    borderWidth: 2, borderColor: '#0078d4', borderRadius: 16,
-    shadowColor: '#0078d4', shadowOpacity: 0.6, shadowRadius: 16,
+  title: { color: '#fff', fontSize: 24, fontWeight: '700', textAlign: 'center' },
+  subtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 22,
   },
-  errorBox: { marginTop: 20, backgroundColor: 'rgba(200,50,50,0.85)', borderRadius: 8, padding: 12 },
-  errorText:{ color: '#fff', fontSize: 13, textAlign: 'center' },
-  body:     { color: '#aaa', fontSize: 15, textAlign: 'center', marginBottom: 20, lineHeight: 22 },
-  btn:      { backgroundColor: '#0078d4', borderRadius: 10, paddingHorizontal: 28, paddingVertical: 14 },
-  btnText:  { color: '#fff', fontWeight: '700', fontSize: 15 },
+  command: { color: '#4fc3f7', fontFamily: 'monospace' },
+  frame: {
+    width: 260,
+    height: 260,
+    marginTop: 28,
+    borderWidth: 2,
+    borderColor: '#0078d4',
+    borderRadius: 16,
+    shadowColor: '#0078d4',
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+  },
+  errorBox: {
+    marginTop: 20,
+    backgroundColor: 'rgba(200,50,50,0.85)',
+    borderRadius: 8,
+    padding: 12,
+  },
+  errorText: { color: '#fff', fontSize: 13, textAlign: 'center' },
+  body: { color: '#aaa', fontSize: 15, textAlign: 'center', marginBottom: 20, lineHeight: 22 },
+  btn: { backgroundColor: '#0078d4', borderRadius: 10, paddingHorizontal: 28, paddingVertical: 14 },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });

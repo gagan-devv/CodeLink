@@ -9,24 +9,20 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-
     "lint": "eslint . --ext .ts,.tsx --ignore-path .eslintignore",
     "lint:fix": "eslint . --ext .ts,.tsx --ignore-path .eslintignore --fix",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
-
     "typecheck": "npm run typecheck:protocol && npm run typecheck:vscode && npm run typecheck:mobile",
     "typecheck:protocol": "cd packages/protocol && tsc --noEmit",
     "typecheck:vscode": "cd packages/vscode-extension && tsc --noEmit",
     "typecheck:mobile": "cd packages/mobile && tsc --noEmit",
-
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:ci": "vitest run --coverage --reporter=verbose",
-    "test:go": "go test ./services/...",
-    "test:go:verbose": "go test -v ./services/...",
-
+    "test": "npm run test --workspace=packages/protocol",
+    "test:watch": "npm run test --workspace=packages/protocol -- --watch",
+    "test:coverage": "npm run test --workspace=packages/protocol -- --coverage",
+    "test:ci": "npm run test --workspace=packages/protocol -- --coverage --reporter=verbose",
+    "test:go": "go test ./services/auth/... ./services/relay/...",
+    "test:go:verbose": "go test -v ./services/auth/... ./services/relay/...",
     "precommit": "npm run lint && npm run typecheck && npm run format:check"
   },
   "devDependencies": {

@@ -21,8 +21,5 @@
   ],
   "exclude": ["node_modules/@testing-library/react-native/src"],
   "files": [],
-  "references": [
-    { "path": "./packages/protocol" },
-    { "path": "./packages/vscode-extension" }
-  ]
+  "references": [{ "path": "./packages/protocol" }, { "path": "./packages/vscode-extension" }]
 }

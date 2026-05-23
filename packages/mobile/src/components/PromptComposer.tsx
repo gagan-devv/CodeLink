@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
 import {
-  View, TextInput, TouchableOpacity, Text, StyleSheet,
-  KeyboardAvoidingView, Platform,
+  TextInput,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { wsManager }      from '../ws/WsManager';
+import { wsManager } from '../ws/WsManager';
 import { usePromptStore } from '../store/usePromptStore';
 
 export function PromptComposer() {
-  const [text,    setText]    = useState('');
+  const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const addPrompt = usePromptStore(s => s.addPrompt);
+  const addPrompt = usePromptStore((s) => s.addPrompt);
 
   const send = async () => {
     const trimmed = text.trim();
-    if (!trimmed || sending || !wsManager.isConnected()) { return; }
+    if (!trimmed || sending || !wsManager.isConnected()) {
+      return;
+    }
 
     setSending(true);
     const id = Math.random().toString(36).slice(2);
@@ -37,7 +43,11 @@ export function PromptComposer() {
         maxLength={2000}
         returnKeyType="default"
       />
-      <TouchableOpacity style={[s.btn, !canSend && s.btnDisabled]} onPress={send} disabled={!canSend}>
+      <TouchableOpacity
+        style={[s.btn, !canSend && s.btnDisabled]}
+        onPress={send}
+        disabled={!canSend}
+      >
         <Text style={s.btnText}>{sending ? 'Sending…' : 'Send'}</Text>
       </TouchableOpacity>
     </KeyboardAvoidingView>
@@ -45,17 +55,24 @@ export function PromptComposer() {
 }
 
 const s = StyleSheet.create({
-  root:        { padding: 16, gap: 12 },
-  input:       {
-    backgroundColor: '#2a2a2a', color: '#d4d4d4',
-    borderRadius: 10, padding: 14, fontSize: 15,
-    minHeight: 110, textAlignVertical: 'top',
-    borderWidth: 1, borderColor: '#383838',
+  root: { padding: 16, gap: 12 },
+  input: {
+    backgroundColor: '#2a2a2a',
+    color: '#d4d4d4',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 15,
+    minHeight: 110,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: '#383838',
   },
-  btn:         {
-    backgroundColor: '#0078d4', borderRadius: 10,
-    paddingVertical: 14, alignItems: 'center',
+  btn: {
+    backgroundColor: '#0078d4',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
   },
   btnDisabled: { opacity: 0.35 },
-  btnText:     { color: '#fff', fontWeight: '700', fontSize: 15 },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });

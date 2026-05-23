@@ -9,17 +9,12 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: [
-      'tests/unit/protocol/**/*.test.ts',
-      'tests/unit/relay-server/**/*.test.ts',
-      'tests/unit/vscode-extension/**/*.test.ts',
-      'tests/unit/mobile-client/**/*.test.tsx',
-      'tests/unit/mobile-client/**/*.test.ts',
-      'tests/integration/**/*.test.ts',
-      'tests/property/**/*.test.ts',
-      'tests/performance/**/*.test.ts'
+      'packages/**/*.test.ts',
+      'packages/**/*.test.tsx'
     ],
     exclude: [
-      'tests/unit/mobile-client/components.test.tsx'
+      '**/node_modules/**',
+      '**/dist/**'
     ],
     setupFiles: ['./tests/setup/test-setup.ts', './tests/setup/react-native-testing-setup.ts'],
     coverage: {

@@ -1,147 +1,152 @@
-import * as vscode from 'vscode'
-import { KeyManager } from './KeyManager'
-import { resolve } from 'node:dns';
+import * as vscode from 'vscode';
+import { KeyManager } from './KeyManager';
 
 export type SessionState = 'idle' | 'pending' | 'active' | 'revoked';
 
 export interface ActiveSession {
-    sessionId: string;
-    laptopToken: string;
-    relayWssUrl: string;
+  sessionId: string;
+  laptopToken: string;
+  relayWssUrl: string;
 }
 
 export class SessionManager {
-    private _state: SessionState = 'idle';
-    private _session: ActiveSession | null = null;
-    private _pollTimer: NodeJS.Timeout | null = null;
+  private _state: SessionState = 'idle';
+  private _session: ActiveSession | null = null;
+  private _pollTimer: NodeJS.Timeout | null = null;
 
-    private readonly _onStateChange = new vscode.EventEmitter<SessionState>();
-    readonly onStateChange = this._onStateChange.event;
-    
-    constructor(
-        private readonly keyManager: KeyManager,
-        private readonly laptopId: string
-    ) {}
+  private readonly _onStateChange = new vscode.EventEmitter<SessionState>();
+  readonly onStateChange = this._onStateChange.event;
 
-    get state(): SessionState   { return this._state; }
-    get session(): ActiveSession | null { return this._session; }
+  constructor(
+    private readonly keyManager: KeyManager,
+    private readonly laptopId: string
+  ) {}
 
-    async createSession(): Promise<{ sessionId: string; qrPayload: string; expiresAt: number }> {
-        const authUrl = this.getAuthUrl();
-        const requestedAt = Date.now();
-        const body = JSON.stringify({ laptopId: this.laptopId, requestedAt });
-        const sig = await this.keyManager.signRequest(body);
+  get state(): SessionState {
+    return this._state;
+  }
+  get session(): ActiveSession | null {
+    return this._session;
+  }
 
-        const response = await fetch(`${authUrl}/v1/sessions`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Laptop-Id': this.laptopId,
-                'X-Laptop-Sig': sig,
-            },
-            body,
-        });
+  async createSession(): Promise<{ sessionId: string; qrPayload: string; expiresAt: number }> {
+    const authUrl = this.getAuthUrl();
+    const requestedAt = Date.now();
+    const body = JSON.stringify({ laptopId: this.laptopId, requestedAt });
+    const sig = await this.keyManager.signRequest(body);
 
-        if (!response.ok) {
-            throw new Error(`Session creation failed: ${response.status}`);
-        }
+    const response = await fetch(`${authUrl}/v1/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Laptop-Id': this.laptopId,
+        'X-Laptop-Sig': sig,
+      },
+      body,
+    });
 
-        const data = await response.json() as {
-            sessionId: string,
-            qrPayload: string,
-            expiresAt: number,
-        };
-
-        this._state = 'pending';
-        this._onStateChange.fire('pending');
-        return data;
+    if (!response.ok) {
+      throw new Error(`Session creation failed: ${response.status}`);
     }
 
-    async waitForMobile(sessionId: string, timeoutMs = 90_000): Promise<ActiveSession> {
-        const authUrl = this.getAuthUrl();
-        const deadline = Date.now() + timeoutMs;
+    const data = (await response.json()) as {
+      sessionId: string;
+      qrPayload: string;
+      expiresAt: number;
+    };
 
-        return new Promise((resolve, reject) => {
-            const poll = async () => {
-                if (Date.now() > deadline) {
-                    this._setState('idle');
-                    return reject(new Error('Pairing timed out - QR code expired'));
-                }
+    this._state = 'pending';
+    this._onStateChange.fire('pending');
+    return data;
+  }
 
-                try {
-                    const sig = await this.keyManager.signRequest('');
-                    const response = await fetch(`${authUrl}/v1/sessions/${sessionId}/status`, {
-                        headers: {
-                            'X-Laptop-Id': this.laptopId,
-                            'X-Laptop-Sig': sig,
-                        },
-                    });
+  async waitForMobile(sessionId: string, timeoutMs = 90_000): Promise<ActiveSession> {
+    const authUrl = this.getAuthUrl();
+    const deadline = Date.now() + timeoutMs;
 
-                    if (!response.ok) {
-                        return reject(new Error(`Status poll failed: ${response.status}`));
-                    }
+    return new Promise((resolve, reject) => {
+      const poll = async () => {
+        if (Date.now() > deadline) {
+          this._setState('idle');
+          return reject(new Error('Pairing timed out - QR code expired'));
+        }
 
-                    const data = await response.json() as {
-                        state: string;
-                        laptopToken: string | null;
-                    };
+        try {
+          const sig = await this.keyManager.signRequest('');
+          const response = await fetch(`${authUrl}/v1/sessions/${sessionId}/status`, {
+            headers: {
+              'X-Laptop-Id': this.laptopId,
+              'X-Laptop-Sig': sig,
+            },
+          });
 
-                    if (data.state === 'active' && data.laptopToken) {
-                        const relayBase = vscode.workspace
-                            .getConfiguration('codelink')
-                            .get<string>('relayServiceUrl', 'ws://localhost:8082');
+          if (!response.ok) {
+            return reject(new Error(`Status poll failed: ${response.status}`));
+          }
 
-                        const session: ActiveSession = {
-                            sessionId,
-                            laptopToken: data.laptopToken,
-                            relayWssUrl: `${relayBase}/ws`
-                        };
-                        this._session = session;
-                        this._setState('active');
-                        return resolve(session)
-                    }
-                } catch (err) {
-                    reject(err);
-                }
+          const data = (await response.json()) as {
+            state: string;
+            laptopToken: string | null;
+          };
+
+          if (data.state === 'active' && data.laptopToken) {
+            const relayBase = vscode.workspace
+              .getConfiguration('codelink')
+              .get<string>('relayServiceUrl', 'ws://localhost:8082');
+
+            const session: ActiveSession = {
+              sessionId,
+              laptopToken: data.laptopToken,
+              relayWssUrl: `${relayBase}/ws`,
             };
-            poll();
-        });
-    }
-
-    async revokeSession(): Promise<void> {
-        if (!this._session) { return; }
-
-        const authUrl = this.getAuthUrl();
-        const sig = await this.keyManager.signRequest('');
-
-        await fetch(`${authUrl}/v1/sessions/${this._session.sessionId}`, {
-            method: 'DELETE',
-            headers: {
-                'X-Laptop-Id': this.laptopId,
-                'X-Laptop-Sig': sig,
-            },
-        });
-
-        this._session = null;
-        this._setState('revoked');
-        setTimeout(() => this._setState('idle'), 1_000);
-    }
-
-    dispose(): void {
-        if (this._pollTimer) {
-            clearTimeout(this._pollTimer);
+            this._session = session;
+            this._setState('active');
+            return resolve(session);
+          }
+        } catch (err) {
+          reject(err);
         }
-        this._onStateChange.dispose();
+      };
+      poll();
+    });
+  }
+
+  async revokeSession(): Promise<void> {
+    if (!this._session) {
+      return;
     }
 
-    private _setState(state: SessionState): void {
-        this._state = state;
-        this._onStateChange.fire(state);
-    }
+    const authUrl = this.getAuthUrl();
+    const sig = await this.keyManager.signRequest('');
 
-    private getAuthUrl(): string {
-        return vscode.workspace
-            .getConfiguration('codelink')
-            .get<string>('authServiceUrl', 'http://localhost:8081');
+    await fetch(`${authUrl}/v1/sessions/${this._session.sessionId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-Laptop-Id': this.laptopId,
+        'X-Laptop-Sig': sig,
+      },
+    });
+
+    this._session = null;
+    this._setState('revoked');
+    setTimeout(() => this._setState('idle'), 1_000);
+  }
+
+  dispose(): void {
+    if (this._pollTimer) {
+      clearTimeout(this._pollTimer);
     }
+    this._onStateChange.dispose();
+  }
+
+  private _setState(state: SessionState): void {
+    this._state = state;
+    this._onStateChange.fire(state);
+  }
+
+  private getAuthUrl(): string {
+    return vscode.workspace
+      .getConfiguration('codelink')
+      .get<string>('authServiceUrl', 'http://localhost:8081');
+  }
 }

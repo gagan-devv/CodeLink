@@ -1,757 +1,221 @@
-# CodeLink
+# 🔗 CodeLink
 
-CodeLink is a development tool that enables AI-assisted code editing through a mobile interface, without requiring cloud IDEs or repository synchronization. All changes require human approval before being applied.
+CodeLink is a premium developer tool that brings AI-assisted coding to your mobile device. Review diffs, track unsaved changes, compose AI prompts, and securely inject instructions directly into your local AI code editor (Continue, Kiro, Cursor, or Antigravity) — all from your phone, without cloud dependencies or synchronizing repositories.
 
-## Architecture Overview
+---
 
-CodeLink consists of three main components:
+## 🏗️ Architecture Overview
+
+CodeLink is built with a highly secure, modular, and performant monorepo architecture:
+
+```
+                  ┌──────────────────────────────┐
+                  │      VS Code Extension       │ (TypeScript Host)
+                  │  - FileWatcher & Git Diffs   │
+                  │  - Editor Adapter Registry  │
+                  └──────────────┬───────────────┘
+                                 │
+                                 │ WebSockets (JWT Auth)
+                                 ▼
+   ┌──────────────────────────────────────────────────────────┐
+   │                  Docker Compose Backend                  │
+   │                                                          │
+   │   ┌─────────────────────┐      ┌─────────────────────┐   │
+   │   │    Auth Service     │◀────▶│    Relay Service    │   │
+   │   │       (Go REST)     │      │   (Go WebSocket)    │   │
+   │   └──────────┬──────────┘      └──────────┬──────────┘   │
+   │              │                            │              │
+   │              ▼                            ▼              │
+   │      ┌───────────────┐            ┌───────────────┐      │
+   │      │  PostgreSQL   │            │  Redis Cache  │      │
+   │      └───────────────┘            └───────────────┘      │
+   └─────────────────────────────┬────────────────────────────┘
+                                 │
+                                 │ WebSockets (JWT Auth)
+                                 ▼
+                  ┌──────────────────────────────┐
+                  │        Mobile Client         │ (React Native / Expo)
+                  │  - Unified Mobile Diff View  │
+                  │  - Prompt Composer Console   │
+                  └──────────────────────────────┘
+```
 
 ### 1. VS Code Extension (`packages/vscode-extension`)
 
-A Visual Studio Code extension that integrates with your local development environment. It communicates with the relay server to receive code change requests from the mobile client.
+A TypeScript host extension that integrates into your local workspace.
 
-**Git Integration Components**:
+- **Git Integration**: Uses a high-performance `FileWatcher` (debounced) and `SnapshotEngine` to compute differences between current file states and Git `HEAD`.
+- **Patch Engine**: Compiles patches using `PatchEncoder` and transmits them as `SYNC_FULL_CONTEXT` message envelopes.
+- **Editor Adapter Registry**: Detects installed AI editors (Continue, Kiro, Cursor, Antigravity) and safely injects prompts using public VS Code command APIs, with no fragile UI scraping.
+- **Authentication**: Generates RSA keys locally via `KeyManager` to securely pair with mobile devices.
 
-- **File Watcher**: Monitors active editor changes with 1000ms debouncing
-- **Git Integration Module**: Fetches HEAD versions from local Git repository using simple-git
-- **Diff Generator**: Compares HEAD vs current file state and generates FileContextPayload
-- **WebSocket Client**: Transmits SYNC_FULL_CONTEXT messages to relay server
+### 2. Auth Service (`services/auth`)
 
-**Editor Adapter System**:
+A microservice written in Go that acts as the source of truth for identity and trust.
 
-- **Editor Registry**: Manages and detects available AI code editors (Continue, Kiro, Cursor, Antigravity)
-- **Capability-Driven Architecture**: Adapts behavior based on what each editor supports
-- **Prompt Injection**: Sends prompts from mobile to AI editor chat panels using public VS Code commands
-- **Safe Integration**: Uses only public VS Code APIs, no UI scraping or private APIs
+- **Laptop Management**: Stores registered laptop identities and public keys in PostgreSQL.
+- **Session Control**: Manages user authentication, pairing requests, and signs secure JWTs using its private key.
+- **Revocations**: Coordinates session cancellations and tracks session invalidations in Redis.
 
-### 2. Relay Server (`packages/relay-server`)
+### 3. Relay Service (`services/relay`)
 
-A WebSocket relay server built with Socket.IO that facilitates real-time communication between the VS Code extension and the mobile client. It runs locally on your machine and handles message routing.
+A high-throughput WebSocket routing hub built in Go.
 
-**Message Routing**: Routes SYNC_FULL_CONTEXT messages from VS Code extension to all connected mobile clients.
+- **Secure Routing**: Validates JWT signatures using the Auth Service's public key.
+- **Real-Time Delivery**: Acts as a stateful WebSocket tunnel routing prompt commands and code diffs between connected extensions and paired mobile devices.
+- **PubSub Integration**: Utilizes Redis for cross-node message distribution and connection tracking.
 
-### 3. Mobile Client (`packages/mobile-client`)
+### 4. Mobile Client (`packages/mobile`)
 
-A Progressive Web App (PWA) built with React that provides a mobile interface for reviewing and approving code changes. It connects to the relay server via WebSocket.
+A modern, native-feeling Expo/React Native application for iOS, Android, and web.
 
-**Diff Viewer**: Renders unified diffs using react-diff-viewer-continued with mobile-optimized styling, dirty state indicators, and timestamp display.
+- **QR Pairing**: Scans QR codes generated by the VS Code extension to establish secure pairing.
+- **Diff Viewer**: Displays unified code diffs using a mobile-optimized layout with unsaved "dirty" state indicators.
+- **Prompt Composer**: Features a sleek console for drafting prompt instructions and sending them directly to the active VS Code AI editor.
 
-### 4. Protocol Package (`packages/protocol`)
+### 5. Protocol Package (`packages/protocol`)
 
-A shared TypeScript package that defines the message types and interfaces used for communication between all components.
+A shared TypeScript library containing the core message type definitions, JSON codecs, type guards, and envelope encoders/decoders (`buildEnvelope`, `parseEnvelope`).
 
-**Message Types**: Includes SYNC_FULL_CONTEXT message type and FileContextPayload interface for Git integration.
+---
 
-## Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          VS Code Extension                               │
-│                                                                          │
-│  ┌──────────────┐    ┌─────────────────┐    ┌──────────────────┐      │
-│  │ File Watcher │───▶│ Git Integration │───▶│ Diff Generator   │      │
-│  │              │    │ Module          │    │                  │      │
-│  │ - Debounce   │    │ - Fetch HEAD    │    │ - Compare        │      │
-│  │ - Track file │    │ - Check tracked │    │ - Build payload  │      │
-│  └──────────────┘    └─────────────────┘    └──────────────────┘      │
-│                                                        │                 │
-│                                                        ▼                 │
-│                                              ┌──────────────────┐       │
-│                                              │ WebSocket Client │       │
-│                                              │ - Send message   │       │
-│                                              │ - Queue/retry    │       │
-│                                              └──────────────────┘       │
-└──────────────────────────────────────────────────────┬──────────────────┘
-                                                       │
-                                                       │ SYNC_FULL_CONTEXT
-                                                       │ message
-                                                       ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           Relay Server                                   │
-│                                                                          │
-│                    ┌──────────────────────────┐                         │
-│                    │   Message Router         │                         │
-│                    │   - Receive from VS Code │                         │
-│                    │   - Broadcast to mobile  │                         │
-│                    └──────────────────────────┘                         │
-└──────────────────────────────────────────────────────┬──────────────────┘
-                                                      # CodeLink
-
-                                                      CodeLink enables AI-assisted code editing via a mobile interface while keeping editing and approvals local to the developer's machine.
-
-                                                      This README has been updated to reflect the actual repository layout and to provide clear local and production deployment guidance.
-
-                                                      **Repo layout (important folders)**
-                                                      - `services/auth` — Auth microservice (Go)
-                                                      - `services/relay` — Relay websocket service (Go)
-                                                      - `infra/docker-compose.yml` — local dev orchestration (Postgres, Redis, auth, relay)
-                                                      - `packages/mobile` — Expo mobile app / PWA (client)
-                                                      - `packages/vscode-extension` — VS Code extension
-                                                      - `packages/protocol` — Shared TypeScript protocol package (library)
-
-                                                      **High-level data flow**
-
-                                                      1. The VS Code extension produces diffs and/or prompt injection messages.
-                                                      2. The extension connects to the relay service (WebSocket) and authenticates using tokens issued by the auth service.
-                                                      3. The relay routes messages between the extension (host) and mobile clients.
-                                                      4. The mobile client connects to the relay and displays diffs / allows prompt injection.
-
-                                                      ## Components & how to deploy them
-
-                                                      **Auth service** (`services/auth`)
-                                                      - Language: Go
-                                                      - Container: `services/auth/Dockerfile`
-                                                      - Default HTTP port: `8081`
-                                                      - Required env vars (must be set in production):
-                                                        - `POSTGRES_URL` — e.g. `postgres://user:pass@host:5432/db`
-                                                        - `REDIS_URL` — e.g. `redis://host:6379`
-                                                        - `AUTH_HMAC_SECRET` — at least 32 bytes
-                                                        - `AUTH_PRIVATE_KEY_PEM` — RSA private key PEM for signing JWTs
-                                                        - optional: `AUTH_JWT_ISSUER`, `AUTH_PORT`, `RELAY_WSS_URL`
-
-                                                      **Relay service** (`services/relay`)
-                                                      - Language: Go
-                                                      - Container: `services/relay/Dockerfile`
-                                                      - Default HTTP / WS port: `8082`
-                                                      - Required env vars:
-                                                        - `REDIS_URL`
-                                                        - `AUTH_PUBLIC_KEY_PEM` — RSA public key PEM for validating tokens issued by auth
-                                                        - optional: `AUTH_JWT_ISSUER`, `RELAY_PORT`
-
-                                                      **Database & cache**
-                                                      - PostgreSQL and Redis are used by the auth and relay services. For local dev the quick option is to use `infra/docker-compose.yml`.
-
-                                                      **Mobile client** (`packages/mobile`)
-                                                      - Expo app (PWA + native builds)
-                                                      - Configurable via env:
-                                                        - `EXPO_PUBLIC_AUTH_URL` (default `http://localhost:8081`)
-                                                        - `EXPO_PUBLIC_RELAY_URL` (default `ws://localhost:8082`)
-                                                      - Run locally with Expo for debugging or build via EAS for production
-
-                                                      **VS Code extension** (`packages/vscode-extension`)
-                                                      - Built with TypeScript and packaged as a VSIX for installation.
-                                                      - Extension settings:
-                                                        - `codelink.authServiceUrl` (default `http://localhost:8081`)
-                                                        - `codelink.relayServiceUrl` (default `ws://localhost:8082`)
-
-
-                                                      ## Local development (recommended quickstart)
-
-                                                      This repo includes a docker-compose file (`infra/docker-compose.yml`) that will start Postgres, Redis, the auth service and the relay service for local testing.
-
-                                                      From the repo root:
-
-                                                      ```bash
-                                                      # build and start backend services (postgres, redis, auth, relay)
-                                                      docker compose -f infra/docker-compose.yml up --build
-                                                      ```
-
-                                                      After compose is up:
-
-                                                      ```bash
-                                                      # Build workspace TypeScript packages
-                                                      npm run build
-
-                                                      # Start mobile client (in another terminal)
-                                                      cd packages/mobile
-                                                      npm start   # or `expo start`
-
-                                                      # Build the VS Code extension (in another terminal)
-                                                      cd packages/vscode-extension
-                                                      npm run build
-                                                      ```
-
-                                                      Notes:
-                                                      - The compose setup exposes services on the host at the standard ports (`8081` for auth, `8082` for relay, `5432` for Postgres, `6379` for Redis).
-                                                      - Ensure `EXPO_PUBLIC_AUTH_URL` and `EXPO_PUBLIC_RELAY_URL` in `packages/mobile` point to the running services (or set them via `.env` / environment when running Expo).
-
-                                                      ## Production deployment suggestions
-
-                                                      You can deploy components independently. Typical mapping:
-
-                                                      - Auth: container (Docker) behind a load balancer, connected to managed Postgres & Redis.
-                                                      - Relay: container (Docker) or horizontally scalable cluster; ensure sticky sessions if using WebSocket proxying (or use websocket-aware load balancer / ingress). Relay needs access to the auth public key for JWT validation and to Redis for session revocation/state.
-                                                      - Mobile client: deploy PWA static assets to any static host / CDN, or build native binaries using EAS and distribute via app stores.
-                                                      - VS Code extension: package as a VSIX and publish to the Visual Studio Marketplace, or install locally during development.
-
-                                                      Deployment tips:
-
-                                                      - For Docker Compose production-like deploys, create an override compose file with proper secrets and volumes, and don't use compose for large-scale production.
-                                                      - For Kubernetes, deploy Postgres and Redis as managed services or StatefulSets, deploy auth and relay as Deployments, and use an Ingress with websocket support (NGINX or cloud provider) for the relay.
-                                                      - Keep `AUTH_HMAC_SECRET` and JWT private keys in a secrets manager.
-
-                                                      ## Useful commands
-
-                                                      - Build all TypeScript packages: `npm run build`
-                                                      - Run Go unit tests (all services): `npm run test:go`
-                                                      - Lint & format: `npm run lint` / `npm run format`
-
-                                                      ## Files to inspect
-                                                      - Compose file: [infra/docker-compose.yml](infra/docker-compose.yml)
-                                                      - Auth service: [services/auth](services/auth)
-                                                      - Relay service: [services/relay](services/relay)
-                                                      - Mobile client: [packages/mobile](packages/mobile)
-                                                      - VS Code extension: [packages/vscode-extension](packages/vscode-extension)
-
-                                                      ## Notes & caveats
-
-                                                      - The original README referenced `packages/relay-server` and `packages/mobile-client`; the real structure is `services/relay` and `packages/mobile`. This README reflects the current source layout.
-                                                      - Before deploying, verify environment variables and keys required by `services/auth/internal/config/config.go` and `services/relay/internal/config/config.go`.
-
-                                                      ---
-
-                                                      If you want, I can now:
-                                                      - generate Kubernetes manifests (Helm or k8s YAML)
-                                                      - add a docker-compose.override.yml for production secrets
-                                                      - create an Expo/EAS publish guide or build scripts
-
-                                                      Tell me which of the above you'd like next.
-#### Key Capabilities
-
-- **Automatic Detection**: Discovers installed editors by querying VS Code commands
-- **Capability-Driven**: Adapts behavior based on what each editor supports
-- **Safe Integration**: Uses only public VS Code APIs (`vscode.commands.executeCommand`)
-- **Graceful Degradation**: Falls back to control-only mode for closed-source editors
-- **Error Handling**: Provides clear error messages when operations fail
-- **No UI Scraping**: Never uses webview DOM access, keystroke replay, or private APIs
-
-#### Sync Levels Explained
-
-- **Full Sync**: Complete access to chat history, token streaming, and diff artifacts (Continue only)
-- **Partial Sync**: Access to own internal state but limited external API (Kiro)
-- **Control-Only**: Can inject prompts but cannot read chat history or stream tokens (Cursor, Antigravity)
-
-#### Using Prompt Injection from Mobile
-
-1. **Ensure an AI editor is installed**: Install Continue, Kiro, Cursor, or Antigravity in VS Code
-2. **Connect mobile client**: Open the mobile client and verify connection status
-3. **Send a prompt**: Type your prompt in the mobile interface and send
-4. **View in editor**: The prompt appears in your AI editor's chat panel as if you typed it
-
-#### Message Protocol
-
-Prompt injection uses the `INJECT_PROMPT` message type:
-
-```typescript
-interface InjectPromptMessage {
-  type: 'INJECT_PROMPT';
-  payload: {
-    prompt: string;
-  };
-  timestamp: number;
-}
-
-interface InjectPromptResponse {
-  type: 'INJECT_PROMPT_RESPONSE';
-  payload: {
-    success: boolean;
-    error?: string;
-    editorUsed?: string;
-  };
-  timestamp: number;
-}
-```
-
-**Message Flow**:
-
-1. Mobile client sends `INJECT_PROMPT` message to relay server
-2. Relay server routes message to VS Code extension
-3. Extension queries Editor Registry for best available adapter
-4. Adapter executes VS Code command to inject prompt into editor
-5. Extension sends `INJECT_PROMPT_RESPONSE` back to mobile client
-
-#### Architecture Principles
-
-The Editor Adapter System follows these design principles:
-
-- **Editor-Agnostic Core**: No editor-specific logic outside adapter implementations
-- **Capability Honesty**: Adapters only claim capabilities they can actually provide
-- **Fail-Safe Operations**: All operations return error results instead of throwing exceptions
-- **Extensible Design**: New editors can be added without modifying core modules
-- **Transparent Limitations**: Clearly documents what is and isn't possible per editor
-
-#### Troubleshooting
-
-**Prompt injection not working**:
-
-- Verify an AI editor is installed in VS Code
-- Check VS Code Output panel for CodeLink extension logs
-- Ensure the editor's extension is activated (open its chat panel once)
-- Review the error message in the mobile client response
-
-**No editor detected**:
-
-- Install at least one supported AI editor (Continue, Kiro, Cursor, or Antigravity)
-- Restart VS Code after installing an editor
-- Check that the editor extension is enabled in VS Code
-- Run "Developer: Show Running Extensions" to verify the editor is active
-
-**Wrong editor selected**:
-
-- The system automatically selects the editor with the highest sync level
-- Preference order: Continue (full) > Kiro (partial) > Cursor/Antigravity (control-only)
-- To force a specific editor, disable other AI editor extensions
-
-**Command execution fails**:
-
-- Ensure the AI editor is fully initialized (may take a few seconds after VS Code starts)
-- Check that the editor's chat panel can be opened manually
-- Review VS Code extension logs for detailed error messages
-- Try reloading VS Code window (Ctrl+R / Cmd+R in Extension Development Host)
-
-### Git Integration & File Diffing
-
-CodeLink provides real-time unified diff viewing on mobile devices, allowing you to monitor your code changes as you work. The system automatically detects file edits in VS Code, compares them against the Git HEAD version, and displays the differences on your mobile device.
-
-#### How It Works
-
-The Git Integration feature follows a pipeline architecture:
-
-```
-File Edit in VS Code
-    ↓
-File Watcher (1000ms debounce)
-    ↓
-Git Integration Module (fetch HEAD version)
-    ↓
-Diff Generator (compare HEAD vs current)
-    ↓
-WebSocket Client (send to relay server)
-    ↓
-Relay Server (route to mobile clients)
-    ↓
-Mobile Client (render unified diff)
-```
-
-#### Key Capabilities
-
-- **Automatic Change Detection**: Monitors active file changes in VS Code with intelligent debouncing
-- **Git Integration**: Fetches HEAD versions from your local Git repository using simple-git
-- **Real-time Diff Transmission**: Sends unified diffs via WebSocket to connected mobile devices
-- **Mobile-Optimized Display**: Renders diffs using react-diff-viewer-continued in unified view mode
-- **Dirty State Tracking**: Shows visual indicators for files with unsaved changes
-- **Untracked File Support**: Handles files not yet committed to Git gracefully
-- **Performance Optimized**: End-to-end latency under 2 seconds for typical files
-
-#### Using the Diff Viewer on Mobile
-
-1. **Connect to the relay server**: Open the mobile client at http://localhost:3000 (or your configured URL)
-2. **Verify connection**: Check that the status shows "Connected" in green
-3. **Edit files in VS Code**: Open any file in your workspace and make changes
-4. **View diffs automatically**: After you stop typing (1 second delay), the diff appears on your mobile device
-5. **Review changes**: The diff viewer shows:
-   - File name and path
-   - Orange dot indicator for unsaved changes
-   - Timestamp of when the diff was generated
-   - Line-by-line comparison with additions (green) and deletions (red)
-   - Unified view optimized for mobile screens
-
-#### Diff Viewer Features
-
-- **Unified View Mode**: Single-column diff display optimized for mobile screens
-- **Syntax Highlighting**: Code is displayed with appropriate syntax coloring
-- **Dark Theme**: Matches VS Code's dark theme for consistency
-- **Dirty Indicator**: Orange dot (●) appears when file has unsaved changes
-- **Timestamp Display**: Shows when the diff was last generated
-- **New File Support**: Files not in Git are shown as all additions
-- **No Changes Message**: Clear indication when file matches HEAD version
-
-#### WebSocket Message Protocol
-
-The Git Integration feature uses the `SYNC_FULL_CONTEXT` message type to transmit diff data:
-
-```typescript
-interface SyncFullContextMessage {
-  type: 'SYNC_FULL_CONTEXT';
-  payload: FileContextPayload;
-  timestamp: number;
-}
-
-interface FileContextPayload {
-  fileName: string; // Workspace-relative path (e.g., "src/index.ts")
-  originalFile: string; // Content from Git HEAD (empty if untracked)
-  modifiedFile: string; // Current file content from disk
-  isDirty: boolean; // True if file has unsaved changes
-  timestamp: number; // Unix timestamp in milliseconds
-}
-```
-
-**Message Flow**:
-
-1. VS Code extension creates `SYNC_FULL_CONTEXT` message with `FileContextPayload`
-2. Message is sent to relay server via WebSocket
-3. Relay server broadcasts message to all connected mobile clients
-4. Mobile client parses payload and renders diff using react-diff-viewer-continued
-
-#### Performance Characteristics
-
-The Git Integration feature is designed for responsive real-time feedback:
-
-- **Debounce Delay**: 1000ms after last keystroke before diff generation
-- **Git Operations**: Typically complete in under 500ms for standard files
-- **Diff Generation**: Completes in under 200ms for files under 10,000 lines
-- **WebSocket Latency**: Under 300ms on typical local networks
-- **End-to-End Latency**: Total time from last keystroke to mobile display is under 2 seconds
-
-**Performance Tips**:
-
-- Large files (>10,000 lines) may take longer to process
-- Binary files are automatically skipped
-- Network latency affects WebSocket transmission time
-- Multiple rapid edits are debounced to avoid excessive processing
-
-#### Troubleshooting
-
-**Diffs not appearing on mobile**:
-
-- Verify the relay server is running and accessible
-- Check that the mobile client shows "Connected" status
-- Ensure the file is within your VS Code workspace
-- Check VS Code Output panel for CodeLink extension logs
-- Verify the file is a text file (binary files are skipped)
-
-**Empty diffs for tracked files**:
-
-- Ensure the file is committed to Git (check `git status`)
-- Verify Git repository is initialized in your workspace
-- Check that the file path is correct and relative to workspace root
-- Review VS Code extension logs for Git operation errors
-
-**Performance issues**:
-
-- Large files (>10,000 lines) may experience slower processing
-- Check network latency between VS Code and relay server
-- Verify Git operations are not timing out (check logs)
-- Consider closing unused files to reduce monitoring overhead
-
-**Git repository not found**:
-
-- Ensure your workspace is within a Git repository
-- Run `git rev-parse --show-toplevel` to verify Git is initialized
-- Check that the VS Code workspace folder is correctly configured
-- Review extension logs for Git initialization errors
-
-**WebSocket connection issues**:
-
-- Verify relay server is running on the expected port (default: 8080)
-- Check firewall settings allow WebSocket connections
-- Ensure no other service is using the relay server port
-- Review browser console for WebSocket connection errors
-
-**Unsaved changes not reflected**:
-
-- The diff shows disk content, not unsaved editor content
-- Save the file (Ctrl+S / Cmd+S) to see unsaved changes in the diff
-- The orange dot indicator shows when changes are unsaved
-- isDirty flag tracks unsaved state separately from diff content
-
-**Untracked files showing as all additions**:
-
-- This is expected behavior for files not committed to Git
-- The originalFile will be empty for untracked files
-- Commit the file to Git to see proper diffs
-- Use `git add <file>` and `git commit` to track the file
-
-## Setup Instructions
-
-### Prerequisites
-
-- Node.js 20.x or higher
-- npm 9.x or higher
-
-### Installation
-
-1. Clone the repository and install dependencies:
-
-```bash
-npm install
-```
-
-2. Build all packages:
-
-```bash
-npm run build
-```
-
-## Development Instructions
-
-### Running All Components
-
-Start all components in development mode:
-
-```bash
-npm run dev
-```
-
-### Running Components Individually
-
-**Protocol Package** (build and watch):
-
-```bash
-cd packages/protocol
-npm run dev
-```
-
-**VS Code Extension** (build and watch):
-
-```bash
-cd packages/vscode-extension
-npm run dev
-```
-
-Then press F5 in VS Code to launch the Extension Development Host.
-
-**Relay Server** (start server):
-
-```bash
-cd packages/relay-server
-npm run build
-npm start
-```
-
-The relay server will listen on port 8080 by default. You can change this by setting the `PORT` environment variable:
-
-```bash
-PORT=3001 npm start
-```
-
-**Note**: The `npm run dev` command only compiles TypeScript in watch mode - it does not start the server. To run the server during development, use two terminals:
-
-Terminal 1 (compile in watch mode):
-
-```bash
-cd packages/relay-server
-npm run dev
-```
-
-Terminal 2 (run the server):
-
-```bash
-cd packages/relay-server
-npm start
-```
-
-**Mobile Client** (development server):
-
-```bash
-cd packages/mobile-client
-npm run dev
-```
-
-The mobile client will be available at http://localhost:3000
-
-## Testing the Complete Flow
-
-To verify the entire system is working:
-
-1. **Start the relay server**:
-
-   ```bash
-   cd packages/relay-server
-   npm run build
-   npm start
-   ```
-
-   You should see: `CodeLink Relay Server listening on port 8080`
-
-2. **Start the mobile client**:
-
-   ```bash
-   cd packages/mobile-client
-   npm run dev
-   ```
-
-   Open http://localhost:3000 in your browser
-
-3. **Verify the connection**:
-   - The mobile client should show status: "Connected" (in green)
-   - Check the browser console - you should see:
-     - "Connected to relay server"
-     - "Sent ping: {id, timestamp, type, source}"
-     - "Received message: {id, timestamp, type, originalId}"
-   - Check the relay server terminal - you should see:
-     - "Client connected: [socket-id]"
-     - "Received message: {type: 'ping', ...}"
-     - "Sent pong: {type: 'pong', ...}"
-   - The mobile client UI should display the "Last Pong Received" section with message details
-
-4. **Test the VS Code extension** (optional):
-   - Open the VS Code workspace
-   - Press F5 to launch Extension Development Host
-   - Open Command Palette (Ctrl+Shift+P / Cmd+Shift+P)
-   - Run "CodeLink: Hello World"
-   - You should see a notification with a ping message ID
-
-## Code Quality Scripts
-
-### CI/CD Pipeline
-
-CodeLink uses GitHub Actions for continuous integration. The pipeline runs on every commit and includes:
-
-- **Linting**: ESLint checks for code quality
-- **Type Checking**: TypeScript compilation for all packages
-- **Formatting**: Prettier verification
-- **Testing**: Comprehensive test suites with 80% coverage requirement
-
-See [CI/CD Setup Documentation](.github/CI_CD_SETUP.md) for detailed information.
-
-### Pre-Commit Hooks
-
-Install Git hooks to run checks before each commit:
-
-```bash
-./scripts/setup-git-hooks.sh
-```
-
-This will automatically run linting, type checking, and formatting checks before allowing commits.
-
-### Linting
-
-Check code for linting errors:
-
-```bash
-npm run lint
-```
-
-Auto-fix linting issues:
-
-```bash
-npm run lint:fix
-```
-
-### Type Checking
-
-Check TypeScript compilation for all packages:
-
-```bash
-npm run typecheck
-```
-
-Check individual packages:
-
-```bash
-npm run typecheck:protocol   # Protocol package
-npm run typecheck:relay      # Relay server
-npm run typecheck:vscode     # VS Code extension
-npm run typecheck:mobile     # Mobile client
-```
-
-### Formatting
-
-Format all code files:
-
-```bash
-npm run format
-```
-
-Check if code is properly formatted:
-
-```bash
-npm run format:check
-```
-
-### Pre-Commit Check
-
-Run all checks (lint + typecheck + format):
-
-```bash
-npm run precommit
-```
-
-### Testing
-
-Run all tests:
-
-```bash
-npm test
-```
-
-Run tests in watch mode:
-
-```bash
-npm run test:watch
-```
-
-Run tests with coverage:
-
-```bash
-npm run test:coverage
-```
-
-## Development Workflow
-
-### Starting a New Feature
-
-1. Create a feature branch:
-
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. Install pre-commit hooks (first time only):
-
-   ```bash
-   ./scripts/setup-git-hooks.sh
-   ```
-
-3. Make your changes and commit:
-
-   ```bash
-   git add .
-   git commit -m "feat: your feature description"
-   ```
-
-   The pre-commit hook will automatically run linting, type checking, and formatting checks.
-
-4. Push your changes:
-
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-5. Create a pull request on GitHub
-   - CI/CD pipeline will run automatically
-   - All checks must pass before merging
-   - At least one approval is required
-
-### Before Committing
-
-Always run these checks locally:
-
-```bash
-# Run all pre-commit checks
-npm run precommit
-
-# Or run individually
-npm run lint
-npm run typecheck
-npm run format:check
-npm test
-```
-
-### Bypassing Pre-Commit Hooks
-
-In rare cases where you need to bypass the pre-commit hook (not recommended):
-
-```bash
-git commit --no-verify -m "your message"
-```
-
-## Project Structure
+## 📂 Project Structure
 
 ```
 codelink/
 ├── packages/
-│   ├── protocol/          # Shared TypeScript types and interfaces
-│   ├── vscode-extension/  # VS Code extension
-│   ├── relay-server/      # WebSocket relay server
-│   └── mobile-client/     # React PWA mobile client
-├── tests/                 # Integration and property-based tests
-├── package.json           # Root workspace configuration
-├── tsconfig.base.json     # Shared TypeScript configuration
-└── README.md              # This file
+│   ├── protocol/          # Shared TypeScript contracts and encoders (Library)
+│   ├── vscode-extension/  # VS Code Host Extension (TypeScript)
+│   └── mobile/            # Expo React Native App (iOS / Android / Web)
+├── services/
+│   ├── auth/              # Identity and Token Issuance Service (Go)
+│   └── relay/             # WebSocket Message Routing Hub (Go)
+├── infra/
+│   ├── docker-compose.yml # Backend dependencies and service orchestration
+│   └── .env.example       # Backend environmental variables template
+├── scripts/
+│   ├── setup-git-hooks.sh # Helper script to install pre-commit git hooks
+│   └── README.md          # Comprehensive reference of development scripts
+├── tsconfig.base.json     # Base TypeScript compiler directives
+├── tsconfig.json          # Solution-style TypeScript compiler targets
+└── package.json           # Root workspace configuration
 ```
 
-## License
+---
 
-MIT
+## 🚀 Local Development Setup
+
+Get the full development environment running locally in three simple steps:
+
+### Step 1: Start Backend Infrastructure
+
+Spin up Postgres, Redis, the Auth service, and the Relay service in Docker:
+
+```bash
+# Build and start backing services and microservices
+docker compose -f infra/docker-compose.yml up --build
+```
+
+_Backends will be available on standard local ports: Auth REST on `8081`, Relay WebSocket on `8082`._
+
+### Step 2: Build Protocol & Extension
+
+In a new terminal window, build the shared package and the extension:
+
+```bash
+# Install workspace dependencies
+npm install
+
+# Compile shared protocol and typescript packages
+npm run build
+```
+
+### Step 3: Run Clients
+
+#### Launch VS Code Extension Development Host
+
+1. Open the repository root folder in VS Code.
+2. Navigate to `packages/vscode-extension/src/extension.ts`.
+3. Press `F5` (or go to Run and Debug -> click "Run Extension").
+4. A new "Extension Development Host" VS Code window will launch with CodeLink active.
+
+#### Launch Mobile Client (Expo)
+
+In another terminal, start the Expo development server:
+
+```bash
+cd packages/mobile
+npm start
+```
+
+_Press `a` to run in an Android Emulator, `i` to run in iOS Simulator, or `w` to run in your local web browser._
+
+---
+
+## 🧪 Testing & Validation
+
+CodeLink incorporates standard NPM workspace commands and native Go unit tests:
+
+### TypeScript Workspace Quality Tools
+
+```bash
+# Compile and build typescript packages
+npm run build
+
+# Run TypeScript linter
+npm run lint
+
+# Auto-fix linter issues
+npm run lint:fix
+
+# Check formatting via Prettier
+npm run format:check
+
+# Format files matching styling policies
+npm run format
+
+# Run TS typechecks across workspaces
+npm run typecheck
+
+# Run Vitest unit tests
+npm run test
+```
+
+### Go Service Quality Tools
+
+```bash
+# Run unit tests across auth and relay microservices
+npm run test:go
+
+# Run verbose Go tests
+npm run test:go:verbose
+```
+
+### Git Pre-Commit Hook Integration
+
+Prevent invalid changes from entering git by installing the pre-commit sanity checks hook:
+
+```bash
+# Make the helper script executable and execute it
+chmod +x scripts/setup-git-hooks.sh
+./scripts/setup-git-hooks.sh
+```
+
+_This installs a hook that automatically executes `npm run precommit` before every commit, keeping your repository history clean._
+
+---
+
+## 🚢 Production Deployment
+
+For production deployments, the modular microservices can be scaled independently:
+
+- **Database & Cache**: Deploy highly available managed PostgreSQL and Redis clusters.
+- **Go Services**: Run inside Kubernetes or container platforms behind a secure load balancer (ensure WebSocket-sticky sessions on Relay Ingress).
+- **Secrets Management**: Securely provide the `AUTH_HMAC_SECRET`, JWT Private Key PEM, and database connection strings using a dedicated secrets manager.
+- **Mobile Assets**: Build native Android/iOS bundles via EAS CLI (`expo build`), or compile PWA static assets to host on CDN networks.
+
+---
+
+## 📄 License
+
+CodeLink is open-source software licensed under the [MIT License](LICENSE).

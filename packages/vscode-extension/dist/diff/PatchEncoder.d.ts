@@ -1,8 +1,8 @@
 export interface PatchPayload {
     fileName: string;
     patches: string;
-    fromSeq: string;
-    toSeq: string;
+    fromSeq: number;
+    toSeq: number;
     isDirty: boolean;
     timestamp: number;
 }

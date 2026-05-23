@@ -46,6 +46,7 @@ class WsClient {
                 this.opts.onMessage(envelope.type, envelope.payload, envelope.id);
             }
             catch {
+                // ignore parsing failures
             }
         });
         this.ws.on('close', () => {
@@ -57,7 +58,6 @@ class WsClient {
         });
         this.ws.on('error', () => {
             this.ws?.terminate();
-            ;
         });
     }
     send(type, payload) {

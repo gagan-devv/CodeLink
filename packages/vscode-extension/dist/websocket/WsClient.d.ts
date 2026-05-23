@@ -1,4 +1,4 @@
-import { MessageType } from '@codelink/protocol';
+import { MessageType, PayloadFor } from '@codelink/protocol';
 interface WsClientOptions {
     onMessage: (type: string, payload: unknown, id: string) => void;
     onConnected: () => void;
@@ -19,7 +19,7 @@ export declare class WsClient {
     constructor(opts: WsClientOptions);
     connect(url: string, token: string): void;
     private _connect;
-    send(type: MessageType, payload: unknown): void;
+    send<T extends MessageType>(type: T, payload: PayloadFor<T>): void;
     isConnected(): boolean;
     disconnect(): void;
     private flushQueue;

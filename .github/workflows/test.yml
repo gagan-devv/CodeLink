@@ -1,4 +1,4 @@
-name: Lint and Type Check
+name: CI Pipeline
 
 on:
   push:
@@ -9,8 +9,8 @@ on:
       - main
 
 jobs:
-  lint:
-    name: Lint and Type Check
+  validate:
+    name: Lint, Type Check, and Test
     runs-on: ubuntu-latest
 
     steps:
@@ -23,36 +23,29 @@ jobs:
           node-version: '20.x'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Install Node dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Build protocol package
-        run: |
-          cd packages/protocol
-          npm run build
+      - name: Build TypeScript packages
+        run: npm run build
 
       - name: Run ESLint
         run: npm run lint
-        continue-on-error: false
 
       - name: Check code formatting
         run: npm run format:check
-        continue-on-error: false
 
-      - name: TypeScript check - Protocol
-        run: |
-          cd packages/protocol
-          npx tsc --noEmit
-        continue-on-error: false
+      - name: TypeScript type checking
+        run: npm run typecheck
 
-      - name: TypeScript check - Relay Server
-        run: |
-          cd packages/relay-server
-          npx tsc --noEmit
-        continue-on-error: false
+      - name: Run Vitest unit tests
+        run: npm run test
 
-      - name: TypeScript check - VSCode Extension
-        run: |
-          cd packages/vscode-extension
-          npx tsc --noEmit
-        continue-on-error: false
+      - name: Run Go unit tests
+        run: npm run test:go

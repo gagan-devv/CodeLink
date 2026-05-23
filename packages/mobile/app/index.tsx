@@ -1,20 +1,20 @@
 import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter }        from 'expo-router';
+import { useRouter } from 'expo-router';
 import { getStoredSession } from '../src/api/authClient';
-import { wsManager }        from '../src/ws/WsManager';
-import { handleMessage }    from '../src/ws/MessageDispatcher';
-import { useSessionStore }  from '../src/store/useSessionStore';
+import { wsManager } from '../src/ws/WsManager';
+import { handleMessage } from '../src/ws/MessageDispatcher';
+import { useSessionStore } from '../src/store/useSessionStore';
 
 export default function Index() {
   const router = useRouter();
 
   useEffect(() => {
-    wsManager.onMessage      = handleMessage;
-    wsManager.onConnected    = () => useSessionStore.getState().setConnected('restored');
+    wsManager.onMessage = handleMessage;
+    wsManager.onConnected = () => useSessionStore.getState().setConnected('restored');
     wsManager.onDisconnected = () => {};
 
-    getStoredSession().then(session => {
+    getStoredSession().then((session) => {
       if (session) {
         useSessionStore.getState().setConnecting();
         wsManager.connect(session.relayWss, session.mobileToken);

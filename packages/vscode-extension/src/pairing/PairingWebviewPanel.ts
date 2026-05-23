@@ -16,90 +16,104 @@ import { WsClient } from '../websocket/WsClient';
  */
 
 export class PairingWebviewPanel {
-    private static instance: PairingWebviewPanel | undefined;
+  private static instance: PairingWebviewPanel | undefined;
 
-    private readonly panel: vscode.WebviewPanel;
-    private disposed = false;
+  private readonly panel: vscode.WebviewPanel;
+  private disposed = false;
 
-    static createOrShow(
-        context: vscode.ExtensionContext,
-        sessionManager: SessionManager,
-        wsClient: WsClient
-    ): void {
-        if (PairingWebviewPanel.instance) {
-            PairingWebviewPanel.instance.panel.reveal();
-            return;
-        }
-
-        const panel = vscode.window.createWebviewPanel(
-            'codelinkPairing',
-            'CodeLink - Pair Mobile',
-            vscode.ViewColumn.Beside,
-            { enableScripts: true, retainContextWhenHidden: true },
-        );
-
-        PairingWebviewPanel.instance = new PairingWebviewPanel(
-            panel, context, sessionManager, wsClient,
-        );
+  static createOrShow(
+    context: vscode.ExtensionContext,
+    sessionManager: SessionManager,
+    wsClient: WsClient
+  ): void {
+    if (PairingWebviewPanel.instance) {
+      PairingWebviewPanel.instance.panel.reveal();
+      return;
     }
 
-    private constructor(
-        panel: vscode.WebviewPanel,
-        private readonly context: vscode.ExtensionContext,
-        private readonly sessionManager: SessionManager,
-        private readonly wsClient: WsClient,
-    ) {
-        this.panel = panel;
+    const panel = vscode.window.createWebviewPanel(
+      'codelinkPairing',
+      'CodeLink - Pair Mobile',
+      vscode.ViewColumn.Beside,
+      { enableScripts: true, retainContextWhenHidden: true }
+    );
 
-        panel.onDidDispose(() => {
-            this.disposed = true;
-            PairingWebviewPanel.instance = undefined;
-        }, null, context.subscriptions);
+    PairingWebviewPanel.instance = new PairingWebviewPanel(
+      panel,
+      context,
+      sessionManager,
+      wsClient
+    );
+  }
 
-        panel.webview.onDidReceiveMessage(msg => {
-            if (msg.command === 'revoke') {
-                this.sessionManager.revokeSession();
-            } else if (msg.command === 'refresh') {
-                this.startPairingFlow();
-            }
-        });
+  private constructor(
+    panel: vscode.WebviewPanel,
+    private readonly context: vscode.ExtensionContext,
+    private readonly sessionManager: SessionManager,
+    private readonly wsClient: WsClient
+  ) {
+    this.panel = panel;
 
+    panel.onDidDispose(
+      () => {
+        this.disposed = true;
+        PairingWebviewPanel.instance = undefined;
+      },
+      null,
+      context.subscriptions
+    );
+
+    panel.webview.onDidReceiveMessage((msg) => {
+      if (msg.command === 'revoke') {
+        this.sessionManager.revokeSession();
+      } else if (msg.command === 'refresh') {
         this.startPairingFlow();
+      }
+    });
+
+    this.startPairingFlow();
+  }
+
+  private async startPairingFlow(): Promise<void> {
+    if (this.disposed) {
+      return;
     }
 
-    private async startPairingFlow(): Promise<void> {
-        if (this.disposed) { return; }
+    try {
+      this.panel.webview.html = this.loadingHtml('Creating Session...');
 
-        try {
-            this.panel.webview.html = this.loadingHtml('Creating Session...');
+      const { sessionId, qrPayload, expiresAt } = await this.sessionManager.createSession();
 
-            const { sessionId, qrPayload, expiresAt } = await this.sessionManager.createSession();
+      const qrDataUrl = await qrcode.toDataURL(qrPayload, { width: 280, margin: 2 });
 
-            const qrDataUrl = await qrcode.toDataURL(qrPayload, { width: 280, margin: 2 });
+      if (this.disposed) {
+        return;
+      }
+      this.panel.webview.html = this.pairingHtml(qrDataUrl, expiresAt, qrPayload);
 
-            if (this.disposed) { return; }
-            this.panel.webview.html = this.pairingHtml(qrDataUrl, expiresAt, qrPayload);
+      const session = await this.sessionManager.waitForMobile(sessionId, 90_000);
 
-            const session = await this.sessionManager.waitForMobile(sessionId, 90_000);
+      if (this.disposed) {
+        return;
+      }
 
-            if (this.disposed) { return; }
+      this.wsClient.connect(session.relayWssUrl, session.laptopToken);
+      this.panel.webview.html = this.pairedHtml(session.sessionId);
+    } catch (err: unknown) {
+      if (this.disposed) {
+        return;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
 
-            this.wsClient.connect(session.relayWssUrl, session.laptopToken);
-            this.panel.webview.html = this.pairedHtml(session.sessionId);
-        
-        } catch (err: unknown) {
-            if (this.disposed) { return; }
-            const msg = err instanceof Error ? err.message : String(err);
-
-            if (msg.includes('timed out')) {
-                this.startPairingFlow();
-            } else {
-                this.panel.webview.html = this.errorHtml(msg);
-            }
-        }
+      if (msg.includes('timed out')) {
+        this.startPairingFlow();
+      } else {
+        this.panel.webview.html = this.errorHtml(msg);
+      }
     }
+  }
 
-    // HTML Templates
+  // HTML Templates
   private loadingHtml(message: string): string {
     return this.wrap(`<p class="muted">${message}</p>`);
   }

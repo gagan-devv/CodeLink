@@ -1,16 +1,16 @@
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { useRouter }       from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSessionStore } from '../../src/store/useSessionStore';
-import { useDiffStore }    from '../../src/store/useDiffStore';
-import { usePromptStore }  from '../../src/store/usePromptStore';
-import { wsManager }       from '../../src/ws/WsManager';
+import { useDiffStore } from '../../src/store/useDiffStore';
+import { usePromptStore } from '../../src/store/usePromptStore';
+import { wsManager } from '../../src/ws/WsManager';
 import { clearStoredSession } from '../../src/api/authClient';
-import { patchEngine }     from '../../src/diff/PatchEngine';
+import { patchEngine } from '../../src/diff/PatchEngine';
 
 export default function SettingsTab() {
-  const router    = useRouter();
-  const status    = useSessionStore(s => s.status);
-  const sessionId = useSessionStore(s => s.sessionId);
+  const router = useRouter();
+  const status = useSessionStore((s) => s.status);
+  const sessionId = useSessionStore((s) => s.sessionId);
 
   const disconnect = () => {
     Alert.alert(
@@ -19,7 +19,8 @@ export default function SettingsTab() {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Disconnect', style: 'destructive',
+          text: 'Disconnect',
+          style: 'destructive',
           onPress: async () => {
             wsManager.disconnect();
             await clearStoredSession();
@@ -34,10 +35,14 @@ export default function SettingsTab() {
     );
   };
 
-  const statusColor = status === 'connected'   ? '#4ec94e'
-                    : status === 'connecting'   ? '#e5c07b'
-                    : status === 'revoked'      ? '#f55'
-                    : '#666';
+  const statusColor =
+    status === 'connected'
+      ? '#4ec94e'
+      : status === 'connecting'
+        ? '#e5c07b'
+        : status === 'revoked'
+          ? '#f55'
+          : '#666';
 
   return (
     <View style={s.root}>
@@ -82,19 +87,25 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 const s = StyleSheet.create({
-  root:           { flex: 1, backgroundColor: '#1e1e1e', padding: 16, gap: 12 },
-  card:           { backgroundColor: '#252526', borderRadius: 12, overflow: 'hidden' },
-  dot:            { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  value:          { fontSize: 14, fontWeight: '600' },
-  mono:           { color: '#888', fontSize: 13, fontFamily: 'monospace' },
-  pairBtn:        { padding: 16, alignItems: 'center' },
-  pairBtnText:    { color: '#0078d4', fontSize: 15, fontWeight: '600' },
-  disconnectBtn:  { padding: 16, alignItems: 'center' },
+  root: { flex: 1, backgroundColor: '#1e1e1e', padding: 16, gap: 12 },
+  card: { backgroundColor: '#252526', borderRadius: 12, overflow: 'hidden' },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  value: { fontSize: 14, fontWeight: '600' },
+  mono: { color: '#888', fontSize: 13, fontFamily: 'monospace' },
+  pairBtn: { padding: 16, alignItems: 'center' },
+  pairBtnText: { color: '#0078d4', fontSize: 15, fontWeight: '600' },
+  disconnectBtn: { padding: 16, alignItems: 'center' },
   disconnectText: { color: '#f55', fontSize: 15, fontWeight: '600' },
 });
 
 const r = StyleSheet.create({
-  row:   { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: '#333' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
   label: { color: '#888', fontSize: 14, flex: 1 },
   right: { flexDirection: 'row', alignItems: 'center' },
 });

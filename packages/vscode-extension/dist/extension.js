@@ -109,7 +109,7 @@ async function activate(context) {
                     wsClient.send('PROMPT_RESPONSE', {
                         originalId: id,
                         success: result.success,
-                        editorUser: adapter.editorName,
+                        editorUsed: adapter.editorName,
                         error: result.error,
                     });
                     break;

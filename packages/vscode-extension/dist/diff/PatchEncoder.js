@@ -52,7 +52,7 @@ class PatchEncoder {
         const patchText = this.engine.patch_toText(patches);
         const toSeq = last.seq + 1;
         this.lastSent.set(fileName, { content: newContent, seq: toSeq });
-        return { fileName, patches: patchText, fromSeq: last.seq.toString(), toSeq: toSeq.toString(), isDirty, timestamp: Date.now() };
+        return { fileName, patches: patchText, fromSeq: last.seq, toSeq: toSeq, isDirty, timestamp: Date.now() };
     }
     recordSnapshot(fileName, content, seq) {
         this.lastSent.set(fileName, { content, seq });
