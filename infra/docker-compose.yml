@@ -34,9 +34,6 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
-    environment:
-      POSTGRES_URL: postgres://codelink:devpassword@postgres:5432/codelink
-      REDIS_URL: redis://redis:6379
     ports:
       - "8081:8081"
     depends_on:
@@ -51,9 +48,6 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
-    environment:
-      POSTGRES_URL: postgres://codelink:devpassword@postgres:5432/codelink
-      REDIS_URL: redis://redis:6379
     ports:
       - "8082:8082"
     depends_on:
