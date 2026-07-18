@@ -17,18 +17,22 @@
     "eas-cli": "^18.13.1",
     "expo": "~55.0.24",
     "expo-camera": "~55.0.18",
+    "expo-linking": "~55.0.16",
     "expo-router": "~55.0.14",
     "expo-secure-store": "~55.0.14",
     "expo-status-bar": "~55.0.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.6",
+    "react-native-safe-area-context": "^5.8.0",
+    "react-native-screens": "^4.26.1",
     "react-native-web": "^0.21.0",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",
     "@types/react": "~19.2.2",
+    "react-refresh": "^0.18.0",
     "typescript": "~5.9.2"
   },
   "private": true
