@@ -35,3 +35,6 @@ go.work.sum
 # RSA 
 dev-private.pem
 dev-public.pem
+
+
+*dist/*

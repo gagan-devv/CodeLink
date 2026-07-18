@@ -16,6 +16,9 @@ import { PairingWebviewPanel } from './pairing/PairingWebviewPanel';
 import { isInjectPromptPayload, isSnapshotRequestPayload } from '@codelink/protocol';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  // Temporary: Clear cached laptop ID from previous local runs
+  await context.globalState.update('codelink.laptopId', undefined);
+
   // Auth
   const keyManager = new KeyManager(context.secrets);
   const laptopIdentity = new LaptopIdentity(keyManager, context.globalState);
