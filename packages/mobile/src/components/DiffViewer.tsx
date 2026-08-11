@@ -64,11 +64,7 @@ export function DiffViewer({ fileName, content, isDirty, cursorLine }: Props) {
               return (
                 <View
                   key={i}
-                  style={[
-                    s.row,
-                    i === cursorLine && s.activeLine,
-                    isSelected && s.selectedLine,
-                  ]}
+                  style={[s.row, i === cursorLine && s.activeLine, isSelected && s.selectedLine]}
                 >
                   <TouchableOpacity onPress={() => handleLinePress(lineNum)} activeOpacity={0.7}>
                     <Text style={[s.gutter, isSelected && s.selectedGutter]}>{lineNum}</Text>

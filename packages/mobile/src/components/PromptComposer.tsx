@@ -28,11 +28,7 @@ export function PromptComposer() {
   useEffect(() => {
     if (!isDictating) return;
 
-    const phrases = [
-      'Refactor this function',
-      ' to handle errors',
-      ' and optimize performance.',
-    ];
+    const phrases = ['Refactor this function', ' to handle errors', ' and optimize performance.'];
     let index = 0;
 
     const interval = setInterval(() => {

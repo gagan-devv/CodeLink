@@ -14,7 +14,11 @@ import { SnapshotEngine } from './diff/SnapshotEngine';
 import { PatchEncoder } from './diff/PatchEncoder';
 import { PairingWebviewPanel } from './pairing/PairingWebviewPanel';
 import * as path from 'path';
-import { isInjectPromptPayload, isSnapshotRequestPayload, InjectPromptPayload } from '@codelink/protocol';
+import {
+  isInjectPromptPayload,
+  isSnapshotRequestPayload,
+  InjectPromptPayload,
+} from '@codelink/protocol';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // Auth
@@ -67,7 +71,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           if (!isInjectPromptPayload(payload)) {
             return;
           }
-          const { prompt, targetFile, lineRange, selectedCode, source } = payload as InjectPromptPayload;
+          const { prompt, targetFile, lineRange, selectedCode, source } =
+            payload as InjectPromptPayload;
 
           if (targetFile) {
             let targetUri: vscode.Uri | undefined;
@@ -78,7 +83,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               if (foundFiles.length > 0) {
                 targetUri = foundFiles[0];
               } else {
-                const globFiles = await vscode.workspace.findFiles(`**/${targetFile}`, undefined, 1);
+                const globFiles = await vscode.workspace.findFiles(
+                  `**/${targetFile}`,
+                  undefined,
+                  1
+                );
                 if (globFiles.length > 0) {
                   targetUri = globFiles[0];
                 } else {

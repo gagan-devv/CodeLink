@@ -82,7 +82,10 @@ export class KiroAdapter implements IEditorAdapter {
    * @param prompt The prompt text to inject
    * @returns Result indicating success or failure with error details
    */
-  async injectPrompt(prompt: string, _targetDetails?: TargetDetails): Promise<PromptInjectionResult> {
+  async injectPrompt(
+    prompt: string,
+    _targetDetails?: TargetDetails
+  ): Promise<PromptInjectionResult> {
     try {
       // Use Kiro's public command to send a message
       // This command should be registered by the Kiro extension

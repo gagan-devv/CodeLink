@@ -42,7 +42,10 @@ export class ContinueAdapter implements IEditorAdapter {
     }
   }
 
-  async injectPrompt(prompt: string, _targetDetails?: TargetDetails): Promise<PromptInjectionResult> {
+  async injectPrompt(
+    prompt: string,
+    _targetDetails?: TargetDetails
+  ): Promise<PromptInjectionResult> {
     try {
       await vscode.commands.executeCommand('continue.continueGUIView.focusContinueInput', {
         text: prompt,
