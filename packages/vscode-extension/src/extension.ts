@@ -13,12 +13,10 @@ import { GitIntegrationModuleImpl } from './git/GitIntegrationModule';
 import { SnapshotEngine } from './diff/SnapshotEngine';
 import { PatchEncoder } from './diff/PatchEncoder';
 import { PairingWebviewPanel } from './pairing/PairingWebviewPanel';
-import { isInjectPromptPayload, isSnapshotRequestPayload } from '@codelink/protocol';
+import * as path from 'path';
+import { isInjectPromptPayload, isSnapshotRequestPayload, InjectPromptPayload } from '@codelink/protocol';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  // Temporary: Clear cached laptop ID from previous local runs
-  await context.globalState.update('codelink.laptopId', undefined);
-
   // Auth
   const keyManager = new KeyManager(context.secrets);
   const laptopIdentity = new LaptopIdentity(keyManager, context.globalState);
@@ -69,7 +67,50 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           if (!isInjectPromptPayload(payload)) {
             return;
           }
-          const { prompt } = payload as { prompt: string };
+          const { prompt, targetFile, lineRange, selectedCode, source } = payload as InjectPromptPayload;
+
+          if (targetFile) {
+            let targetUri: vscode.Uri | undefined;
+            if (path.isAbsolute(targetFile)) {
+              targetUri = vscode.Uri.file(targetFile);
+            } else {
+              const foundFiles = await vscode.workspace.findFiles(targetFile, undefined, 1);
+              if (foundFiles.length > 0) {
+                targetUri = foundFiles[0];
+              } else {
+                const globFiles = await vscode.workspace.findFiles(`**/${targetFile}`, undefined, 1);
+                if (globFiles.length > 0) {
+                  targetUri = globFiles[0];
+                } else {
+                  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                  if (workspaceFolder) {
+                    targetUri = vscode.Uri.joinPath(workspaceFolder.uri, targetFile);
+                  }
+                }
+              }
+            }
+
+            if (targetUri) {
+              try {
+                const document = await vscode.workspace.openTextDocument(targetUri);
+                const editor = await vscode.window.showTextDocument(document);
+                if (
+                  lineRange &&
+                  typeof lineRange.startLine === 'number' &&
+                  typeof lineRange.endLine === 'number'
+                ) {
+                  const startPos = new vscode.Position(Math.max(0, lineRange.startLine - 1), 0);
+                  const endPos = new vscode.Position(lineRange.endLine, 0);
+                  const selection = new vscode.Selection(startPos, endPos);
+                  editor.selection = selection;
+                  editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
+                }
+              } catch (err) {
+                console.error(`Failed to open target file ${targetFile}:`, err);
+              }
+            }
+          }
+
           const adapter = await registry.getBestAdapter();
           if (!adapter) {
             wsClient.send('PROMPT_RESPONSE', {
@@ -79,7 +120,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             });
             return;
           }
-          const result = await adapter.injectPrompt(prompt);
+          const result = await adapter.injectPrompt(prompt, {
+            targetFile,
+            lineRange,
+            selectedCode,
+            source,
+          });
           wsClient.send('PROMPT_RESPONSE', {
             originalId: id,
             success: result.success,
@@ -122,14 +168,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await sessionManager.revokeSession();
       wsClient.disconnect();
       vscode.window.showInformationMessage('CodeLink: Session revoked.');
-    }),
-
-    vscode.commands.registerCommand('codelink.showStatus', () => {
-      const state = sessionManager.state;
-      const sess = sessionManager.session;
-      vscode.window.showInformationMessage(
-        `CodeLink status ${state}` + (sess ? ` | session: ${sess.sessionId.slice(0, 12)}...` : '')
-      );
     })
   );
 }

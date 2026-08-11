@@ -6,6 +6,7 @@ import {
   PromptInjectionResult,
   ChatMessage,
   DiffArtifact,
+  TargetDetails,
 } from './types';
 
 export class ContinueAdapter implements IEditorAdapter {
@@ -41,7 +42,7 @@ export class ContinueAdapter implements IEditorAdapter {
     }
   }
 
-  async injectPrompt(prompt: string): Promise<PromptInjectionResult> {
+  async injectPrompt(prompt: string, _targetDetails?: TargetDetails): Promise<PromptInjectionResult> {
     try {
       await vscode.commands.executeCommand('continue.continueGUIView.focusContinueInput', {
         text: prompt,

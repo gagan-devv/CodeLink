@@ -4,6 +4,7 @@ import {
   EditorCapabilities,
   DetectionResult,
   PromptInjectionResult,
+  TargetDetails,
 } from './types';
 
 /**
@@ -108,7 +109,7 @@ export class AntigravityAdapter implements IEditorAdapter {
    * @param prompt The prompt text to inject into Antigravity's chat
    * @returns PromptInjectionResult indicating success or failure with error details
    */
-  async injectPrompt(prompt: string): Promise<PromptInjectionResult> {
+  async injectPrompt(prompt: string, _targetDetails?: TargetDetails): Promise<PromptInjectionResult> {
     // Try primary command pattern: antigravity.chat.send
     try {
       await vscode.commands.executeCommand('antigravity.chat.send', prompt);

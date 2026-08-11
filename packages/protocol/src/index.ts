@@ -154,6 +154,9 @@ export interface SnapshotRequestPayload {
 export interface InjectPromptPayload {
   prompt: string;
   targetFile?: string;
+  lineRange?: { startLine: number; endLine: number };
+  selectedCode?: string;
+  source?: 'text' | 'voice';
 }
 
 export interface PromptResponsePayload {
@@ -229,7 +232,28 @@ export function isInjectPromptPayload(p: unknown): p is InjectPromptPayload {
     return false;
   }
   const o = p as Record<string, unknown>;
-  return typeof o['prompt'] === 'string' && o['prompt'].length > 0;
+  if (typeof o['prompt'] !== 'string' || o['prompt'].length === 0) {
+    return false;
+  }
+  if (o['targetFile'] !== undefined && typeof o['targetFile'] !== 'string') {
+    return false;
+  }
+  if (o['lineRange'] !== undefined) {
+    if (typeof o['lineRange'] !== 'object' || o['lineRange'] === null) {
+      return false;
+    }
+    const lr = o['lineRange'] as Record<string, unknown>;
+    if (typeof lr['startLine'] !== 'number' || typeof lr['endLine'] !== 'number') {
+      return false;
+    }
+  }
+  if (o['selectedCode'] !== undefined && typeof o['selectedCode'] !== 'string') {
+    return false;
+  }
+  if (o['source'] !== undefined && o['source'] !== 'text' && o['source'] !== 'voice') {
+    return false;
+  }
+  return true;
 }
 
 export function isSnapshotRequestPayload(p: unknown): p is SnapshotRequestPayload {

@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { useDiffStore } from '../store/useDiffStore';
 
 interface Props {
   fileName: string;
@@ -10,6 +11,10 @@ interface Props {
 
 export function DiffViewer({ fileName, content, isDirty, cursorLine }: Props) {
   const scrollRef = useRef<ScrollView>(null);
+  const selectedRange = useDiffStore((s) => s.selectedRange);
+  const selectLineRange = useDiffStore((s) => s.selectLineRange);
+  const clearSelection = useDiffStore((s) => s.clearSelection);
+
   const lines = content.split('\n');
   const LINE_H = 20;
 
@@ -18,6 +23,22 @@ export function DiffViewer({ fileName, content, isDirty, cursorLine }: Props) {
     const offset = Math.max(0, cursorLine - 8) * LINE_H;
     scrollRef.current?.scrollTo({ y: offset, animated: true });
   }, [cursorLine]);
+
+  const handleLinePress = (lineNum: number) => {
+    if (!selectedRange) {
+      selectLineRange(lineNum, lineNum);
+    } else if (selectedRange.startLine === lineNum && selectedRange.endLine === lineNum) {
+      clearSelection();
+    } else if (selectedRange.startLine === selectedRange.endLine) {
+      selectLineRange(selectedRange.startLine, lineNum);
+    } else {
+      if (lineNum === selectedRange.startLine || lineNum === selectedRange.endLine) {
+        clearSelection();
+      } else {
+        selectLineRange(selectedRange.startLine, lineNum);
+      }
+    }
+  };
 
   return (
     <View style={s.root}>
@@ -33,12 +54,29 @@ export function DiffViewer({ fileName, content, isDirty, cursorLine }: Props) {
       <ScrollView ref={scrollRef} style={s.scroll} horizontal={false} showsVerticalScrollIndicator>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View>
-            {lines.map((line, i) => (
-              <View key={i} style={[s.row, i === cursorLine && s.activeLine]}>
-                <Text style={s.gutter}>{i + 1}</Text>
-                <Text style={s.code}>{line || ' '}</Text>
-              </View>
-            ))}
+            {lines.map((line, i) => {
+              const lineNum = i + 1;
+              const isSelected =
+                selectedRange !== null &&
+                lineNum >= selectedRange.startLine &&
+                lineNum <= selectedRange.endLine;
+
+              return (
+                <View
+                  key={i}
+                  style={[
+                    s.row,
+                    i === cursorLine && s.activeLine,
+                    isSelected && s.selectedLine,
+                  ]}
+                >
+                  <TouchableOpacity onPress={() => handleLinePress(lineNum)} activeOpacity={0.7}>
+                    <Text style={[s.gutter, isSelected && s.selectedGutter]}>{lineNum}</Text>
+                  </TouchableOpacity>
+                  <Text style={s.code}>{line || ' '}</Text>
+                </View>
+              );
+            })}
           </View>
         </ScrollView>
       </ScrollView>
@@ -62,6 +100,7 @@ const s = StyleSheet.create({
   scroll: { flex: 1 },
   row: { flexDirection: 'row', height: 20, alignItems: 'center', paddingRight: 16 },
   activeLine: { backgroundColor: '#2c3a4a' },
+  selectedLine: { backgroundColor: '#3d4f66' },
   gutter: {
     width: 44,
     textAlign: 'right',
@@ -69,6 +108,10 @@ const s = StyleSheet.create({
     color: '#5a5a5a',
     fontSize: 12,
     fontFamily: 'monospace',
+  },
+  selectedGutter: {
+    color: '#ffffff',
+    fontWeight: 'bold',
   },
   code: { color: '#d4d4d4', fontSize: 12, fontFamily: 'monospace' },
 });

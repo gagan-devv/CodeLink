@@ -81,6 +81,16 @@ export interface DiffArtifact {
 }
 
 /**
+ * Target details when injecting a prompt.
+ */
+export interface TargetDetails {
+  targetFile?: string;
+  lineRange?: { startLine: number; endLine: number };
+  selectedCode?: string;
+  source?: 'text' | 'voice';
+}
+
+/**
  * Common interface that all editor adapters must implement.
  *
  * Safety: All methods use only public VS Code APIs and return result objects (never throw).
@@ -105,7 +115,7 @@ export interface IEditorAdapter {
    * Inject a prompt into the editor's chat panel.
    * Uses vscode.commands.executeCommand with editor-specific commands.
    */
-  injectPrompt(prompt: string): Promise<PromptInjectionResult>;
+  injectPrompt(prompt: string, targetDetails?: TargetDetails): Promise<PromptInjectionResult>;
 
   /**
    * Read chat history if supported (optional).

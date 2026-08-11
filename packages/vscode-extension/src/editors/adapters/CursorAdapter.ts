@@ -4,6 +4,7 @@ import {
   EditorCapabilities,
   DetectionResult,
   PromptInjectionResult,
+  TargetDetails,
 } from './types';
 
 /**
@@ -108,7 +109,7 @@ export class CursorAdapter implements IEditorAdapter {
    * @param prompt The prompt text to inject into Cursor's chat
    * @returns PromptInjectionResult indicating success or failure with error details
    */
-  async injectPrompt(prompt: string): Promise<PromptInjectionResult> {
+  async injectPrompt(prompt: string, _targetDetails?: TargetDetails): Promise<PromptInjectionResult> {
     // Try primary command pattern: cursor.chat.newMessage
     try {
       await vscode.commands.executeCommand('cursor.chat.newMessage', prompt);

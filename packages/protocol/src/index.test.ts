@@ -83,6 +83,26 @@ describe('isFilePatchPayload', () => {
 describe('isInjectPromptPayload', () => {
   it('accepts a valid payload',   () => expect(isInjectPromptPayload({ prompt: 'Refactor this' })).toBe(true));
   it('accepts optional fields',   () => expect(isInjectPromptPayload({ prompt: 'x', targetFile: 'src/a.ts' })).toBe(true));
+  it('accepts lineRange, selectedCode, and source optional fields', () => {
+    expect(
+      isInjectPromptPayload({
+        prompt: 'Fix issue',
+        targetFile: 'src/index.ts',
+        lineRange: { startLine: 10, endLine: 20 },
+        selectedCode: 'const x = 1;',
+        source: 'voice',
+      })
+    ).toBe(true);
+  });
+  it('rejects invalid lineRange types', () => {
+    expect(isInjectPromptPayload({ prompt: 'x', lineRange: '10-20' })).toBe(false);
+    expect(isInjectPromptPayload({ prompt: 'x', lineRange: { startLine: '10', endLine: 20 } })).toBe(false);
+    expect(isInjectPromptPayload({ prompt: 'x', lineRange: { startLine: 10 } })).toBe(false);
+    expect(isInjectPromptPayload({ prompt: 'x', lineRange: null })).toBe(false);
+  });
+  it('rejects invalid targetFile type', () => expect(isInjectPromptPayload({ prompt: 'x', targetFile: 123 })).toBe(false));
+  it('rejects invalid selectedCode type', () => expect(isInjectPromptPayload({ prompt: 'x', selectedCode: 123 })).toBe(false));
+  it('rejects invalid source value', () => expect(isInjectPromptPayload({ prompt: 'x', source: 'audio' })).toBe(false));
   it('rejects empty prompt',      () => expect(isInjectPromptPayload({ prompt: '' })).toBe(false));
   it('rejects missing prompt',    () => expect(isInjectPromptPayload({})).toBe(false));
 });

@@ -14,9 +14,6 @@ export class SessionManager {
   private _session: ActiveSession | null = null;
   private _pollTimer: NodeJS.Timeout | null = null;
 
-  private readonly _onStateChange = new vscode.EventEmitter<SessionState>();
-  readonly onStateChange = this._onStateChange.event;
-
   constructor(
     private readonly keyManager: KeyManager,
     private readonly laptopId: string
@@ -55,8 +52,7 @@ export class SessionManager {
       expiresAt: number;
     };
 
-    this._state = 'pending';
-    this._onStateChange.fire('pending');
+    this._setState('pending');
     return data;
   }
 
@@ -136,12 +132,10 @@ export class SessionManager {
     if (this._pollTimer) {
       clearTimeout(this._pollTimer);
     }
-    this._onStateChange.dispose();
   }
 
   private _setState(state: SessionState): void {
     this._state = state;
-    this._onStateChange.fire(state);
   }
 
   private getAuthUrl(): string {
