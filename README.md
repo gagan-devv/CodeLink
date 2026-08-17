@@ -135,13 +135,15 @@ _Backends will be available on standard local ports: Auth REST on `8081`, Relay 
 
 ### Step 2: Build Workspace Packages
 
-In a new terminal window, build the shared protocol package and extension:
+> **Note:** Build artifacts (`dist/`) are omitted from Git tracking to ensure clean source versioning. You must run `npm run build` whenever you clone the repository or pull updates to compile the shared packages (`@codelink/protocol` and `codelink-extension`).
+
+In a new terminal window, build all TypeScript workspace packages:
 
 ```bash
 # Install workspace dependencies
 npm install
 
-# Compile workspace packages
+# Compile workspace packages (@codelink/protocol & extension)
 npm run build
 ```
 

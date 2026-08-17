@@ -11,7 +11,10 @@ coverage/
 
 # DESIGN FILES
 design/
+
 # Build artifacts
+dist/
+packages/*/dist/
 coverage/
 logs/
 *.tsbuildinfo
@@ -35,6 +38,3 @@ go.work.sum
 # RSA 
 dev-private.pem
 dev-public.pem
-
-
-*dist/*
