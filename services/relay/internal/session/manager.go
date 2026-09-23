@@ -61,7 +61,7 @@ func (m *Manager) Unregister(conn *Connection) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	sess, ok := m.sessions[conn.ID]
+	sess, ok := m.sessions[conn.SessionID]
 	if !ok {
 		return
 	}
@@ -141,13 +141,43 @@ func (m *Manager) checkRevocations(ctx context.Context, rdb *redis.Client) {
 		}
 		if data.State == "revoked" {
 			log.Printf("relay: session %s revoked - notifying connections", id)
-			m.broadcast(id, revokedMsg)
+			m.broadcastAndClose(id, revokedMsg)
 		}
 	}
 }
 
-func (m *Manager) broadcast(sessionID string, msg []byte) {
+func (m *Manager) broadcastAndClose(sessionID string, msg []byte) {
 	m.mu.Lock()
+	sess, ok := m.sessions[sessionID]
+	if ok {
+		delete(m.sessions, sessionID)
+	}
+	m.mu.Unlock()
+	if !ok {
+		return
+	}
+
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+
+	if sess.Host != nil {
+		safeSend(sess.Host.SendCh, msg)
+		if sess.Host.Conn != nil {
+			_ = sess.Host.Conn.Close()
+		}
+		sess.Host = nil
+	}
+	for id, c := range sess.Clients {
+		safeSend(c.SendCh, msg)
+		if c.Conn != nil {
+			_ = c.Conn.Close()
+		}
+		delete(sess.Clients, id)
+	}
+}
+
+func (m *Manager) broadcast(sessionID string, msg []byte) {
+	m.mu.RLock()
 	sess, ok := m.sessions[sessionID]
 	m.mu.RUnlock()
 	if !ok {
