@@ -162,16 +162,12 @@ func (m *Manager) broadcastAndClose(sessionID string, msg []byte) {
 
 	if sess.Host != nil {
 		safeSend(sess.Host.SendCh, msg)
-		if sess.Host.Conn != nil {
-			_ = sess.Host.Conn.Close()
-		}
+		sess.Host.CloseSend()
 		sess.Host = nil
 	}
 	for id, c := range sess.Clients {
 		safeSend(c.SendCh, msg)
-		if c.Conn != nil {
-			_ = c.Conn.Close()
-		}
+		c.CloseSend()
 		delete(sess.Clients, id)
 	}
 }
@@ -196,7 +192,7 @@ func (m *Manager) broadcast(sessionID string, msg []byte) {
 }
 
 func safeSend(ch chan []byte, msg []byte) {
-	defer func () { recover() } ()
+	defer func() { recover() }()
 	select {
 	case ch <- msg:
 	default:
@@ -204,11 +200,11 @@ func safeSend(ch chan []byte, msg []byte) {
 	}
 }
 
-var revokedMsg = func () []byte {
+var revokedMsg = func() []byte {
 	b, _ := json.Marshal(map[string]interface{}{
-		"v": 1,
-		"type": "SESSION_REVOKED",
+		"v":       1,
+		"type":    "SESSION_REVOKED",
 		"payload": map[string]string{"reason": "host_requested"},
 	})
 	return b
-} ()
+}()

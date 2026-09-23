@@ -1,6 +1,8 @@
 package session
 
 import (
+	"sync"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -17,4 +19,11 @@ type Connection struct {
 	SessionID string
 	Role      Role
 	SendCh    chan []byte
+	closeOnce sync.Once
+}
+
+func (c *Connection) CloseSend() {
+	c.closeOnce.Do(func() {
+		close(c.SendCh)
+	})
 }

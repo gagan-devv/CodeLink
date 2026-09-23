@@ -73,13 +73,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.readPump(conn)
 
 	h.manager.Unregister(conn)
-	close(conn.SendCh)	
+	conn.CloseSend()
 }
 
 func (h *Handler) readPump(conn *session.Connection) {
 	conn.Conn.SetReadLimit(maxMsgSize)
 	conn.Conn.SetReadDeadline(time.Now().Add(pongWait))
-	conn.Conn.SetPongHandler(func (string) error {
+	conn.Conn.SetPongHandler(func(string) error {
 		conn.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
@@ -101,14 +101,14 @@ func (h *Handler) readPump(conn *session.Connection) {
 
 func (h *Handler) writePump(conn *session.Connection) {
 	ticker := time.NewTicker(pingPeriod)
-	defer func ()  {
+	defer func() {
 		ticker.Stop()
 		conn.Conn.Close()
-	} ()
+	}()
 
 	for {
 		select {
-		case msg, ok := <- conn.SendCh:
+		case msg, ok := <-conn.SendCh:
 			conn.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				conn.Conn.WriteMessage(websocket.CloseMessage, []byte{})
@@ -118,7 +118,7 @@ func (h *Handler) writePump(conn *session.Connection) {
 				log.Printf("relay: write [%s]: %v", conn.ID, err)
 				return
 			}
-		case <- ticker.C:
+		case <-ticker.C:
 			conn.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := conn.Conn.WriteControl(
 				websocket.PingMessage, nil, time.Now().Add(writeWait),
@@ -139,8 +139,8 @@ func buildHandshakeAck(connID string) []byte {
 		Payload payload `json:"payload"`
 	}
 	b, _ := json.Marshal(envelope{
-		V: 1,
-		Type: "HANDSHAKE_ACK",
+		V:       1,
+		Type:    "HANDSHAKE_ACK",
 		Payload: payload{ConnectionID: connID},
 	})
 	return b

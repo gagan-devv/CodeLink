@@ -206,3 +206,107 @@ func TestManager_BroadcastAndClose_NoDeadlock(t *testing.T) {
 		t.Fatalf("failed to register new session after revocation: %v", err)
 	}
 }
+
+func TestManager_BroadcastAndClose_DrainsThenCloses(t *testing.T) {
+	m := NewManager()
+
+	host := &Connection{
+		ID:        "conn-host-1",
+		SessionID: "sess-drain",
+		Role:      RoleHost,
+		SendCh:    make(chan []byte, 10),
+	}
+	client := &Connection{
+		ID:        "conn-client-1",
+		SessionID: "sess-drain",
+		Role:      RoleClient,
+		SendCh:    make(chan []byte, 10),
+	}
+
+	_ = m.Register(host)
+	_ = m.Register(client)
+
+	revMsg := []byte("revoked")
+	m.broadcastAndClose("sess-drain", revMsg)
+
+	// Read host SendCh: first read gets message, second returns ok == false
+	msg, ok := <-host.SendCh
+	if !ok || string(msg) != string(revMsg) {
+		t.Fatalf("expected revoke message on host, got %s (ok=%v)", msg, ok)
+	}
+	_, ok = <-host.SendCh
+	if ok {
+		t.Fatal("expected host SendCh to be closed after revoke message")
+	}
+
+	// Read client SendCh: first read gets message, second returns ok == false
+	msg, ok = <-client.SendCh
+	if !ok || string(msg) != string(revMsg) {
+		t.Fatalf("expected revoke message on client, got %s (ok=%v)", msg, ok)
+	}
+	_, ok = <-client.SendCh
+	if ok {
+		t.Fatal("expected client SendCh to be closed after revoke message")
+	}
+}
+
+func TestConnection_CloseSend_Idempotent(t *testing.T) {
+	conn := &Connection{
+		ID:        "conn-1",
+		SessionID: "sess-1",
+		Role:      RoleHost,
+		SendCh:    make(chan []byte, 10),
+	}
+
+	conn.CloseSend()
+	// Second call should not panic
+	conn.CloseSend()
+
+	// Verify channel is closed
+	_, ok := <-conn.SendCh
+	if ok {
+		t.Error("expected channel to be closed")
+	}
+}
+
+func TestManager_BroadcastAndClose_HandlerExitPath(t *testing.T) {
+	m := NewManager()
+
+	host := &Connection{
+		ID:        "conn-host-1",
+		SessionID: "sess-exit",
+		Role:      RoleHost,
+		SendCh:    make(chan []byte, 10),
+	}
+	client := &Connection{
+		ID:        "conn-client-1",
+		SessionID: "sess-exit",
+		Role:      RoleClient,
+		SendCh:    make(chan []byte, 10),
+	}
+
+	_ = m.Register(host)
+	_ = m.Register(client)
+
+	revMsg := []byte("revoked")
+	m.broadcastAndClose("sess-exit", revMsg)
+
+	// Handler exit path for host: Unregister followed by CloseSend
+	m.Unregister(host)
+	host.CloseSend()
+
+	// Handler exit path for client: Unregister followed by CloseSend
+	m.Unregister(client)
+	client.CloseSend()
+
+	// New host can register for the same session ID without error
+	newHost := &Connection{
+		ID:        "conn-host-2",
+		SessionID: "sess-exit",
+		Role:      RoleHost,
+		SendCh:    make(chan []byte, 10),
+	}
+	if err := m.Register(newHost); err != nil {
+		t.Fatalf("failed to register new host for same session ID after revocation: %v", err)
+	}
+}
