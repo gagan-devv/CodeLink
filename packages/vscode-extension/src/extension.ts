@@ -13,7 +13,7 @@ import { GitIntegrationModuleImpl } from './git/GitIntegrationModule';
 import { SnapshotEngine } from './diff/SnapshotEngine';
 import { PatchEncoder } from './diff/PatchEncoder';
 import { PairingWebviewPanel } from './pairing/PairingWebviewPanel';
-import * as path from 'path';
+import { resolveTargetFile } from './workspace/resolveTargetFile';
 import {
   isInjectPromptPayload,
   isSnapshotRequestPayload,
@@ -75,39 +75,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             payload as InjectPromptPayload;
 
           if (targetFile) {
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            if (!workspaceFolder) {
+            const resolved = await resolveTargetFile(targetFile);
+            if (resolved.status === 'blocked') {
+              console.warn(
+                `[CodeLink Security] Blocked attempt to access file outside workspace: ${targetFile}`
+              );
+              wsClient.send('PROMPT_RESPONSE', {
+                originalId: id,
+                success: false,
+                error: 'targetFile is outside the workspace',
+              });
+              return;
+            } else if (resolved.status === 'no_workspace') {
               console.warn('[CodeLink] No workspace folder open to resolve targetFile');
-            } else {
-              const workspaceRoot = path.resolve(workspaceFolder.uri.fsPath);
-              const resolvedPath = path.isAbsolute(targetFile)
-                ? path.resolve(targetFile)
-                : path.resolve(workspaceRoot, targetFile);
-
-              const relativePath = path.relative(workspaceRoot, resolvedPath);
-              if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-                console.warn(
-                  `[CodeLink Security] Blocked attempt to access file outside workspace: ${targetFile}`
-                );
-              } else {
-                const targetUri = vscode.Uri.file(resolvedPath);
-                try {
-                  const document = await vscode.workspace.openTextDocument(targetUri);
-                  const editor = await vscode.window.showTextDocument(document);
-                  if (
-                    lineRange &&
-                    typeof lineRange.startLine === 'number' &&
-                    typeof lineRange.endLine === 'number'
-                  ) {
-                    const startPos = new vscode.Position(Math.max(0, lineRange.startLine - 1), 0);
-                    const endPos = new vscode.Position(lineRange.endLine, 0);
-                    const selection = new vscode.Selection(startPos, endPos);
-                    editor.selection = selection;
-                    editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
-                  }
-                } catch (err) {
-                  console.error(`Failed to open target file ${targetFile}:`, err);
+            } else if (resolved.status === 'not_found') {
+              console.warn(`[CodeLink] Target file not found: ${targetFile}`);
+            } else if (resolved.status === 'ok') {
+              try {
+                const document = await vscode.workspace.openTextDocument(resolved.uri);
+                const editor = await vscode.window.showTextDocument(document);
+                if (
+                  lineRange &&
+                  typeof lineRange.startLine === 'number' &&
+                  typeof lineRange.endLine === 'number'
+                ) {
+                  const startPos = new vscode.Position(Math.max(0, lineRange.startLine - 1), 0);
+                  const endPos = new vscode.Position(lineRange.endLine, 0);
+                  const selection = new vscode.Selection(startPos, endPos);
+                  editor.selection = selection;
+                  editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
                 }
+              } catch (err) {
+                console.error(`Failed to open target file ${targetFile}:`, err);
               }
             }
           }
