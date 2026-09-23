@@ -75,47 +75,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             payload as InjectPromptPayload;
 
           if (targetFile) {
-            let targetUri: vscode.Uri | undefined;
-            if (path.isAbsolute(targetFile)) {
-              targetUri = vscode.Uri.file(targetFile);
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+              console.warn('[CodeLink] No workspace folder open to resolve targetFile');
             } else {
-              const foundFiles = await vscode.workspace.findFiles(targetFile, undefined, 1);
-              if (foundFiles.length > 0) {
-                targetUri = foundFiles[0];
-              } else {
-                const globFiles = await vscode.workspace.findFiles(
-                  `**/${targetFile}`,
-                  undefined,
-                  1
-                );
-                if (globFiles.length > 0) {
-                  targetUri = globFiles[0];
-                } else {
-                  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-                  if (workspaceFolder) {
-                    targetUri = vscode.Uri.joinPath(workspaceFolder.uri, targetFile);
-                  }
-                }
-              }
-            }
+              const workspaceRoot = path.resolve(workspaceFolder.uri.fsPath);
+              const resolvedPath = path.isAbsolute(targetFile)
+                ? path.resolve(targetFile)
+                : path.resolve(workspaceRoot, targetFile);
 
-            if (targetUri) {
-              try {
-                const document = await vscode.workspace.openTextDocument(targetUri);
-                const editor = await vscode.window.showTextDocument(document);
-                if (
-                  lineRange &&
-                  typeof lineRange.startLine === 'number' &&
-                  typeof lineRange.endLine === 'number'
-                ) {
-                  const startPos = new vscode.Position(Math.max(0, lineRange.startLine - 1), 0);
-                  const endPos = new vscode.Position(lineRange.endLine, 0);
-                  const selection = new vscode.Selection(startPos, endPos);
-                  editor.selection = selection;
-                  editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
+              const relativePath = path.relative(workspaceRoot, resolvedPath);
+              if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+                console.warn(
+                  `[CodeLink Security] Blocked attempt to access file outside workspace: ${targetFile}`
+                );
+              } else {
+                const targetUri = vscode.Uri.file(resolvedPath);
+                try {
+                  const document = await vscode.workspace.openTextDocument(targetUri);
+                  const editor = await vscode.window.showTextDocument(document);
+                  if (
+                    lineRange &&
+                    typeof lineRange.startLine === 'number' &&
+                    typeof lineRange.endLine === 'number'
+                  ) {
+                    const startPos = new vscode.Position(Math.max(0, lineRange.startLine - 1), 0);
+                    const endPos = new vscode.Position(lineRange.endLine, 0);
+                    const selection = new vscode.Selection(startPos, endPos);
+                    editor.selection = selection;
+                    editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
+                  }
+                } catch (err) {
+                  console.error(`Failed to open target file ${targetFile}:`, err);
                 }
-              } catch (err) {
-                console.error(`Failed to open target file ${targetFile}:`, err);
               }
             }
           }

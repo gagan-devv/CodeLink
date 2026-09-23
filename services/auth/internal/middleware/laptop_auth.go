@@ -23,9 +23,10 @@ func LaptopAuth(laptopRepo *repository.LaptopRepository) gin.HandlerFunc {
 			return
 		}
 
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "failed to read body or body exceeded 1MB limit"})
 			return
 		}
 		c.Request.Body = io.NopCloser(bytes.NewReader(body))
