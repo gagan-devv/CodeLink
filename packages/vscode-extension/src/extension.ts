@@ -48,7 +48,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registry.register(new AntigravityAdapter());
 
   // Session
-  const sessionManager = new SessionManager(keyManager, laptopId);
+  const sessionManager = new SessionManager(keyManager, laptopId, laptopIdentity);
   context.subscriptions.push({ dispose: () => sessionManager.dispose() });
 
   // WebSocket Client
@@ -174,6 +174,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.window.showInformationMessage('CodeLink: Session revoked.');
     }),
 
+    vscode.commands.registerCommand('codelink.resetIdentity', async () => {
+      try {
+        await sessionManager.revokeSession();
+        wsClient.disconnect();
+        await laptopIdentity.resetIdentity();
+        sessionManager.updateLaptopId('');
+        vscode.window.showInformationMessage('CodeLink: Identity and keypair reset successfully.');
+      } catch (err) {
+        vscode.window.showErrorMessage(`CodeLink: Failed to reset identity: ${err}`);
+      }
+    }),
+
     vscode.commands.registerCommand('codelink.reRegister', async () => {
       try {
         await sessionManager.revokeSession();
@@ -185,6 +197,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
       } catch (err) {
         vscode.window.showErrorMessage(`CodeLink: Failed to re-register laptop: ${err}`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (e.affectsConfiguration('codelink.authServiceUrl')) {
+        try {
+          await sessionManager.revokeSession();
+          wsClient.disconnect();
+          const newLaptopId = await laptopIdentity.reRegister();
+          sessionManager.updateLaptopId(newLaptopId);
+          vscode.window.showInformationMessage(
+            `CodeLink: Auth service URL changed. Re-registered with new identity (${newLaptopId}).`
+          );
+        } catch (err) {
+          vscode.window.showErrorMessage(
+            `CodeLink: Failed to re-register after auth URL change: ${err}`
+          );
+        }
       }
     })
   );

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { KeyManager } from './KeyManager';
+import { LaptopIdentity } from './LaptopIdentity';
 import { authFetch } from './authClient';
 
 export type SessionState = 'idle' | 'pending' | 'active' | 'revoked';
@@ -17,7 +18,8 @@ export class SessionManager {
 
   constructor(
     private readonly keyManager: KeyManager,
-    private laptopId: string
+    private laptopId: string,
+    private readonly laptopIdentity?: LaptopIdentity
   ) {}
 
   updateLaptopId(newLaptopId: string): void {
@@ -31,7 +33,13 @@ export class SessionManager {
     return this._session;
   }
 
-  async createSession(): Promise<{ sessionId: string; qrPayload: string; expiresAt: number }> {
+  async createSession(
+    retryOnNotFound = true
+  ): Promise<{ sessionId: string; qrPayload: string; expiresAt: number }> {
+    if (this.laptopIdentity && !this.laptopId) {
+      this.laptopId = await this.laptopIdentity.ensureRegistered();
+    }
+
     const authUrl = this.getAuthUrl();
     const requestedAt = Date.now();
     const body = JSON.stringify({ laptopId: this.laptopId, requestedAt });
@@ -54,6 +62,24 @@ export class SessionManager {
     });
 
     if (!response.ok) {
+      if (response.status === 401 && retryOnNotFound && this.laptopIdentity) {
+        let isLaptopNotFound = false;
+        try {
+          const errData = JSON.parse(response.bodyText) as { reason?: string };
+          if (errData.reason === 'laptop not found') {
+            isLaptopNotFound = true;
+          }
+        } catch {
+          // not JSON
+        }
+
+        if (isLaptopNotFound) {
+          const newLaptopId = await this.laptopIdentity.reRegister();
+          this.updateLaptopId(newLaptopId);
+          return this.createSession(false);
+        }
+      }
+
       const truncatedBody =
         response.bodyText.length > 500
           ? response.bodyText.slice(0, 500) + '...'

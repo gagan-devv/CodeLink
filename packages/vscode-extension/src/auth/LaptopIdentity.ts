@@ -3,6 +3,7 @@ import { KeyManager } from './KeyManager';
 import { authFetch } from './authClient';
 
 const LAPTOP_ID_KEY = 'codelink.laptopId';
+const AUTH_SERVICE_URL_KEY = 'codelink.authServiceUrl';
 
 export class LaptopIdentity {
   constructor(
@@ -11,20 +12,38 @@ export class LaptopIdentity {
   ) {}
 
   async ensureRegistered(): Promise<string> {
-    const cached = this.globalState.get<string>(LAPTOP_ID_KEY);
-    if (cached) {
-      return cached;
+    const currentAuthUrl = this.getAuthUrl();
+    const storedAuthUrl = this.globalState.get<string>(AUTH_SERVICE_URL_KEY);
+    const cachedId = this.globalState.get<string>(LAPTOP_ID_KEY);
+
+    // If authServiceUrl was stored and differs from the current configuration, automatically reset
+    if (storedAuthUrl && storedAuthUrl !== currentAuthUrl) {
+      await this.resetIdentity();
+      return this.register();
     }
+
+    if (cachedId) {
+      if (!storedAuthUrl) {
+        await this.globalState.update(AUTH_SERVICE_URL_KEY, currentAuthUrl);
+      }
+      return cachedId;
+    }
+
     return this.register();
   }
 
   async clearIdentity(): Promise<void> {
     await this.globalState.update(LAPTOP_ID_KEY, undefined);
+    await this.globalState.update(AUTH_SERVICE_URL_KEY, undefined);
+  }
+
+  async resetIdentity(): Promise<void> {
+    await this.clearIdentity();
+    await this.keyManager.clearKeys();
   }
 
   async reRegister(): Promise<string> {
-    await this.clearIdentity();
-    await this.keyManager.clearKeys();
+    await this.resetIdentity();
     return this.register();
   }
 
@@ -46,11 +65,16 @@ export class LaptopIdentity {
 
     const { laptopId } = await response.json();
     await this.globalState.update(LAPTOP_ID_KEY, laptopId);
+    await this.globalState.update(AUTH_SERVICE_URL_KEY, authUrl);
     return laptopId;
   }
 
   getLaptopId(): string | undefined {
     return this.globalState.get<string>(LAPTOP_ID_KEY);
+  }
+
+  getStoredAuthUrl(): string | undefined {
+    return this.globalState.get<string>(AUTH_SERVICE_URL_KEY);
   }
 
   private getAuthUrl(): string {
