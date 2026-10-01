@@ -56,7 +56,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: mux,
+		Handler: relay.RequestLogger(mux),
 	}
 
 	go func() {

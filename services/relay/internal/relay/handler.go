@@ -2,6 +2,7 @@ package relay
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gagan-devv/codelink/services/relay/internal/auth"
 	"github.com/gagan-devv/codelink/services/relay/internal/session"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -87,18 +89,24 @@ func MatchOrigin(candidate, allowed string) bool {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tokenStr := r.URL.Query().Get("token")
 	if tokenStr == "" {
+		log.Println("relay: rejected websocket connection: reason=missing token")
 		http.Error(w, "missing token", http.StatusUnauthorized)
 		return
 	}
 	claims, err := h.validator.Validate(tokenStr)
 	if err != nil {
-		http.Error(w, "invalid token", http.StatusUnauthorized)
+		reason := "invalid token"
+		if errors.Is(err, jwt.ErrTokenExpired) || strings.Contains(err.Error(), "token is expired") {
+			reason = "expired"
+		}
+		log.Printf("relay: rejected websocket connection: reason=%s\n", reason)
+		http.Error(w, reason, http.StatusUnauthorized)
 		return
 	}
 
 	wsConn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("relay: upgrade error: %v", err)
+		log.Println("relay: rejected websocket connection: reason=upgrade failed")
 		return
 	}
 
