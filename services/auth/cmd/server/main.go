@@ -13,9 +13,9 @@ import (
 	"github.com/gagan-devv/codelink/services/auth/internal/middleware"
 	"github.com/gagan-devv/codelink/services/auth/internal/repository"
 	"github.com/gin-gonic/gin"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -74,8 +74,8 @@ func main() {
 
 	// Router
 	r := gin.Default()
-	r.Use(corsMiddleware())
-	r.GET("/healthz", func(c *gin.Context) { c.Status(http.StatusOK)})
+	r.Use(middleware.CORS(cfg.AllowedOrigins))
+	r.GET("/healthz", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	v1 := r.Group("/v1")
 
@@ -97,18 +97,4 @@ func main() {
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("server: %v", err)
 	}
-}
-
-func corsMiddleware() gin.HandlerFunc {
-    return func(c *gin.Context) {
-        c.Header("Access-Control-Allow-Origin",  "*")
-        c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        c.Header("Access-Control-Allow-Headers", "Content-Type, X-Laptop-Id, X-Laptop-Sig")
-
-        if c.Request.Method == http.MethodOptions {
-            c.AbortWithStatus(http.StatusNoContent)
-            return
-        }
-        c.Next()
-    }
 }
