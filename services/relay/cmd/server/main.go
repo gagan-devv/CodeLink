@@ -46,7 +46,7 @@ func main() {
 	manager := session.NewManager()
 	go manager.WatchRevocations(ctx, rdb)
 
-	wsHandler := relay.NewHandler(manager, validator)
+	wsHandler := relay.NewHandler(manager, validator, cfg.AllowedOrigins)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +55,7 @@ func main() {
 	mux.Handle("/ws", wsHandler)
 
 	srv := &http.Server{
-		Addr: ":" + cfg.Port,
+		Addr:    ":" + cfg.Port,
 		Handler: mux,
 	}
 
@@ -66,7 +66,7 @@ func main() {
 		log.Println("relay: shutting down...")
 		cancel()
 		srv.Shutdown(context.Background())
-	} ()
+	}()
 
 	log.Printf("relay service listening on :%s", cfg.Port)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {

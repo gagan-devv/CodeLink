@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gagan-devv/codelink/services/relay/internal/auth"
@@ -19,21 +21,67 @@ const (
 	maxMsgSize = 512 * 1024
 )
 
-var upgrader = websocket.Upgrader{
-	HandshakeTimeout:  5 * time.Second,
-	ReadBufferSize:    32 * 1024,
-	WriteBufferSize:   32 * 1024,
-	EnableCompression: true,
-	CheckOrigin:       func(r *http.Request) bool { return true },
-}
-
 type Handler struct {
 	manager   *session.Manager
 	validator *auth.Validator
+	upgrader  websocket.Upgrader
 }
 
-func NewHandler(manager *session.Manager, validator *auth.Validator) *Handler {
-	return &Handler{manager: manager, validator: validator}
+func NewHandler(manager *session.Manager, validator *auth.Validator, allowedOrigins []string) *Handler {
+	return &Handler{
+		manager:   manager,
+		validator: validator,
+		upgrader: websocket.Upgrader{
+			HandshakeTimeout:  5 * time.Second,
+			ReadBufferSize:    32 * 1024,
+			WriteBufferSize:   32 * 1024,
+			EnableCompression: true,
+			CheckOrigin:       BuildCheckOrigin(allowedOrigins),
+		},
+	}
+}
+
+// BuildCheckOrigin returns a CheckOrigin function for websocket.Upgrader.
+func BuildCheckOrigin(allowedOrigins []string) func(r *http.Request) bool {
+	return func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		for _, allowed := range allowedOrigins {
+			if MatchOrigin(origin, allowed) {
+				return true
+			}
+		}
+		log.Printf("relay: rejected websocket origin: %s", origin)
+		return false
+	}
+}
+
+// MatchOrigin checks if candidate origin matches allowed origin.
+// Exact match on scheme + host + port with no trailing slash, host compared case-insensitively.
+func MatchOrigin(candidate, allowed string) bool {
+	if candidate == "" || allowed == "" {
+		return false
+	}
+	if strings.HasSuffix(candidate, "/") || strings.HasSuffix(allowed, "/") {
+		return false
+	}
+	uCand, err := url.Parse(candidate)
+	if err != nil || uCand.Scheme == "" || uCand.Host == "" || uCand.Path != "" || uCand.RawQuery != "" {
+		return false
+	}
+	uAllow, err := url.Parse(allowed)
+	if err != nil || uAllow.Scheme == "" || uAllow.Host == "" || uAllow.Path != "" || uAllow.RawQuery != "" {
+		return false
+	}
+	if !strings.EqualFold(uCand.Scheme, uAllow.Scheme) {
+		return false
+	}
+	if !strings.EqualFold(uCand.Host, uAllow.Host) {
+		return false
+	}
+	return true
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +96,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wsConn, err := upgrader.Upgrade(w, r, nil)
+	wsConn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("relay: upgrade error: %v", err)
 		return

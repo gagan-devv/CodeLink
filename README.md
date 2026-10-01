@@ -137,16 +137,18 @@ _Backends will be available on standard local ports: Auth REST on `8081`, Relay 
 
 Backend configurations are defined in `infra/.env` (modeled after `infra/.env.example`):
 
-| Variable               | Service     | Description                                                 | Dev Example                                               | Production                                          |
-| ---------------------- | ----------- | ----------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------- |
-| `AUTH_PORT`            | Auth        | REST service listening port                                 | `8081`                                                    | `8081`                                              |
-| `POSTGRES_URL`         | Auth        | PostgreSQL connection URL                                   | `postgres://codelink:devpassword@localhost:5432/codelink` | Cloud managed PostgreSQL                            |
-| `REDIS_URL`            | Auth, Relay | Redis connection URL                                        | `redis://localhost:6379`                                  | Cloud managed Redis                                 |
-| `AUTH_HMAC_SECRET`     | Auth        | 32+ byte hex secret for HMAC tokens                         | `openssl rand -hex 32`                                    | KMS / Secret store                                  |
-| `AUTH_PRIVATE_KEY_PEM` | Auth        | RSA-2048 private key for signing JWTs                       | Generated RSA PEM                                         | KMS / Secret store                                  |
-| `AUTH_PUBLIC_KEY_PEM`  | Relay       | RSA-2048 public key for validating JWTs                     | Generated RSA Public PEM                                  | KMS / Secret store                                  |
-| `AUTH_ALLOWED_ORIGINS` | Auth        | Comma-separated CORS allowed browser origins (no wildcards) | `http://localhost:19006,http://localhost:5173`            | Real HTTPS origins only (`https://app.codelink.io`) |
-| `RELAY_WSS_URL`        | Auth        | Relay WebSocket endpoint URL                                | `ws://localhost:8082/ws`                                  | Real WSS endpoint (`wss://relay.codelink.io/ws`)    |
+| Variable                | Service     | Description                                                      | Dev Example                                               | Production                                          |
+| ----------------------- | ----------- | ---------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------- |
+| `AUTH_PORT`             | Auth        | REST service listening port                                      | `8081`                                                    | `8081`                                              |
+| `POSTGRES_URL`          | Auth        | PostgreSQL connection URL                                        | `postgres://codelink:devpassword@localhost:5432/codelink` | Cloud managed PostgreSQL                            |
+| `REDIS_URL`             | Auth, Relay | Redis connection URL                                             | `redis://localhost:6379`                                  | Cloud managed Redis                                 |
+| `AUTH_HMAC_SECRET`      | Auth        | 32+ byte hex secret for HMAC tokens                              | `openssl rand -hex 32`                                    | KMS / Secret store                                  |
+| `AUTH_PRIVATE_KEY_PEM`  | Auth        | RSA-2048 private key for signing JWTs                            | Generated RSA PEM                                         | KMS / Secret store                                  |
+| `AUTH_PUBLIC_KEY_PEM`   | Relay       | RSA-2048 public key for validating JWTs                          | Generated RSA Public PEM                                  | KMS / Secret store                                  |
+| `AUTH_ALLOWED_ORIGINS`  | Auth        | Comma-separated CORS allowed browser origins (no wildcards)      | `http://localhost:19006,http://localhost:5173`            | Real HTTPS origins only (`https://app.codelink.io`) |
+| `RELAY_PORT`            | Relay       | WebSocket service listening port                                 | `8082`                                                    | `8082`                                              |
+| `RELAY_ALLOWED_ORIGINS` | Relay       | Comma-separated WebSocket allowed browser origins (no wildcards) | `http://localhost:19006,http://localhost:5173`            | Real HTTPS origins only (`https://app.codelink.io`) |
+| `RELAY_WSS_URL`         | Auth        | Relay WebSocket endpoint URL                                     | `ws://localhost:8082/ws`                                  | Real WSS endpoint (`wss://relay.codelink.io/ws`)    |
 
 ### Step 2: Build Workspace Packages
 
