@@ -73,7 +73,9 @@ func main() {
 	sessionHandler := handlers.NewSessionHandler(sessionRepo, signer, cfg)
 
 	// Router
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(middleware.RequestLogger())
 	r.Use(middleware.CORS(cfg.AllowedOrigins))
 	r.GET("/healthz", func(c *gin.Context) { c.Status(http.StatusOK) })
 

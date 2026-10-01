@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -39,21 +40,41 @@ func (h *SessionHandler) Create(c *gin.Context) {
 	laptopID := c.GetString("laptopID")
 
 	var req struct {
-		LaptopID    string `json:"laptopId" binding:"required"`
-		RequestedAt int64  `json:"requestedAt" binding:"required"`
+		LaptopID    string `json:"laptopId"`
+		RequestedAt int64  `json:"requestedAt"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		reason := "missing field"
+		log.Printf("session create failed: status=400 laptopId=%s reason=%s\n", laptopID, reason)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request", "reason": reason})
+		return
+	}
+	if req.LaptopID == "" || req.RequestedAt == 0 {
+		reason := "missing field"
+		log.Printf("session create failed: status=400 laptopId=%s reason=%s\n", laptopID, reason)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request", "reason": reason})
 		return
 	}
 	if req.LaptopID != laptopID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "laptopId does not match authenticated laptop"})
+		reason := "laptopId mismatch"
+		log.Printf("session create failed: status=403 laptopId=%s reason=%s\n", laptopID, reason)
+		c.JSON(http.StatusForbidden, gin.H{"error": "laptopId does not match authenticated laptop", "reason": reason})
+		return
+	}
+
+	const maxSkew = 5 * time.Minute
+	now := time.Now().UTC()
+	reqTime := time.UnixMilli(req.RequestedAt)
+	diff := now.Sub(reqTime)
+	if diff < -maxSkew || diff > maxSkew {
+		reason := "expired timestamp"
+		log.Printf("session create failed: status=401 laptopId=%s reason=%s\n", laptopID, reason)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "reason": reason})
 		return
 	}
 
 	sessionID := "sess_" + uuid.New().String()
 	challenge := authcrypto.GenerateChallenge(sessionID, req.RequestedAt, h.cfg.HMACSecret)
-	now := time.Now().UTC()
 	expiresAt := now.Add(90 * time.Second)
 
 	session := &domain.Session{
@@ -119,7 +140,9 @@ func (h *SessionHandler) Join(c *gin.Context) {
 		MobileDeviceID string `json:"mobileDeviceId" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		reason := "missing field"
+		log.Printf("session join failed: status=400 sessionID=%s reason=%s\n", sessionID, reason)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "reason": reason})
 		return
 	}
 
@@ -138,11 +161,15 @@ func (h *SessionHandler) Join(c *gin.Context) {
 		return
 	case domain.SessionPending:
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "session not joinable"})
+		reason := "session not joinable"
+		log.Printf("session join failed: status=400 sessionID=%s reason=%s\n", sessionID, reason)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session not joinable", "reason": reason})
 	}
 
 	if subtle.ConstantTimeCompare([]byte(req.Challenge), []byte(data.Challenge)) != 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid challenge"})
+		reason := "invalid challenge"
+		log.Printf("session join failed: status=400 sessionID=%s reason=%s\n", sessionID, reason)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid challenge", "reason": reason})
 		return
 	}
 
