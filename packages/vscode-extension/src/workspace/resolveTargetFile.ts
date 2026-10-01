@@ -10,18 +10,87 @@ export type ResolveResult =
 
 export async function isInsideWorkspace(
   candidateFsPath: string,
-  workspaceFolders: readonly vscode.WorkspaceFolder[]
-): Promise<{ inside: boolean; realPath: string; error?: unknown }> {
-  for (const folder of workspaceFolders) {
-    const root = path.resolve(folder.uri.fsPath);
-    const resolvedCandidate = path.resolve(candidateFsPath);
-    const rel = path.relative(root, resolvedCandidate);
-    const isContained = !path.isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + path.sep);
-    if (isContained) {
-      return { inside: true, realPath: resolvedCandidate };
+  workspaceFolders?: readonly vscode.WorkspaceFolder[]
+): Promise<{ inside: boolean; realPath: string }> {
+  const folders = workspaceFolders ?? vscode.workspace.workspaceFolders ?? [];
+  if (folders.length === 0) {
+    return { inside: false, realPath: candidateFsPath };
+  }
+
+  const workspaceRoots: string[] = [];
+  for (const folder of folders) {
+    try {
+      const realRoot = await fs.promises.realpath(folder.uri.fsPath);
+      workspaceRoots.push(realRoot);
+    } catch {
+      workspaceRoots.push(path.resolve(folder.uri.fsPath));
     }
   }
-  return { inside: false, realPath: candidateFsPath };
+
+  let realCandidate: string;
+  try {
+    realCandidate = await fs.promises.realpath(candidateFsPath);
+  } catch (err: unknown) {
+    const isEnoent =
+      typeof err === 'object' &&
+      err !== null &&
+      'code' in err &&
+      (err as { code: string }).code === 'ENOENT';
+    if (isEnoent) {
+      let current = path.dirname(path.resolve(candidateFsPath));
+      let parentRealPath: string | null = null;
+      let searching = true;
+      while (searching) {
+        try {
+          parentRealPath = await fs.promises.realpath(current);
+          searching = false;
+        } catch (parentErr: unknown) {
+          const parentIsEnoent =
+            typeof parentErr === 'object' &&
+            parentErr !== null &&
+            'code' in parentErr &&
+            (parentErr as { code: string }).code === 'ENOENT';
+          if (parentIsEnoent) {
+            const next = path.dirname(current);
+            if (next === current) {
+              searching = false;
+            } else {
+              current = next;
+            }
+          } else {
+            return { inside: false, realPath: candidateFsPath };
+          }
+        }
+      }
+
+      if (!parentRealPath) {
+        return { inside: false, realPath: candidateFsPath };
+      }
+
+      for (const root of workspaceRoots) {
+        const rel = path.relative(root, parentRealPath);
+        const isContained =
+          !path.isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + path.sep);
+        if (isContained) {
+          const remainingRel = path.relative(current, path.resolve(candidateFsPath));
+          return { inside: true, realPath: path.resolve(parentRealPath, remainingRel) };
+        }
+      }
+      return { inside: false, realPath: candidateFsPath };
+    }
+
+    return { inside: false, realPath: candidateFsPath };
+  }
+
+  for (const root of workspaceRoots) {
+    const rel = path.relative(root, realCandidate);
+    const isContained = !path.isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + path.sep);
+    if (isContained) {
+      return { inside: true, realPath: realCandidate };
+    }
+  }
+
+  return { inside: false, realPath: realCandidate };
 }
 
 export async function resolveTargetFile(targetFile: string): Promise<ResolveResult> {
