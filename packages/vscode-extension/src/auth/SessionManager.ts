@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { KeyManager } from './KeyManager';
+import { authFetch } from './authClient';
 
 export type SessionState = 'idle' | 'pending' | 'active' | 'revoked';
 
@@ -36,7 +37,11 @@ export class SessionManager {
     const body = JSON.stringify({ laptopId: this.laptopId, requestedAt });
     const sig = await this.keyManager.signRequest(body);
 
-    const response = await fetch(`${authUrl}/v1/sessions`, {
+    const response = await authFetch<{
+      sessionId: string;
+      qrPayload: string;
+      expiresAt: number;
+    }>(`${authUrl}/v1/sessions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -44,17 +49,19 @@ export class SessionManager {
         'X-Laptop-Sig': sig,
       },
       body,
+      authUrl,
+      laptopId: this.laptopId,
     });
 
     if (!response.ok) {
-      throw new Error(`Session creation failed: ${response.status}`);
+      const truncatedBody =
+        response.bodyText.length > 500
+          ? response.bodyText.slice(0, 500) + '...'
+          : response.bodyText;
+      throw new Error(`Session creation failed (${response.status}): ${truncatedBody}`);
     }
 
-    const data = (await response.json()) as {
-      sessionId: string;
-      qrPayload: string;
-      expiresAt: number;
-    };
+    const data = await response.json();
 
     this._setState('pending');
     return data;
@@ -73,21 +80,25 @@ export class SessionManager {
 
         try {
           const sig = await this.keyManager.signRequest('');
-          const response = await fetch(`${authUrl}/v1/sessions/${sessionId}/status`, {
+          const response = await authFetch<{
+            state: string;
+            laptopToken: string | null;
+          }>(`${authUrl}/v1/sessions/${sessionId}/status`, {
             headers: {
               'X-Laptop-Id': this.laptopId,
               'X-Laptop-Sig': sig,
             },
+            authUrl,
+            laptopId: this.laptopId,
           });
 
           if (!response.ok) {
-            return reject(new Error(`Status poll failed: ${response.status}`));
+            return reject(
+              new Error(`Status poll failed (${response.status}): ${response.bodyText}`)
+            );
           }
 
-          const data = (await response.json()) as {
-            state: string;
-            laptopToken: string | null;
-          };
+          const data = await response.json();
 
           if (data.state === 'active' && data.laptopToken) {
             const relayBase = vscode.workspace
@@ -119,12 +130,14 @@ export class SessionManager {
     const authUrl = this.getAuthUrl();
     const sig = await this.keyManager.signRequest('');
 
-    await fetch(`${authUrl}/v1/sessions/${this._session.sessionId}`, {
+    await authFetch(`${authUrl}/v1/sessions/${this._session.sessionId}`, {
       method: 'DELETE',
       headers: {
         'X-Laptop-Id': this.laptopId,
         'X-Laptop-Sig': sig,
       },
+      authUrl,
+      laptopId: this.laptopId,
     });
 
     this._session = null;

@@ -14,6 +14,7 @@ import { SnapshotEngine } from './diff/SnapshotEngine';
 import { PatchEncoder } from './diff/PatchEncoder';
 import { PairingWebviewPanel } from './pairing/PairingWebviewPanel';
 import { resolveTargetFile } from './workspace/resolveTargetFile';
+import { getOutputChannel } from './logger';
 import {
   isInjectPromptPayload,
   isSnapshotRequestPayload,
@@ -21,6 +22,9 @@ import {
 } from '@codelink/protocol';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const outputChannel = getOutputChannel();
+  context.subscriptions.push(outputChannel);
+
   // Auth
   const keyManager = new KeyManager(context.secrets);
   const laptopIdentity = new LaptopIdentity(keyManager, context.globalState);

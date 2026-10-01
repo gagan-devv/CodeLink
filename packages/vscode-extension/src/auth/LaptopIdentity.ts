@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { KeyManager } from './KeyManager';
+import { authFetch } from './authClient';
 
 const LAPTOP_ID_KEY = 'codelink.laptopId';
 
@@ -31,17 +32,19 @@ export class LaptopIdentity {
     const authUrl = this.getAuthUrl();
     const publicKeyPem = await this.keyManager.getPublicKeyPem();
 
-    const response = await fetch(`${authUrl}/v1/laptops/register`, {
+    const response = await authFetch<{ laptopId: string }>(`${authUrl}/v1/laptops/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ publicKeyPem }),
+      authUrl,
+      laptopId: '(none)',
     });
 
     if (!response.ok) {
-      throw new Error(`Laptop registration failed: ${response.status} ${response.statusText}`);
+      throw new Error(`Laptop registration failed (${response.status}): ${response.bodyText}`);
     }
 
-    const { laptopId } = (await response.json()) as { laptopId: string };
+    const { laptopId } = await response.json();
     await this.globalState.update(LAPTOP_ID_KEY, laptopId);
     return laptopId;
   }

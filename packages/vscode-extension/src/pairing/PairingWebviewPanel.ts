@@ -157,13 +157,22 @@ export class PairingWebviewPanel {
   private errorHtml(message: string): string {
     return this.wrap(`
       <h2>⚠ Error</h2>
-      <p class="muted">${message}</p>
+      <p class="muted">${this.escapeHtml(message)}</p>
       <button onclick="refresh()">Try again</button>
       <script>
         const vscode = acquireVsCodeApi();
         function refresh() { vscode.postMessage({ command: 'refresh' }); }
       </script>
     `);
+  }
+
+  private escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   private wrap(body: string): string {

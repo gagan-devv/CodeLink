@@ -8,6 +8,12 @@ vi.mock('vscode', () => ({
       get: vi.fn((key: string, defaultValue?: string) => defaultValue),
     })),
   },
+  window: {
+    createOutputChannel: vi.fn(() => ({
+      appendLine: vi.fn(),
+      dispose: vi.fn(),
+    })),
+  },
 }));
 
 describe('LaptopIdentity', () => {
@@ -108,6 +114,6 @@ describe('LaptopIdentity', () => {
     }));
     global.fetch = fetchMock as any;
 
-    await expect(laptopIdentity.reRegister()).rejects.toThrow('Laptop registration failed: 500');
+    await expect(laptopIdentity.reRegister()).rejects.toThrow('Laptop registration failed (500)');
   });
 });
