@@ -168,6 +168,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await sessionManager.revokeSession();
       wsClient.disconnect();
       vscode.window.showInformationMessage('CodeLink: Session revoked.');
+    }),
+
+    vscode.commands.registerCommand('codelink.reRegister', async () => {
+      try {
+        await sessionManager.revokeSession();
+        wsClient.disconnect();
+        const newLaptopId = await laptopIdentity.reRegister();
+        sessionManager.updateLaptopId(newLaptopId);
+        vscode.window.showInformationMessage(
+          `CodeLink: Laptop re-registered successfully. New Laptop ID: ${newLaptopId}`
+        );
+      } catch (err) {
+        vscode.window.showErrorMessage(`CodeLink: Failed to re-register laptop: ${err}`);
+      }
     })
   );
 }

@@ -16,8 +16,12 @@ export class SessionManager {
 
   constructor(
     private readonly keyManager: KeyManager,
-    private readonly laptopId: string
+    private laptopId: string
   ) {}
+
+  updateLaptopId(newLaptopId: string): void {
+    this.laptopId = newLaptopId;
+  }
 
   get state(): SessionState {
     return this._state;

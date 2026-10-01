@@ -26,6 +26,10 @@
       {
         "command": "codelink.showStatus",
         "title": "CodeLink: Show Connection Status"
+      },
+      {
+        "command": "codelink.reRegister",
+        "title": "CodeLink: Re-register Laptop (Reset Identity & Keys)"
       }
     ],
     "configuration": {

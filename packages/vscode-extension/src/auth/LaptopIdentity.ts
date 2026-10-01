@@ -17,6 +17,16 @@ export class LaptopIdentity {
     return this.register();
   }
 
+  async clearIdentity(): Promise<void> {
+    await this.globalState.update(LAPTOP_ID_KEY, undefined);
+  }
+
+  async reRegister(): Promise<string> {
+    await this.clearIdentity();
+    await this.keyManager.clearKeys();
+    return this.register();
+  }
+
   private async register(): Promise<string> {
     const authUrl = this.getAuthUrl();
     const publicKeyPem = await this.keyManager.getPublicKeyPem();

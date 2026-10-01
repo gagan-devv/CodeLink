@@ -39,4 +39,9 @@ export class KeyManager {
     signer.update(body);
     return signer.sign(privateKeyPem, 'base64');
   }
+
+  async clearKeys(): Promise<void> {
+    await this.secrets.delete(PRIVATE_KEY_SECRET);
+    await this.secrets.delete(PUBLIC_KEY_SECRET);
+  }
 }
