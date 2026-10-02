@@ -41,6 +41,7 @@ export default function PairingScreen() {
       wsManager.onMessage = handleMessage;
       wsManager.onConnected = () => {
         useSessionStore.getState().setConnected(session.sessionId);
+        wsManager.send('SNAPSHOT_REQUEST', { fileName: '', reason: 'initial' });
         router.replace('/(tabs)');
       };
       wsManager.onDisconnected = () => {};

@@ -32,7 +32,9 @@ class WsManagerClass {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
+      console.log('[WsManager] WebSocket opened');
       this.reconnectDelay = 1_000;
+      this.send('SNAPSHOT_REQUEST', { fileName: '', reason: 'initial' });
       this.onConnected();
     };
 
@@ -46,6 +48,7 @@ class WsManagerClass {
     };
 
     this.ws.onclose = () => {
+      console.log('[WsManager] WebSocket closed');
       this.onDisconnected();
       if (!this.intentionalClose) {
         this._scheduleReconnect();

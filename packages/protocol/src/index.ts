@@ -146,7 +146,7 @@ export interface PatchAckPayload {
 
 export interface SnapshotRequestPayload {
   fileName: string;
-  reason: 'gap' | 'corruption' | 'reconnect';
+  reason: 'gap' | 'corruption' | 'reconnect' | 'initial';
 }
 
 // ── Prompt payloads ───────────────────────────────────────────────────────────
@@ -263,8 +263,10 @@ export function isSnapshotRequestPayload(p: unknown): p is SnapshotRequestPayloa
   const o = p as Record<string, unknown>;
   return (
     typeof o['fileName'] === 'string' &&
-    o['fileName'].length > 0 &&
-    (o['reason'] === 'gap' || o['reason'] === 'corruption' || o['reason'] === 'reconnect')
+    (o['reason'] === 'gap' ||
+      o['reason'] === 'corruption' ||
+      o['reason'] === 'reconnect' ||
+      o['reason'] === 'initial')
   );
 }
 

@@ -109,14 +109,18 @@ describe('isInjectPromptPayload', () => {
 
 // ── isSnapshotRequestPayload ─────────────────────────────────────────────────────
 describe('isSnapshotRequestPayload', () => {
-  it('accepts valid payload',      () => expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'gap' })).toBe(true));
-  it('accepts all reason values',  () => {
+  it('accepts valid payload', () => expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'gap' })).toBe(true));
+  it('accepts empty fileName (represents active editor)', () =>
+    expect(isSnapshotRequestPayload({ fileName: '', reason: 'initial' })).toBe(true));
+  it('accepts all reason values', () => {
     expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'corruption' })).toBe(true);
     expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'reconnect' })).toBe(true);
+    expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'initial' })).toBe(true);
   });
-  it('rejects invalid reason',     () => expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'unknown' })).toBe(false));
-  it('rejects empty fileName',     () => expect(isSnapshotRequestPayload({ fileName: '', reason: 'gap' })).toBe(false));
-  it('rejects null',               () => expect(isSnapshotRequestPayload(null)).toBe(false));
+  it('rejects invalid reason', () => expect(isSnapshotRequestPayload({ fileName: 'a.ts', reason: 'unknown' })).toBe(false));
+  it('rejects non-string fileName', () =>
+    expect(isSnapshotRequestPayload({ fileName: 123, reason: 'gap' })).toBe(false));
+  it('rejects null', () => expect(isSnapshotRequestPayload(null)).toBe(false));
 });
 
 // ── buildEnvelope ─────────────────────────────────────────────────────────────

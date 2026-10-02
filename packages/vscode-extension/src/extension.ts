@@ -14,7 +14,7 @@ import { SnapshotEngine } from './diff/SnapshotEngine';
 import { PatchEncoder } from './diff/PatchEncoder';
 import { PairingWebviewPanel } from './pairing/PairingWebviewPanel';
 import { resolveTargetFile } from './workspace/resolveTargetFile';
-import { getOutputChannel } from './logger';
+import { getOutputChannel, logLine } from './logger';
 import {
   isInjectPromptPayload,
   isSnapshotRequestPayload,
@@ -51,10 +51,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const sessionManager = new SessionManager(keyManager, laptopId, laptopIdentity);
   context.subscriptions.push({ dispose: () => sessionManager.dispose() });
 
+  const fileWatcherRef = { current: null as FileWatcher | null };
+
   // WebSocket Client
   const wsClient = new WsClient({
     onConnected: () => {
       vscode.window.setStatusBarMessage('$(plug) CodeLink: Mobile connected', 3_000);
+      fileWatcherRef.current?.resync();
     },
     onDisconnected: () => {
       vscode.window.setStatusBarMessage('$(debug-disconnected) CodeLink: Disconnected', 3_000);
@@ -66,7 +69,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             return;
           }
           const { fileName } = payload as { fileName: string };
-          await fileWatcher.handleSnapshotRequest(fileName);
+          await fileWatcherRef.current?.handleSnapshotRequest(fileName);
           break;
         }
         case 'PATCH_ACK':
@@ -154,13 +157,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const snapshot = new SnapshotEngine();
   const patches = new PatchEncoder();
   const fileWatcher = new FileWatcher(git, snapshot, patches, wsClient);
+  fileWatcherRef.current = fileWatcher;
 
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (workspaceRoot) {
-    fileWatcher.start(workspaceRoot);
-  }
+  const startFileWatcher = () => {
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (root) {
+      fileWatcher.start(root);
+    } else {
+      logLine('CodeLink: open a folder to sync files');
+      fileWatcher.start();
+    }
+  };
 
-  context.subscriptions.push({ dispose: () => fileWatcher.stop() });
+  startFileWatcher();
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      startFileWatcher();
+    }),
+    { dispose: () => fileWatcher.stop() }
+  );
 
   // Commands
   context.subscriptions.push(

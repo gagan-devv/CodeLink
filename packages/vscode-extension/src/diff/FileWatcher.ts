@@ -5,6 +5,8 @@ import { SnapshotEngine } from './SnapshotEngine';
 import { PatchEncoder } from './PatchEncoder';
 import { WsClient } from '../websocket/WsClient';
 
+import { logLine } from '../logger';
+
 const DEBOUNCE_MS = 300;
 
 export class FileWatcher {
@@ -19,8 +21,11 @@ export class FileWatcher {
     private readonly ws: WsClient
   ) {}
 
-  start(workspaceRoot: string): void {
-    this.git.initialize(workspaceRoot);
+  start(workspaceRoot?: string): void {
+    this.stop();
+    if (workspaceRoot) {
+      this.git.initialize(workspaceRoot);
+    }
 
     this.disposables.push(
       vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -54,8 +59,24 @@ export class FileWatcher {
     this.disposables = [];
   }
 
-  private async onFileSwitch(doc: vscode.TextDocument): Promise<void> {
+  async resync(): Promise<void> {
+    this.activeFile = null;
+    const editor = vscode.window.activeTextEditor;
+    if (editor?.document) {
+      await this.onFileSwitch(editor.document);
+    }
+  }
+
+  async onFileSwitch(doc: vscode.TextDocument): Promise<void> {
     const fileName = this.getRelativeName(doc);
+    const isNull = fileName === null;
+    const deduped = !isNull && this.activeFile === fileName;
+    const isConnected = this.ws.isConnected();
+
+    logLine(
+      `[FileWatcher] onFileSwitch: fileName=${fileName ?? doc.fileName}, relativeNameNull=${isNull}, deduped=${deduped}, wsConnected=${isConnected}`
+    );
+
     if (!fileName || this.activeFile === fileName) {
       return;
     }
@@ -121,7 +142,13 @@ export class FileWatcher {
 
     this.patches.recordSnapshot(fileName, content, payload.seq);
 
+    const sent = this.ws.isConnected();
     this.ws.send('FILE_SNAPSHOT', payload);
+
+    const byteSize = Buffer.byteLength(payload.content, 'utf8');
+    logLine(
+      `[FileWatcher] sendSnapshot: fileName=${fileName}, encoding=${payload.encoding}, byteSize=${byteSize}, sent=${sent}`
+    );
 
     const editor = vscode.window.activeTextEditor;
     if (editor?.document === doc) {
@@ -135,6 +162,10 @@ export class FileWatcher {
   }
 
   async handleSnapshotRequest(fileName: string): Promise<void> {
+    if (!fileName) {
+      await this.resync();
+      return;
+    }
     this.patches.reset(fileName);
     this.snapshot.reset(fileName);
 
@@ -144,13 +175,13 @@ export class FileWatcher {
     }
   }
 
-  private getRelativeName(doc: vscode.TextDocument): string | null {
-    if (doc.uri.scheme != 'file') {
+  getRelativeName(doc: vscode.TextDocument): string | null {
+    if (doc.uri.scheme !== 'file') {
       return null;
     }
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders?.length) {
-      return null;
+      return path.basename(doc.fileName);
     }
     const root = workspaceFolders[0].uri.fsPath;
     return path.relative(root, doc.fileName).replace(/\\/g, '/');

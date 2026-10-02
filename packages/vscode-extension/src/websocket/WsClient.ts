@@ -54,6 +54,7 @@ export class WsClient {
           payload: unknown;
           id: string;
         };
+        logLine(`[WebSocket] Received message: type=${envelope.type}`);
         this.opts.onMessage(envelope.type, envelope.payload, envelope.id);
       } catch {
         // ignore parsing failures
