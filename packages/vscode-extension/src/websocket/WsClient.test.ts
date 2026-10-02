@@ -79,5 +79,20 @@ describe('WsClient', () => {
     expect(mockLogLine).toHaveBeenCalledWith(
       '[WebSocket] Connection closed: code=1006 reason=Abnormal Closure'
     );
+
+    // Simulate message event
+    mockLogLine.mockClear();
+    const msg = JSON.stringify({
+      type: 'SNAPSHOT_REQUEST',
+      payload: { fileName: '', reason: 'initial' },
+      id: 'req-1',
+    });
+    wsInstance.emit('message', Buffer.from(msg));
+    expect(onMessage).toHaveBeenCalledWith(
+      'SNAPSHOT_REQUEST',
+      { fileName: '', reason: 'initial' },
+      'req-1'
+    );
+    expect(mockLogLine).toHaveBeenCalledWith('[WebSocket] Received message: type=SNAPSHOT_REQUEST');
   });
 });

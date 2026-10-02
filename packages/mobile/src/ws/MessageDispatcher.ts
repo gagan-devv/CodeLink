@@ -7,6 +7,7 @@ import { wsManager } from './WsManager';
 import { isFileSnapshotPayload, isFilePatchPayload } from '@codelink/protocol';
 
 export function handleMessage(type: string, payload: unknown, id: string): void {
+  console.log(`[MessageDispatcher] Received message: type=${type}`);
   switch (type) {
     case 'HANDSHAKE_ACK': {
       useSessionStore.getState().setConnected(id);

@@ -21,7 +21,10 @@ export default function Index() {
   // Check stored session on mount
   useEffect(() => {
     wsManager.onMessage = handleMessage;
-    wsManager.onConnected = () => useSessionStore.getState().setConnected('restored');
+    wsManager.onConnected = () => {
+      useSessionStore.getState().setConnected('restored');
+      wsManager.send('SNAPSHOT_REQUEST', { fileName: '', reason: 'initial' });
+    };
     wsManager.onDisconnected = () => {};
 
     getStoredSession().then((session) => {
