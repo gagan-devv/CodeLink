@@ -7,7 +7,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "eas-build-post-install": "cd ../.. && npm run build -w @codelink/protocol"
+    "eas-build-post-install": "cd ../.. && npm run build -w @codelink/protocol && node scripts/patch-react-native-screens.js"
   },
   "dependencies": {
     "@codelink/protocol": "^2.0.0",

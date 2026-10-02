@@ -8,6 +8,7 @@
     "packages/mobile"
   ],
   "scripts": {
+    "postinstall": "node scripts/patch-react-native-screens.js",
     "build": "npm run build --workspaces --if-present",
     "lint": "eslint . --ext .ts,.tsx --ignore-path .eslintignore",
     "lint:fix": "eslint . --ext .ts,.tsx --ignore-path .eslintignore --fix",
