@@ -33,7 +33,6 @@ func NewSessionHandler(
 type qrData struct {
 	SessionID string `json:"sessionId"`
 	Challenge string `json:"challenge"`
-	RelayWSS  string `json:"relayWSS"`
 }
 
 func (h *SessionHandler) Create(c *gin.Context) {
@@ -92,7 +91,6 @@ func (h *SessionHandler) Create(c *gin.Context) {
 	qr, _ := json.Marshal(qrData{
 		SessionID: sessionID,
 		Challenge: challenge,
-		RelayWSS: h.cfg.RelayWSS,
 	})
 
 	c.JSON(http.StatusCreated, gin.H{
