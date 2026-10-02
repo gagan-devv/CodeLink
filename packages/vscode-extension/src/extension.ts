@@ -174,6 +174,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.window.showInformationMessage('CodeLink: Session revoked.');
     }),
 
+    vscode.commands.registerCommand('codelink.showStatus', () => {
+      const config = vscode.workspace.getConfiguration('codelink');
+      const authUrl = config.get<string>('authServiceUrl', 'http://localhost:8081');
+      const relayUrl = config.get<string>('relayServiceUrl', 'ws://localhost:8082');
+      const sessionState = sessionManager.state;
+      const isConnected = wsClient.isConnected();
+
+      vscode.window.showInformationMessage(
+        `CodeLink Status: Session: ${sessionState} | WebSocket: ${isConnected ? 'Connected' : 'Disconnected'} | Auth URL: ${authUrl} | Relay URL: ${relayUrl}`
+      );
+    }),
+
     vscode.commands.registerCommand('codelink.resetIdentity', async () => {
       try {
         await sessionManager.revokeSession();

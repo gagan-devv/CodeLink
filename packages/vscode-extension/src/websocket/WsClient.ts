@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import { buildEnvelope, MessageType, PayloadFor } from '@codelink/protocol';
+import { logLine } from '../logger';
 
 interface WsClientOptions {
   onMessage: (type: string, payload: unknown, id: string) => void;
@@ -41,6 +42,7 @@ export class WsClient {
     this.ws.on('open', () => {
       this.connected = true;
       this.reconnectDelay = 1_000;
+      logLine(`[WebSocket] Connection opened: ${this.url}`);
       this.opts.onConnected();
       this.flushQueue();
     });
@@ -58,15 +60,20 @@ export class WsClient {
       }
     });
 
-    this.ws.on('close', () => {
+    this.ws.on('close', (code: number, reason: Buffer) => {
       this.connected = false;
+      const reasonStr = reason ? reason.toString('utf8') : '';
+      logLine(
+        `[WebSocket] Connection closed: code=${code}${reasonStr ? ` reason=${reasonStr}` : ''}`
+      );
       this.opts.onDisconnected();
       if (!this.intentionalClose) {
         this.scheduleReconnect();
       }
     });
 
-    this.ws.on('error', () => {
+    this.ws.on('error', (err: Error) => {
+      logLine(`[WebSocket] Connection error: ${err?.message || err}`);
       this.ws?.terminate();
     });
   }

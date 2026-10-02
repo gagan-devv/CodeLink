@@ -94,12 +94,21 @@ export class SessionManager {
   }
 
   async waitForMobile(sessionId: string, timeoutMs = 90_000): Promise<ActiveSession> {
+    if (this._pollTimer) {
+      clearTimeout(this._pollTimer);
+      this._pollTimer = null;
+    }
+
     const authUrl = this.getAuthUrl();
     const deadline = Date.now() + timeoutMs;
 
     return new Promise((resolve, reject) => {
       const poll = async () => {
-        if (Date.now() > deadline) {
+        if (Date.now() >= deadline) {
+          if (this._pollTimer) {
+            clearTimeout(this._pollTimer);
+            this._pollTimer = null;
+          }
           this._setState('idle');
           return reject(new Error('Pairing timed out - QR code expired'));
         }
@@ -119,6 +128,10 @@ export class SessionManager {
           });
 
           if (!response.ok) {
+            if (this._pollTimer) {
+              clearTimeout(this._pollTimer);
+              this._pollTimer = null;
+            }
             return reject(
               new Error(`Status poll failed (${response.status}): ${response.bodyText}`)
             );
@@ -127,6 +140,10 @@ export class SessionManager {
           const data = await response.json();
 
           if (data.state === 'active' && data.laptopToken) {
+            if (this._pollTimer) {
+              clearTimeout(this._pollTimer);
+              this._pollTimer = null;
+            }
             const relayBase = vscode.workspace
               .getConfiguration('codelink')
               .get<string>('relayServiceUrl', 'ws://localhost:8082');
@@ -140,7 +157,13 @@ export class SessionManager {
             this._setState('active');
             return resolve(session);
           }
+
+          this._pollTimer = setTimeout(poll, 2000);
         } catch (err) {
+          if (this._pollTimer) {
+            clearTimeout(this._pollTimer);
+            this._pollTimer = null;
+          }
           reject(err);
         }
       };
@@ -149,6 +172,11 @@ export class SessionManager {
   }
 
   async revokeSession(): Promise<void> {
+    if (this._pollTimer) {
+      clearTimeout(this._pollTimer);
+      this._pollTimer = null;
+    }
+
     if (!this._session) {
       return;
     }
@@ -174,6 +202,7 @@ export class SessionManager {
   dispose(): void {
     if (this._pollTimer) {
       clearTimeout(this._pollTimer);
+      this._pollTimer = null;
     }
   }
 
