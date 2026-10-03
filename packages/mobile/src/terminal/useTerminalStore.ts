@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { TerminalSessionInfo } from '@codelink/protocol';
+import { wsManager } from '../ws/WsManager';
+import { secureRandomBytes } from '../crypto/random';
+import { MobileE2EESession } from '../crypto/MobileE2EESession';
 
 export type SpecialKey =
   | 'UP'
@@ -30,6 +33,14 @@ export interface TerminalStoreState {
   hasGap: boolean;
   multilinePasteModal: MultilinePasteModalState;
 
+  // E2EE state
+  e2eeState: 'unpaired' | 'initiating' | 'pending_approval' | 'paired' | 'error';
+  e2eeSession: MobileE2EESession | null;
+  e2eeError: string | null;
+  sasCode: string | null;
+  sessionToken: string | null;
+  deviceId: string | null;
+
   setSessions: (sessions: TerminalSessionInfo[]) => void;
   setActiveSession: (id: string) => void;
   setMode: (mode: 'observe' | 'control' | 'detached') => void;
@@ -43,6 +54,18 @@ export interface TerminalStoreState {
   handlePaste: (text: string) => { requiresConfirmation: boolean; text: string };
   confirmPaste: () => string;
   cancelPaste: () => void;
+  setPairingState: (
+    state: 'unpaired' | 'initiating' | 'pending_approval' | 'paired' | 'error'
+  ) => void;
+  setPendingApproval: (sessionToken: string, sasCode: string) => void;
+  setE2EESession: (session: MobileE2EESession, deviceId: string) => void;
+  setE2EEError: (error: string | null) => void;
+  clearE2EE: () => void;
+  sendEncryptedInput: (
+    sessionId: string,
+    data: string,
+    generation?: number
+  ) => { success: boolean; error?: string };
   reset: () => void;
 }
 
@@ -72,6 +95,76 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     visible: false,
     text: '',
     lineCount: 0,
+  },
+  e2eeState: 'unpaired',
+  e2eeSession: null,
+  e2eeError: null,
+  sasCode: null,
+  sessionToken: null,
+  deviceId: null,
+
+  setPairingState: (state) => set({ e2eeState: state, e2eeError: null }),
+
+  setPendingApproval: (sessionToken, sasCode) =>
+    set({
+      e2eeState: 'pending_approval',
+      sessionToken,
+      sasCode,
+      e2eeError: null,
+    }),
+
+  setE2EESession: (session, deviceId) =>
+    set({
+      e2eeSession: session,
+      deviceId,
+      e2eeState: 'paired',
+      e2eeError: null,
+      sasCode: null,
+      sessionToken: null,
+    }),
+
+  setE2EEError: (error) => set({ e2eeError: error, e2eeState: 'error' }),
+
+  clearE2EE: () =>
+    set({
+      e2eeSession: null,
+      deviceId: null,
+      e2eeState: 'unpaired',
+      e2eeError: null,
+      sasCode: null,
+      sessionToken: null,
+    }),
+
+  sendEncryptedInput: (sessionId, data, generation = 0) => {
+    const { e2eeSession } = get();
+    if (!e2eeSession) {
+      const err = 'Plaintext transmission refused: no active E2EE session exists';
+      set({ e2eeError: err, e2eeState: 'error' });
+      return { success: false, error: err };
+    }
+
+    try {
+      const packet = e2eeSession.encrypt(data);
+      const randBytes = secureRandomBytes(4);
+      let randHex = '';
+      for (let i = 0; i < randBytes.length; i++) {
+        randHex += randBytes[i].toString(16).padStart(2, '0');
+      }
+      const inputId = `in-${Date.now()}-${randHex}`;
+      // Send encrypted packet as JSON string payload
+      const payload = {
+        sessionId,
+        inputId,
+        generation,
+        data: JSON.stringify(packet),
+      };
+      wsManager.sendTerminal('TERM_INPUT', payload);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      set({ e2eeError: msg, e2eeState: 'error' });
+      return { success: false, error: msg };
+    }
   },
 
   setSessions: (sessions) => {
@@ -193,6 +286,12 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
         text: '',
         lineCount: 0,
       },
+      e2eeState: 'unpaired',
+      e2eeSession: null,
+      e2eeError: null,
+      sasCode: null,
+      sessionToken: null,
+      deviceId: null,
     });
   },
 }));

@@ -5,7 +5,13 @@ import { usePromptStore } from '../store/usePromptStore';
 import { useTerminalStore } from '../terminal/useTerminalStore';
 import { clearStoredSession } from '../api/authClient';
 import { wsManager } from './WsManager';
-import { isFileSnapshotPayload, isFilePatchPayload } from '@codelink/protocol';
+import {
+  isFileSnapshotPayload,
+  isFilePatchPayload,
+  TerminalPairRespPayload,
+  TerminalPairStatusRespPayload,
+} from '@codelink/protocol';
+import { MobilePairingService } from '../crypto/MobilePairingService';
 
 export function handleMessage(type: string, payload: unknown, id: string): void {
   console.log(`[MessageDispatcher] Received message: type=${type}`);
@@ -68,7 +74,74 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
     case 'TERM_OUTPUT': {
       const p = payload as { sessionId: string; data: string };
       if (p && typeof p.sessionId === 'string' && typeof p.data === 'string') {
-        useTerminalStore.getState().appendOutput(p.sessionId, p.data);
+        const { e2eeSession } = useTerminalStore.getState();
+        if (e2eeSession) {
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(p.data);
+          } catch {
+            useTerminalStore
+              .getState()
+              .setE2EEError('Plaintext terminal output rejected: active E2EE session exists');
+            return;
+          }
+
+          if (
+            typeof parsed === 'object' &&
+            parsed !== null &&
+            'ciphertext' in parsed &&
+            'nonce' in parsed &&
+            'seq' in parsed &&
+            typeof (parsed as { ciphertext: unknown }).ciphertext === 'string' &&
+            typeof (parsed as { nonce: unknown }).nonce === 'string' &&
+            typeof (parsed as { seq: unknown }).seq === 'number'
+          ) {
+            try {
+              const decrypted = e2eeSession.decrypt(
+                parsed as { seq: number; nonce: string; ciphertext: string }
+              );
+              useTerminalStore.getState().appendOutput(p.sessionId, decrypted);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              useTerminalStore.getState().setE2EEError(`Failed to decrypt terminal output: ${msg}`);
+            }
+          } else {
+            useTerminalStore
+              .getState()
+              .setE2EEError('Plaintext terminal output rejected: active E2EE session exists');
+          }
+        } else {
+          try {
+            const parsed = JSON.parse(p.data);
+            if (parsed && parsed.ciphertext && parsed.nonce) {
+              useTerminalStore
+                .getState()
+                .setE2EEError('Encrypted terminal output received but device is unpaired');
+              return;
+            }
+          } catch {
+            // Not JSON, plaintext output
+          }
+          useTerminalStore.getState().appendOutput(p.sessionId, p.data);
+        }
+      }
+      break;
+    }
+
+    case 'TERM_PAIR_RESP': {
+      MobilePairingService.handlePairResp(payload as TerminalPairRespPayload);
+      break;
+    }
+
+    case 'TERM_PAIR_STATUS_RESP': {
+      MobilePairingService.handlePairStatus(payload as TerminalPairStatusRespPayload);
+      break;
+    }
+
+    case 'TERM_ERROR': {
+      const p = payload as { code?: string; message?: string };
+      if (p && p.message) {
+        useTerminalStore.getState().setE2EEError(`[${p.code || 'TERM_ERROR'}] ${p.message}`);
       }
       break;
     }

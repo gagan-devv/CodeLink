@@ -218,4 +218,35 @@ export class PairingManager {
     this.attemptCount = 0;
     return true;
   }
+
+  public getHostKeyPair(): KeyPair {
+    return this.hostKeyPair;
+  }
+
+  public getDeviceStore(): PairedDeviceStore | undefined {
+    return this.deviceStore;
+  }
+
+  public getPairingStatus(sessionToken: string): {
+    approved: boolean;
+    deviceId?: string;
+    hostPublicKey?: string;
+    clientPublicKey?: Uint8Array;
+    error?: string;
+  } {
+    const pending = this.pendingPairings.get(sessionToken);
+    if (!pending) {
+      return { approved: false, error: 'Pairing session not found or expired' };
+    }
+    if (!pending.approved) {
+      return { approved: false };
+    }
+    const deviceId = `dev-${sodium.to_hex(sodium.crypto_generichash(8, pending.clientPublicKey, null))}`;
+    return {
+      approved: true,
+      deviceId,
+      hostPublicKey: sodium.to_base64(this.hostKeyPair.publicKey),
+      clientPublicKey: pending.clientPublicKey,
+    };
+  }
 }

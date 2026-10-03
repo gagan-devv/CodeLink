@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import sodium from 'libsodium-wrappers';
 import {
   buildTerminalEnvelope,
   parseTerminalEnvelope,
@@ -12,10 +13,15 @@ import {
   TerminalCloseSessionPayload,
   TerminalKillPayload,
   TerminalHandshakePayload,
+  TerminalPairPayload,
+  TerminalPairStatusPayload,
+  EncryptedPacket,
 } from '@codelink/protocol';
 import { CompanionConfig } from '../service/CompanionConfig';
 import { SessionTable, TerminalSession } from '../session/SessionTable';
-import { PairingManager } from '../crypto/PairingManager';
+import { PairingManager, KeyPair } from '../crypto/PairingManager';
+import { PairedDeviceStore } from '../auth/PairedDeviceStore';
+import { E2EESession } from '../crypto/E2EESession';
 import { InputDeduplicator } from './InputDeduplicator';
 import { ReattachHandler } from './ReattachHandler';
 
@@ -25,6 +31,9 @@ export interface RelayClientOptions {
   config: CompanionConfig;
   sessionTable: SessionTable;
   pairingManager?: PairingManager;
+  deviceStore?: PairedDeviceStore;
+  hostKeyPair?: KeyPair;
+  requireE2EE?: boolean;
   defaultDeviceId?: string;
   reconnectInitialDelayMs?: number;
   reconnectMaxDelayMs?: number;
@@ -45,9 +54,18 @@ export class RelayClient {
   private sessionDisposables = new Map<string, { dispose: () => void }>();
   private activeDeviceId: string;
   private relayConnectionId?: string;
+  private deviceStore?: PairedDeviceStore;
+  private hostKeyPair?: KeyPair;
+  private requireE2EE: boolean;
+  private e2eeSessions = new Map<string, E2EESession>();
 
   constructor(private options: RelayClientOptions) {
     this.activeDeviceId = options.defaultDeviceId || 'remote-client';
+    this.requireE2EE = options.requireE2EE ?? options.deviceStore !== undefined;
+    this.deviceStore =
+      options.deviceStore ||
+      (this.requireE2EE ? options.pairingManager?.getDeviceStore() : undefined);
+    this.hostKeyPair = options.hostKeyPair || options.pairingManager?.getHostKeyPair();
   }
 
   public isConnected(): boolean {
@@ -72,6 +90,60 @@ export class RelayClient {
 
   public getRelayConnectionId(): string | undefined {
     return this.relayConnectionId;
+  }
+
+  public getOrCreateE2EESession(deviceId: string): E2EESession | null {
+    if (this.e2eeSessions.has(deviceId)) {
+      return this.e2eeSessions.get(deviceId)!;
+    }
+
+    if (!this.deviceStore || !this.hostKeyPair) {
+      return null;
+    }
+
+    const device = this.deviceStore.getDevice(deviceId);
+    if (!device || device.revoked) {
+      return null;
+    }
+
+    try {
+      const clientPubKey = sodium.from_base64(device.publicKey);
+      const kxKeys = sodium.crypto_kx_server_session_keys(
+        this.hostKeyPair.publicKey,
+        this.hostKeyPair.privateKey,
+        clientPubKey
+      );
+      const session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx);
+      this.e2eeSessions.set(deviceId, session);
+      return session;
+    } catch {
+      return null;
+    }
+  }
+
+  public registerE2EESession(deviceId: string, session: E2EESession): void {
+    this.e2eeSessions.set(deviceId, session);
+  }
+
+  public getE2EESession(deviceId: string): E2EESession | undefined {
+    return this.e2eeSessions.get(deviceId);
+  }
+
+  public sendOutput(sessionId: string, data: string, deviceId?: string): void {
+    const targetDevId = deviceId || this.activeDeviceId;
+    const session = this.getOrCreateE2EESession(targetDevId);
+
+    let outputData = data;
+    if (session) {
+      const packet = session.encrypt(data);
+      outputData = JSON.stringify(packet);
+    }
+
+    this.sendTerminalEnvelope('TERM_OUTPUT', {
+      sessionId,
+      seq: ++this.outputSeq,
+      data: outputData,
+    });
   }
 
   public async connect(): Promise<void> {
@@ -198,6 +270,15 @@ export class RelayClient {
           ((payload as unknown as Record<string, unknown>).deviceId as string) ||
           this.activeDeviceId;
 
+        if (this.requireE2EE && this.deviceStore && !this.deviceStore.isApproved(deviceId)) {
+          this.sendTerminalEnvelope('TERM_ERROR', {
+            code: 'DEVICE_NOT_APPROVED',
+            message: 'Device is not approved or pairing was revoked',
+            sessionId: payload.sessionId,
+          });
+          return;
+        }
+
         let session = this.options.sessionTable.get(payload.sessionId);
         if (!session) {
           try {
@@ -239,11 +320,7 @@ export class RelayClient {
         }
 
         if (reattachResult.data && reattachResult.data.length > 0) {
-          this.sendTerminalEnvelope('TERM_OUTPUT', {
-            sessionId: payload.sessionId,
-            seq: ++this.outputSeq,
-            data: reattachResult.data,
-          });
+          this.sendOutput(payload.sessionId, reattachResult.data, deviceId);
         }
 
         this.subscribeSessionOutput(payload.sessionId, session);
@@ -255,6 +332,73 @@ export class RelayClient {
         const deviceId =
           ((payload as unknown as Record<string, unknown>).deviceId as string) ||
           this.activeDeviceId;
+
+        const isE2EERequired = this.requireE2EE || this.e2eeSessions.has(deviceId);
+
+        // If E2EE or device store is in use, verify approval
+        if (this.deviceStore) {
+          if (!this.deviceStore.isApproved(deviceId)) {
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'DEVICE_NOT_APPROVED',
+              message: 'Device is not approved or pairing was revoked',
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+        } else if (this.requireE2EE) {
+          this.sendTerminalEnvelope('TERM_ERROR', {
+            code: 'DEVICE_NOT_APPROVED',
+            message: 'Device is not approved or device store missing',
+            sessionId: payload.sessionId,
+          });
+          return;
+        }
+
+        let inputData = payload.data;
+
+        if (isE2EERequired) {
+          const e2eeSession = this.getOrCreateE2EESession(deviceId);
+          if (!e2eeSession) {
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'NO_E2EE_SESSION',
+              message: 'Refusing plaintext: no active E2EE session exists for device',
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+
+          let packet: EncryptedPacket;
+          try {
+            packet = typeof payload.data === 'string' ? JSON.parse(payload.data) : payload.data;
+            if (
+              !packet ||
+              typeof packet.ciphertext !== 'string' ||
+              typeof packet.nonce !== 'string' ||
+              typeof packet.seq !== 'number'
+            ) {
+              throw new Error('Not an encrypted packet');
+            }
+          } catch {
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'PLAINTEXT_REJECTED',
+              message: 'Plaintext input rejected: encrypted payload expected',
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+
+          try {
+            inputData = e2eeSession.decrypt(packet);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'DECRYPTION_FAILED',
+              message: `Decryption failed or replay detected: ${msg}`,
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+        }
 
         const dedup = this.inputDeduplicator.processInput(
           payload.inputId,
@@ -270,7 +414,7 @@ export class RelayClient {
         }
 
         try {
-          this.options.sessionTable.writeInput(payload.sessionId, deviceId, payload.data);
+          this.options.sessionTable.writeInput(payload.sessionId, deviceId, inputData);
         } catch (err) {
           this.sendTerminalEnvelope('TERM_ERROR', {
             code: 'INPUT_REJECTED',
@@ -358,12 +502,83 @@ export class RelayClient {
         break;
       }
 
+      case 'TERM_PAIR': {
+        const payload = envelope.payload as TerminalPairPayload;
+        if (!this.options.pairingManager) {
+          this.sendTerminalEnvelope('TERM_PAIR_RESP', {
+            success: false,
+            error: 'Pairing manager not available',
+          });
+          break;
+        }
+
+        const res = this.options.pairingManager.verifyAndInitiate(
+          payload.code,
+          payload.clientPublicKey,
+          payload.clientDeviceName
+        );
+
+        if (res.success && res.sessionToken) {
+          const sas = this.options.pairingManager.computeSas(res.sessionToken);
+          this.sendTerminalEnvelope('TERM_PAIR_RESP', {
+            success: true,
+            sessionToken: res.sessionToken,
+            sas,
+          });
+        } else {
+          this.sendTerminalEnvelope('TERM_PAIR_RESP', {
+            success: false,
+            error: res.error || 'Pairing code verification failed',
+          });
+        }
+        break;
+      }
+
+      case 'TERM_PAIR_STATUS': {
+        const payload = envelope.payload as TerminalPairStatusPayload;
+        if (!this.options.pairingManager) {
+          this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
+            approved: false,
+            error: 'Pairing manager not available',
+          });
+          break;
+        }
+
+        const status = this.options.pairingManager.getPairingStatus(payload.sessionToken);
+        if (status.approved && status.deviceId && status.clientPublicKey && this.hostKeyPair) {
+          try {
+            const kxKeys = sodium.crypto_kx_server_session_keys(
+              this.hostKeyPair.publicKey,
+              this.hostKeyPair.privateKey,
+              status.clientPublicKey
+            );
+            const session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx);
+            this.e2eeSessions.set(status.deviceId, session);
+            this.activeDeviceId = status.deviceId;
+          } catch {
+            // ignore
+          }
+
+          this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
+            approved: true,
+            deviceId: status.deviceId,
+            hostPublicKey: status.hostPublicKey,
+          });
+        } else {
+          this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
+            approved: false,
+            error: status.error,
+          });
+        }
+        break;
+      }
+
       default: {
         // Pairing handling for pairing extensions
         if (
           this.options.pairingManager &&
-          ((envelope.type as string) === 'TERM_PAIR' ||
-            (envelope.payload as Record<string, unknown>)?.pairingCode)
+          ((envelope.payload as Record<string, unknown>)?.pairingCode ||
+            (envelope.payload as Record<string, unknown>)?.code)
         ) {
           const p = envelope.payload as Record<string, unknown>;
           const code = (p.code || p.pairingCode) as string;
@@ -394,11 +609,7 @@ export class RelayClient {
       return;
     }
     const sub = session.pty.onData((data) => {
-      this.sendTerminalEnvelope('TERM_OUTPUT', {
-        sessionId,
-        seq: ++this.outputSeq,
-        data,
-      });
+      this.sendOutput(sessionId, data, session.controllerDeviceId || this.activeDeviceId);
     });
     this.sessionDisposables.set(sessionId, sub);
   }
