@@ -6,3 +6,6 @@ export * from './service/CompanionConfig';
 export * from './auth/PairedDeviceStore';
 export * from './crypto/E2EESession';
 export * from './crypto/PairingManager';
+export * from './transport/FlowController';
+export * from './transport/InputDeduplicator';
+export * from './transport/ReattachHandler';
