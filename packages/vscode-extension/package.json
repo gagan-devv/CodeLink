@@ -34,6 +34,10 @@
       {
         "command": "codelink.reRegister",
         "title": "CodeLink: Re-register Laptop (Reset Identity & Keys)"
+      },
+      {
+        "command": "codelink.terminalMenu",
+        "title": "CodeLink: Managed Terminal Status & Controls"
       }
     ],
     "configuration": {

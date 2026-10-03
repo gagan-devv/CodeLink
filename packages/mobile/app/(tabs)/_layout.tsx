@@ -13,6 +13,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Editor', tabBarLabel: 'Editor' }} />
       <Tabs.Screen name="prompt" options={{ title: 'Prompt', tabBarLabel: 'Prompt' }} />
+      <Tabs.Screen name="terminal" options={{ title: 'Terminal', tabBarLabel: 'Terminal' }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarLabel: 'Settings' }} />
     </Tabs>
   );

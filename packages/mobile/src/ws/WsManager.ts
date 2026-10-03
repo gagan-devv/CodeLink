@@ -1,4 +1,11 @@
-import { buildEnvelope, MessageType, PayloadFor } from '@codelink/protocol';
+import {
+  buildEnvelope,
+  MessageType,
+  PayloadFor,
+  buildTerminalEnvelope,
+  TerminalMessageType,
+  TerminalPayloadFor,
+} from '@codelink/protocol';
 
 type MessageHandler = (type: string, payload: unknown, id: string) => void;
 type ConnectionHandler = () => void;
@@ -63,6 +70,12 @@ class WsManagerClass {
   send<T extends MessageType>(type: T, payload: PayloadFor<T>): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(buildEnvelope(type, payload)));
+    }
+  }
+
+  sendTerminal<T extends TerminalMessageType>(type: T, payload: TerminalPayloadFor<T>): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(buildTerminalEnvelope(type, payload)));
     }
   }
 
