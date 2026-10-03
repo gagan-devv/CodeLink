@@ -14,6 +14,16 @@
         "EXPO_PUBLIC_RELAY_URL": "wss://relay-production-24e4.up.railway.app/ws"
       }
     },
+    "staging": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_AUTH_URL": "https://auth-service-staging-2ac1.up.railway.app",
+        "EXPO_PUBLIC_RELAY_URL": "wss://relay-service-staging.up.railway.app/ws"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "android": {
