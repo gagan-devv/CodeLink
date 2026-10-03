@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gagan-devv/codelink/services/auth/internal/config"
@@ -16,18 +18,68 @@ import (
 	"github.com/google/uuid"
 )
 
+type companionRateLimiter struct {
+	mu     sync.Mutex
+	counts map[string][]time.Time
+	limit  int
+	window time.Duration
+}
+
+func newCompanionRateLimiter(limit int, window time.Duration) *companionRateLimiter {
+	return &companionRateLimiter{
+		counts: make(map[string][]time.Time),
+		limit:  limit,
+		window: window,
+	}
+}
+
+func (l *companionRateLimiter) allow(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-l.window)
+
+	timestamps := l.counts[key]
+	valid := timestamps[:0]
+	for _, t := range timestamps {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+	if len(valid) >= l.limit {
+		l.counts[key] = valid
+		return false
+	}
+	l.counts[key] = append(valid, now)
+	return true
+}
+
+type SessionStore interface {
+	GetRedisSession(ctx context.Context, sessionID string) (*repository.RedisSession, error)
+	Create(ctx context.Context, s *domain.Session, challenge string) error
+	Activate(ctx context.Context, sessionID, mobileDeviceID, laptopID, laptopToken, mobileToken string) error
+	Revoke(ctx context.Context, sessionID string) error
+}
+
 type SessionHandler struct {
-	sessionRepo *repository.SessionRepository
+	sessionRepo SessionStore
 	signer      *authcrypto.JWTSigner
 	cfg         *config.Config
+	rateLimiter *companionRateLimiter
 }
 
 func NewSessionHandler(
-	sessionRepo *repository.SessionRepository,
+	sessionRepo SessionStore,
 	signer *authcrypto.JWTSigner,
 	cfg *config.Config,
 ) *SessionHandler {
-	return &SessionHandler{sessionRepo: sessionRepo, signer: signer, cfg: cfg}
+	return &SessionHandler{
+		sessionRepo: sessionRepo,
+		signer:      signer,
+		cfg:         cfg,
+		rateLimiter: newCompanionRateLimiter(10, time.Minute),
+	}
 }
 
 type qrData struct {
@@ -228,4 +280,67 @@ func (h *SessionHandler) Revoke(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (h *SessionHandler) CompanionToken(c *gin.Context) {
+	sessionID := c.Param("id")
+	laptopID := c.GetString("laptopID")
+
+	if h.rateLimiter != nil && !h.rateLimiter.allow(sessionID) {
+		reason := "rate limit exceeded"
+		log.Printf("companion token failed: status=429 sessionID=%s laptopId=%s reason=%s\n", sessionID, laptopID, reason)
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":  "rate limit exceeded",
+			"reason": "too many companion token requests",
+		})
+		return
+	}
+
+	if h.sessionRepo == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "session repository not initialized"})
+		return
+	}
+
+	data, err := h.sessionRepo.GetRedisSession(c.Request.Context(), sessionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found or expired"})
+		return
+	}
+
+	if data.LaptopID != laptopID {
+		reason := "laptopId mismatch"
+		log.Printf("companion token failed: status=403 sessionID=%s laptopId=%s reason=%s\n", sessionID, laptopID, reason)
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "reason": reason})
+		return
+	}
+
+	if data.State != string(domain.SessionActive) {
+		reason := "session not active"
+		log.Printf("companion token failed: status=409 sessionID=%s state=%s reason=%s\n", sessionID, data.State, reason)
+		c.JSON(http.StatusConflict, gin.H{"error": "session not active", "reason": reason})
+		return
+	}
+
+	if h.signer == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "jwt signer not initialized"})
+		return
+	}
+
+	ttl := 1 * time.Hour
+	companionToken, err := h.signer.Issue(authcrypto.Claims{
+		Role:      authcrypto.RoleCompanion,
+		SessionID: sessionID,
+		LaptopID:  data.LaptopID,
+	}, ttl)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue companion token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"companionToken": companionToken,
+		"sessionId":      sessionID,
+		"relayWss":       h.cfg.RelayWSS,
+		"expiresAt":      time.Now().Add(ttl).UnixMilli(),
+	})
 } 
