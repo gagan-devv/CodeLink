@@ -10,6 +10,8 @@ import { SessionTable } from '../session/SessionTable';
 import { SocketServer, IpcCommand, IpcResponse } from '../ipc/SocketServer';
 import { PairingManager, PairingChallenge, KeyPair } from '../crypto/PairingManager';
 import { PairedDeviceStore } from '../auth/PairedDeviceStore';
+import { AuditLogger } from '../audit/AuditLogger';
+import { SessionRecorder } from '../recording/SessionRecorder';
 
 function getDefaultSocketPath(): string {
   if (process.env.XDG_RUNTIME_DIR) {
@@ -134,11 +136,30 @@ async function runDaemon(): Promise<void> {
   const config = new CompanionConfig();
   const socketPath = getDefaultSocketPath();
   const hostKeys = getOrCreateHostKeyPair();
-  const deviceStore = new PairedDeviceStore();
+  const auditLogger = new AuditLogger();
+  const sessionRecorder = new SessionRecorder({
+    enabled: config.get().recordingEnabled,
+  });
+  const deviceStore = new PairedDeviceStore(undefined, auditLogger);
   const pairingManager = new PairingManager(hostKeys, deviceStore);
   const ptyManager = new PtyManager();
-  const sessionTable = new SessionTable(ptyManager, config.get().maxSessions);
-  const server = new SocketServer(socketPath, config, sessionTable, pairingManager, deviceStore);
+  const sessionTable = new SessionTable(ptyManager, {
+    maxSessions: config.get().maxSessions,
+    controlIdleTimeoutMs: 6 * 60 * 60 * 1000,
+    auditLogger,
+    sessionRecorder,
+  });
+  sessionTable.startIdleTimer(60000);
+
+  const server = new SocketServer(
+    socketPath,
+    config,
+    sessionTable,
+    pairingManager,
+    deviceStore,
+    auditLogger,
+    sessionRecorder
+  );
 
   console.log(`[codelink-terminal] Starting companion service...`);
   console.log(
@@ -148,12 +169,18 @@ async function runDaemon(): Promise<void> {
   console.log(
     `[codelink-terminal] Safety notice: Shells run as ${os.userInfo().username} with full file access.`
   );
+  if (config.get().recordingEnabled) {
+    console.warn(
+      `[codelink-terminal] WARNING: Local session recording is enabled. Terminal outputs will be recorded to disk.`
+    );
+  }
 
   await server.start();
   console.log(`[codelink-terminal] Companion daemon running and listening for local commands.`);
 
   const shutdown = async () => {
     console.log('\n[codelink-terminal] Shutting down companion service...');
+    sessionTable.stopIdleTimer();
     await sessionTable.closeAll();
     await server.stop();
     process.exit(0);
@@ -294,13 +321,66 @@ async function main(): Promise<void> {
       break;
     }
 
-    case 'list': {
+    case 'kill': {
+      const sessionId = args[1];
+      if (!sessionId) {
+        console.error('Usage: codelink-terminal kill <sessionId>');
+        process.exit(1);
+      }
       try {
-        const res = await sendIpcCommand(socketPath, { command: 'list-sessions' });
+        const res = await sendIpcCommand(socketPath, {
+          command: 'kill-session',
+          args: { sessionId },
+        });
         if (res.ok) {
-          console.log('Active sessions:', JSON.stringify(res.data, null, 2));
+          console.log(`✓ Terminal session ${sessionId} has been terminated.`);
         } else {
-          console.error('Failed to list sessions:', res.error);
+          console.error('Failed to kill session:', res.error);
+        }
+      } catch (err) {
+        console.error('Could not communicate with companion daemon:', err);
+      }
+      break;
+    }
+
+    case 'takeover': {
+      const sessionId = args[1];
+      if (!sessionId) {
+        console.error('Usage: codelink-terminal takeover <sessionId>');
+        process.exit(1);
+      }
+      try {
+        const res = await sendIpcCommand(socketPath, {
+          command: 'takeover',
+          args: { sessionId },
+        });
+        if (res.ok) {
+          console.log(`✓ Host reclaimed control of session ${sessionId}.`);
+        } else {
+          console.error('Failed to reclaim control:', res.error);
+        }
+      } catch (err) {
+        console.error('Could not communicate with companion daemon:', err);
+      }
+      break;
+    }
+
+    case 'audit': {
+      const limit = parseInt(args[1] || '20', 10);
+      try {
+        const res = await sendIpcCommand(socketPath, {
+          command: 'audit',
+          args: { limit },
+        });
+        if (res.ok) {
+          const events = ((res.data as Record<string, unknown>)?.events as unknown[]) || [];
+          console.log(`--- Recent Audit Events (${events.length}) ---`);
+          for (const ev of events as Array<Record<string, unknown>>) {
+            const time = new Date(Number(ev.timestamp)).toISOString();
+            console.log(`[${time}] ${String(ev.type).toUpperCase()}: ${JSON.stringify(ev)}`);
+          }
+        } else {
+          console.error('Failed to fetch audit log:', res.error);
         }
       } catch (err) {
         console.error('Could not communicate with companion daemon:', err);
@@ -318,7 +398,10 @@ Commands:
   pair           Generate a one-time pairing code and QR data for a new device
   devices        List all paired remote devices
   revoke <id>    Revoke an approved paired device
+  kill <id>      Emergency kill-switch: terminate a specific active session
   kill-all       Emergency kill-switch: terminate all active terminal sessions
+  takeover <id>  Reclaim control of a session back to the local host
+  audit [limit]  Display recent structured audit log records
   list           List all active terminal sessions
   start-daemon   Run companion daemon in foreground (for systemd or testing)
 

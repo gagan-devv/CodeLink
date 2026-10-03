@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
+import { AuditLogger } from '../audit/AuditLogger';
+
 export interface PairedDevice {
   deviceId: string;
   deviceName: string;
@@ -14,7 +16,10 @@ export class PairedDeviceStore {
   private devices = new Map<string, PairedDevice>();
   private filePath: string;
 
-  constructor(customPath?: string) {
+  constructor(
+    customPath?: string,
+    private auditLogger?: AuditLogger
+  ) {
     this.filePath = customPath || path.join(os.homedir(), '.codelink', 'paired_devices.json');
     this.load();
   }
@@ -59,6 +64,12 @@ export class PairedDeviceStore {
     };
     this.devices.set(device.deviceId, device);
     this.save();
+    this.auditLogger?.log({
+      type: 'device_paired',
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      timestamp: device.pairedAt,
+    });
   }
 
   public isApproved(deviceId: string): boolean {
@@ -76,6 +87,11 @@ export class PairedDeviceStore {
     }
     dev.revoked = true;
     this.save();
+    this.auditLogger?.log({
+      type: 'device_revoked',
+      deviceId,
+      timestamp: Date.now(),
+    });
     return true;
   }
 

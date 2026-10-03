@@ -5,6 +5,8 @@ import { CompanionConfig } from '../service/CompanionConfig';
 import { SessionTable } from '../session/SessionTable';
 import { PairingManager } from '../crypto/PairingManager';
 import { PairedDeviceStore } from '../auth/PairedDeviceStore';
+import { AuditLogger } from '../audit/AuditLogger';
+import { SessionRecorder } from '../recording/SessionRecorder';
 
 export interface IpcCommand {
   command:
@@ -13,11 +15,13 @@ export interface IpcCommand {
     | 'disable'
     | 'list-sessions'
     | 'kill-all'
+    | 'kill-session'
     | 'revoke'
     | 'takeover'
     | 'pair'
     | 'approve-pairing'
-    | 'list-devices';
+    | 'list-devices'
+    | 'audit';
   args?: Record<string, unknown>;
 }
 
@@ -36,7 +40,9 @@ export class SocketServer {
     private config: CompanionConfig,
     private sessionTable?: SessionTable,
     private pairingManager?: PairingManager,
-    private deviceStore?: PairedDeviceStore
+    private deviceStore?: PairedDeviceStore,
+    private auditLogger?: AuditLogger,
+    private sessionRecorder?: SessionRecorder
   ) {}
 
   public async start(): Promise<void> {
@@ -149,11 +155,35 @@ export class SocketServer {
 
       case 'kill-all': {
         if (this.sessionTable) {
-          await this.sessionTable.closeAll();
+          await this.sessionTable.emergencyKill(undefined, 'socket_ipc');
         }
         return {
           ok: true,
           data: { message: 'All terminal sessions killed' },
+        };
+      }
+
+      case 'kill-session': {
+        const sessionId = cmd.args?.sessionId as string;
+        if (!sessionId || !this.sessionTable) {
+          return { ok: false, error: 'sessionId required for kill-session' };
+        }
+        await this.sessionTable.emergencyKill(sessionId, 'socket_ipc');
+        return {
+          ok: true,
+          data: { message: `Terminated session ${sessionId}` },
+        };
+      }
+
+      case 'audit': {
+        if (!this.auditLogger) {
+          return { ok: false, error: 'Audit logger not configured' };
+        }
+        const limit = typeof cmd.args?.limit === 'number' ? cmd.args.limit : 50;
+        const events = this.auditLogger.getRecentEvents(limit);
+        return {
+          ok: true,
+          data: { events },
         };
       }
 
