@@ -12,6 +12,7 @@ CodeLink is a premium developer tool that brings AI-assisted coding to your mobi
 - 🤖 **Universal Editor Adapter Registry**: Native integration with Continue, Kiro, Cursor, and Antigravity editors using safe VS Code extension APIs.
 - 🔒 **Zero-Trust Security**: End-to-end local RSA key pairing, JWT authentication, and session revocation tracking via Go microservices.
 - ⚡ **Real-Time WebSocket Sync**: Low-latency bidirectionally synchronized diffs, active cursor tracking, and prompt envelopes.
+- 💻 **Managed Interactive Terminal (E2EE)**: Remote access to real Linux PTY shells with multi-tab persistence, XChaCha20-Poly1305 end-to-end encryption, single-controller enforcement, host takeover, and zero-payload audit logging. See [Managed Terminal Guide](docs/MANAGED_TERMINAL.md).
 
 ---
 
