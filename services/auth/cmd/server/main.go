@@ -90,6 +90,7 @@ func main() {
 		authed := sessions.Group("", middleware.LaptopAuth(laptopRepo))
 		authed.POST("", sessionHandler.Create)
 		authed.GET("/:id/status", sessionHandler.Status)
+		authed.POST("/:id/companion-token", sessionHandler.CompanionToken)
 		authed.DELETE("/:id", sessionHandler.Revoke)
 	}
 

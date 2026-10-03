@@ -9,5 +9,6 @@ export * from './crypto/PairingManager';
 export * from './transport/FlowController';
 export * from './transport/InputDeduplicator';
 export * from './transport/ReattachHandler';
+export * from './transport/RelayClient';
 export * from './audit/AuditLogger';
 export * from './recording/SessionRecorder';

@@ -22,7 +22,11 @@ export type TerminalMessageType =
   | 'TERM_REVOKE'
   | 'TERM_KILL'
   | 'TERM_GAP'
-  | 'TERM_ERROR';
+  | 'TERM_ERROR'
+  | 'TERM_PAIR'
+  | 'TERM_PAIR_RESP'
+  | 'TERM_PAIR_STATUS'
+  | 'TERM_PAIR_STATUS_RESP';
 
 export interface TerminalEnvelope<T extends TerminalMessageType = TerminalMessageType> {
   v: typeof TERMINAL_PROTOCOL_VERSION;
@@ -143,6 +147,36 @@ export interface TerminalHandshakeRespPayload {
   reason?: string;
 }
 
+export interface EncryptedPacket {
+  seq: number;
+  nonce: string;
+  ciphertext: string;
+}
+
+export interface TerminalPairPayload {
+  code: string;
+  clientPublicKey: string;
+  clientDeviceName: string;
+}
+
+export interface TerminalPairRespPayload {
+  success: boolean;
+  sessionToken?: string;
+  sas?: string;
+  error?: string;
+}
+
+export interface TerminalPairStatusPayload {
+  sessionToken: string;
+}
+
+export interface TerminalPairStatusRespPayload {
+  approved: boolean;
+  deviceId?: string;
+  hostPublicKey?: string;
+  error?: string;
+}
+
 export type TerminalPayloadFor<T extends TerminalMessageType> = T extends 'TERM_INPUT'
   ? TerminalInputPayload
   : T extends 'TERM_INPUT_ACK'
@@ -181,7 +215,15 @@ export type TerminalPayloadFor<T extends TerminalMessageType> = T extends 'TERM_
                                     ? TerminalHandshakePayload
                                     : T extends 'TERM_HANDSHAKE_RESP'
                                       ? TerminalHandshakeRespPayload
-                                      : Record<string, unknown>;
+                                      : T extends 'TERM_PAIR'
+                                        ? TerminalPairPayload
+                                        : T extends 'TERM_PAIR_RESP'
+                                          ? TerminalPairRespPayload
+                                          : T extends 'TERM_PAIR_STATUS'
+                                            ? TerminalPairStatusPayload
+                                            : T extends 'TERM_PAIR_STATUS_RESP'
+                                              ? TerminalPairStatusRespPayload
+                                              : Record<string, unknown>;
 
 const VALID_MESSAGE_TYPES: Set<string> = new Set<TerminalMessageType>([
   'TERM_HANDSHAKE',
@@ -203,6 +245,10 @@ const VALID_MESSAGE_TYPES: Set<string> = new Set<TerminalMessageType>([
   'TERM_KILL',
   'TERM_GAP',
   'TERM_ERROR',
+  'TERM_PAIR',
+  'TERM_PAIR_RESP',
+  'TERM_PAIR_STATUS',
+  'TERM_PAIR_STATUS_RESP',
 ]);
 
 export function isTerminalEnvelope(value: unknown): value is TerminalEnvelope {

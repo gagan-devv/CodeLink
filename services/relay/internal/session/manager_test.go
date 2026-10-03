@@ -1,6 +1,7 @@
 package session
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -309,4 +310,218 @@ func TestManager_BroadcastAndClose_HandlerExitPath(t *testing.T) {
 	if err := m.Register(newHost); err != nil {
 		t.Fatalf("failed to register new host for same session ID after revocation: %v", err)
 	}
+}
+
+func TestManager_RouteTerminalFramesBothWays(t *testing.T) {
+	m := NewManager()
+
+	host := &Connection{
+		ID:        "conn-host",
+		SessionID: "sess-term-1",
+		Role:      RoleHost,
+		SendCh:    make(chan []byte, 10),
+	}
+	companion := &Connection{
+		ID:        "conn-companion",
+		SessionID: "sess-term-1",
+		Role:      RoleCompanion,
+		SendCh:    make(chan []byte, 10),
+	}
+	client := &Connection{
+		ID:        "conn-client",
+		SessionID: "sess-term-1",
+		Role:      RoleClient,
+		SendCh:    make(chan []byte, 10),
+	}
+
+	if err := m.Register(host); err != nil {
+		t.Fatalf("register host: %v", err)
+	}
+	if err := m.Register(companion); err != nil {
+		t.Fatalf("register companion: %v", err)
+	}
+	if err := m.Register(client); err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+
+	// 1. Client -> Companion: TERM_INPUT must reach companion and NOT host
+	termInput := []byte(`{"v":1,"type":"TERM_INPUT","payload":{"sessionId":"t1","data":"echo hello\n"}}`)
+	m.Route(client, termInput)
+
+	select {
+	case received := <-companion.SendCh:
+		if string(received) != string(termInput) {
+			t.Errorf("companion expected %s, got %s", termInput, received)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for companion to receive TERM_INPUT from client")
+	}
+
+	select {
+	case unexpected := <-host.SendCh:
+		t.Fatalf("host unexpectedly received terminal frame: %s", unexpected)
+	default:
+		// expected: host channel empty
+	}
+
+	// 2. Companion -> Client: TERM_OUTPUT must reach client and NOT host
+	termOutput := []byte(`{"v":1,"type":"TERM_OUTPUT","payload":{"sessionId":"t1","data":"hello\n"}}`)
+	m.Route(companion, termOutput)
+
+	select {
+	case received := <-client.SendCh:
+		if string(received) != string(termOutput) {
+			t.Errorf("client expected %s, got %s", termOutput, received)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for client to receive TERM_OUTPUT from companion")
+	}
+
+	select {
+	case unexpected := <-host.SendCh:
+		t.Fatalf("host unexpectedly received companion frame: %s", unexpected)
+	default:
+		// expected: host channel empty
+	}
+
+	// 3. Client -> Host: Non-terminal frame (e.g. INJECT_PROMPT) must reach host and NOT companion
+	promptMsg := []byte(`{"v":1,"type":"INJECT_PROMPT","payload":{"prompt":"write code"}}`)
+	m.Route(client, promptMsg)
+
+	select {
+	case received := <-host.SendCh:
+		if string(received) != string(promptMsg) {
+			t.Errorf("host expected %s, got %s", promptMsg, received)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for host to receive non-terminal message from client")
+	}
+
+	select {
+	case unexpected := <-companion.SendCh:
+		t.Fatalf("companion unexpectedly received non-terminal frame: %s", unexpected)
+	default:
+		// expected: companion channel empty
+	}
+}
+
+func TestManager_RouteTerminalFrame_NoCompanionConnected(t *testing.T) {
+	m := NewManager()
+
+	host := &Connection{
+		ID:        "conn-host",
+		SessionID: "sess-no-comp",
+		Role:      RoleHost,
+		SendCh:    make(chan []byte, 10),
+	}
+	client := &Connection{
+		ID:        "conn-client",
+		SessionID: "sess-no-comp",
+		Role:      RoleClient,
+		SendCh:    make(chan []byte, 10),
+	}
+
+	_ = m.Register(host)
+	_ = m.Register(client)
+
+	// Client sends terminal message when no companion is present
+	termInput := []byte(`{"v":1,"type":"TERM_INPUT","payload":{"data":"whoami\n"}}`)
+	m.Route(client, termInput)
+
+	// Client should immediately receive a TERM_ERROR frame
+	select {
+	case errFrame := <-client.SendCh:
+		msgType, err := ParseMessageType(errFrame)
+		if err != nil {
+			t.Fatalf("failed to parse error frame: %v", err)
+		}
+		if msgType != "TERM_ERROR" {
+			t.Errorf("expected TERM_ERROR frame, got %s", msgType)
+		}
+		if !strings.Contains(string(errFrame), "COMPANION_NOT_CONNECTED") {
+			t.Errorf("expected error payload to contain COMPANION_NOT_CONNECTED, got %s", errFrame)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for client to receive error frame when companion not connected")
+	}
+
+	// Host should receive nothing
+	select {
+	case unexpected := <-host.SendCh:
+		t.Fatalf("host unexpectedly received frame: %s", unexpected)
+	default:
+		// expected
+	}
+}
+
+func TestManager_DuplicateCompanion(t *testing.T) {
+	m := NewManager()
+
+	comp1 := &Connection{
+		ID:        "conn-comp-1",
+		SessionID: "sess-dup-comp",
+		Role:      RoleCompanion,
+		SendCh:    make(chan []byte, 10),
+	}
+	comp2 := &Connection{
+		ID:        "conn-comp-2",
+		SessionID: "sess-dup-comp",
+		Role:      RoleCompanion,
+		SendCh:    make(chan []byte, 10),
+	}
+
+	if err := m.Register(comp1); err != nil {
+		t.Fatalf("register first companion: %v", err)
+	}
+	if err := m.Register(comp2); err != ErrCompanionAlreadyConnected {
+		t.Fatalf("expected ErrCompanionAlreadyConnected, got %v", err)
+	}
+}
+
+func TestManager_CompanionUnregisterAndCleanup(t *testing.T) {
+	m := NewManager()
+
+	host := &Connection{
+		ID:        "conn-host",
+		SessionID: "sess-cleanup",
+		Role:      RoleHost,
+		SendCh:    make(chan []byte, 10),
+	}
+	companion := &Connection{
+		ID:        "conn-companion",
+		SessionID: "sess-cleanup",
+		Role:      RoleCompanion,
+		SendCh:    make(chan []byte, 10),
+	}
+	client := &Connection{
+		ID:        "conn-client",
+		SessionID: "sess-cleanup",
+		Role:      RoleClient,
+		SendCh:    make(chan []byte, 10),
+	}
+
+	_ = m.Register(host)
+	_ = m.Register(companion)
+	_ = m.Register(client)
+
+	m.Unregister(host)
+	m.mu.RLock()
+	if _, exists := m.sessions["sess-cleanup"]; !exists {
+		t.Error("expected session to remain active with companion and client")
+	}
+	m.mu.RUnlock()
+
+	m.Unregister(client)
+	m.mu.RLock()
+	if _, exists := m.sessions["sess-cleanup"]; !exists {
+		t.Error("expected session to remain active with companion alone")
+	}
+	m.mu.RUnlock()
+
+	m.Unregister(companion)
+	m.mu.RLock()
+	if _, exists := m.sessions["sess-cleanup"]; exists {
+		t.Error("expected session to be cleaned up after all participants unregistered")
+	}
+	m.mu.RUnlock()
 }

@@ -9,8 +9,9 @@ import (
 type Role string
 
 const (
-	RoleHost   Role = "host"
-	RoleClient Role = "client"
+	RoleHost      Role = "host"
+	RoleClient    Role = "client"
+	RoleCompanion Role = "companion"
 )
 
 type Connection struct {

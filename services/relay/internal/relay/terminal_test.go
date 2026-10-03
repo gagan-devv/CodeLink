@@ -27,6 +27,22 @@ func TestTerminalMessage_SizeLimit(t *testing.T) {
 	if IsOversizedTerminalFrame(validJSON) {
 		t.Errorf("expected frame of %d bytes to be accepted under 32KB cap", len(validJSON))
 	}
+
+	// Non-terminal message > 32 KB should NOT be classified as oversized terminal frame
+	nonTermBytes := bytes.Repeat([]byte("b"), 35*1024)
+	nonTermJSON, _ := json.Marshal(map[string]interface{}{
+		"type":    "SNAPSHOT_RESPONSE",
+		"payload": string(nonTermBytes),
+	})
+	if IsOversizedTerminalFrame(nonTermJSON) {
+		t.Error("expected non-terminal message > 32KB to not be flagged as oversized terminal frame")
+	}
+
+	// Corrupted / non-JSON data > 32 KB should NOT be flagged as oversized terminal frame
+	corruptBytes := bytes.Repeat([]byte("x"), 35*1024)
+	if IsOversizedTerminalFrame(corruptBytes) {
+		t.Error("expected non-JSON data to not be flagged as oversized terminal frame")
+	}
 }
 
 func TestTerminalRateLimiter(t *testing.T) {

@@ -21,7 +21,7 @@ const (
 	revokedTTL = 2 * time.Minute
 )
 
-type redisSession struct {
+type RedisSession struct {
 	State          string `json:"state"`
 	LaptopID       string `json:"laptop_id"`
 	MobileDeviceID string `json:"mobile_device_id,omitempty"`
@@ -48,7 +48,7 @@ func (r *SessionRepository) Create(ctx context.Context, s *domain.Session, chall
 		return fmt.Errorf("session repo: create postgres: %w", err)
 	}
 
-	data := redisSession{
+	data := RedisSession{
 		State: string(domain.SessionPending),
 		LaptopID: s.LaptopID,
 		Challenge: challenge,
@@ -59,7 +59,7 @@ func (r *SessionRepository) Create(ctx context.Context, s *domain.Session, chall
 	return nil
 }
 
-func (r *SessionRepository) GetRedisSession(ctx context.Context, sessionID string) (*redisSession, error) {
+func (r *SessionRepository) GetRedisSession(ctx context.Context, sessionID string) (*RedisSession, error) {
 	b, err := r.redis.Get(ctx, redisKey(sessionID)).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return nil, ErrSessionNotFound
@@ -67,7 +67,7 @@ func (r *SessionRepository) GetRedisSession(ctx context.Context, sessionID strin
 	if err != nil {
 		return nil, fmt.Errorf("session repo: redis get: %w", err)
 	}
-	var data redisSession
+	var data RedisSession
 	if err := json.Unmarshal(b, &data); err != nil {
 		return nil, fmt.Errorf("session repo: unmarshal: %w", err)
 	}
@@ -88,7 +88,7 @@ func (r *SessionRepository) Activate(
 		return fmt.Errorf("session repo: activate postgres: %w", err)
 	}
 
-	data := redisSession{
+	data := RedisSession{
 		State: string(domain.SessionActive),
 		LaptopID: laptopID,
 		MobileDeviceID: mobileDeviceID,
@@ -109,7 +109,7 @@ func (r *SessionRepository) Revoke(ctx context.Context, sessionID string) error 
 		return fmt.Errorf("session repo: revoke postgres: %w", err)
 	}
 
-	data := redisSession{State: string(domain.SessionRevoked)}
+	data := RedisSession{State: string(domain.SessionRevoked)}
 	if err := r.setRedis(ctx, sessionID, data, revokedTTL); err != nil {
 		return fmt.Errorf("session repo: revoke redis: %w", err)
 	}
@@ -139,7 +139,7 @@ func (r *SessionRepository) GetByID(ctx context.Context, sessionID string) (*dom
 	return s, nil
 }
 
-func (r *SessionRepository) setRedis(ctx context.Context, sessionID string, data redisSession, ttl time.Duration) error {
+func (r *SessionRepository) setRedis(ctx context.Context, sessionID string, data RedisSession, ttl time.Duration) error {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return err
