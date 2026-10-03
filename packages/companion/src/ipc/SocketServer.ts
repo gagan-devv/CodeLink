@@ -3,9 +3,21 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CompanionConfig } from '../service/CompanionConfig';
 import { SessionTable } from '../session/SessionTable';
+import { PairingManager } from '../crypto/PairingManager';
+import { PairedDeviceStore } from '../auth/PairedDeviceStore';
 
 export interface IpcCommand {
-  command: 'status' | 'enable' | 'disable' | 'list-sessions' | 'kill-all' | 'revoke' | 'takeover';
+  command:
+    | 'status'
+    | 'enable'
+    | 'disable'
+    | 'list-sessions'
+    | 'kill-all'
+    | 'revoke'
+    | 'takeover'
+    | 'pair'
+    | 'approve-pairing'
+    | 'list-devices';
   args?: Record<string, unknown>;
 }
 
@@ -22,7 +34,9 @@ export class SocketServer {
   constructor(
     public readonly socketPath: string,
     private config: CompanionConfig,
-    private sessionTable?: SessionTable
+    private sessionTable?: SessionTable,
+    private pairingManager?: PairingManager,
+    private deviceStore?: PairedDeviceStore
   ) {}
 
   public async start(): Promise<void> {
@@ -150,6 +164,49 @@ export class SocketServer {
         }
         this.sessionTable.hostTakeover(sessionId);
         return { ok: true, data: { message: `Reclaimed control of session ${sessionId}` } };
+      }
+
+      case 'pair': {
+        if (!this.pairingManager) {
+          return { ok: false, error: 'Pairing manager not initialized' };
+        }
+        const challenge = this.pairingManager.createPairingChallenge();
+        return {
+          ok: true,
+          data: challenge,
+        };
+      }
+
+      case 'approve-pairing': {
+        const sessionToken = cmd.args?.sessionToken as string;
+        if (!sessionToken || !this.pairingManager) {
+          return { ok: false, error: 'sessionToken required' };
+        }
+        const ok = this.pairingManager.approve(sessionToken);
+        return {
+          ok,
+          data: { approved: ok },
+        };
+      }
+
+      case 'revoke': {
+        const deviceId = cmd.args?.deviceId as string;
+        if (!deviceId || !this.deviceStore) {
+          return { ok: false, error: 'deviceId required' };
+        }
+        const ok = this.deviceStore.revokeDevice(deviceId);
+        return {
+          ok,
+          data: { revoked: ok, deviceId },
+        };
+      }
+
+      case 'list-devices': {
+        const devices = this.deviceStore ? this.deviceStore.list() : [];
+        return {
+          ok: true,
+          data: { devices },
+        };
       }
 
       default:

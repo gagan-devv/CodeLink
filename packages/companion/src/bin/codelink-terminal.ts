@@ -3,16 +3,58 @@ import * as net from 'net';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
+import sodium from 'libsodium-wrappers';
 import { CompanionConfig } from '../service/CompanionConfig';
 import { PtyManager } from '../pty/PtyManager';
 import { SessionTable } from '../session/SessionTable';
 import { SocketServer, IpcCommand, IpcResponse } from '../ipc/SocketServer';
+import { PairingManager, PairingChallenge, KeyPair } from '../crypto/PairingManager';
+import { PairedDeviceStore } from '../auth/PairedDeviceStore';
 
 function getDefaultSocketPath(): string {
   if (process.env.XDG_RUNTIME_DIR) {
     return path.join(process.env.XDG_RUNTIME_DIR, 'codelink-terminal.sock');
   }
   return path.join(os.homedir(), '.codelink', 'terminal.sock');
+}
+
+function getOrCreateHostKeyPair(): KeyPair {
+  const keysPath = path.join(os.homedir(), '.codelink', 'host_identity.json');
+  try {
+    if (fs.existsSync(keysPath)) {
+      const raw = fs.readFileSync(keysPath, 'utf8');
+      const data = JSON.parse(raw);
+      return {
+        keyType: 'x25519',
+        publicKey: sodium.from_base64(data.publicKey),
+        privateKey: sodium.from_base64(data.privateKey),
+      };
+    }
+  } catch {
+    // regenerate
+  }
+
+  const dir = path.dirname(keysPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+
+  const keys = sodium.crypto_kx_keypair();
+  fs.writeFileSync(
+    keysPath,
+    JSON.stringify(
+      {
+        publicKey: sodium.to_base64(keys.publicKey),
+        privateKey: sodium.to_base64(keys.privateKey),
+        createdAt: Date.now(),
+      },
+      null,
+      2
+    ),
+    { encoding: 'utf8', mode: 0o600 }
+  );
+
+  return keys;
 }
 
 async function sendIpcCommand(socketPath: string, cmd: IpcCommand): Promise<IpcResponse> {
@@ -88,11 +130,15 @@ WantedBy=default.target
 }
 
 async function runDaemon(): Promise<void> {
+  await sodium.ready;
   const config = new CompanionConfig();
   const socketPath = getDefaultSocketPath();
+  const hostKeys = getOrCreateHostKeyPair();
+  const deviceStore = new PairedDeviceStore();
+  const pairingManager = new PairingManager(hostKeys, deviceStore);
   const ptyManager = new PtyManager();
   const sessionTable = new SessionTable(ptyManager, config.get().maxSessions);
-  const server = new SocketServer(socketPath, config, sessionTable);
+  const server = new SocketServer(socketPath, config, sessionTable, pairingManager, deviceStore);
 
   console.log(`[codelink-terminal] Starting companion service...`);
   console.log(
@@ -118,6 +164,7 @@ async function runDaemon(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  await sodium.ready;
   const args = process.argv.slice(2);
   const command = args[0] || 'help';
   const socketPath = getDefaultSocketPath();
@@ -147,6 +194,63 @@ async function main(): Promise<void> {
         }
       } catch {
         console.log(`Daemon Status: NOT RUNNING`);
+      }
+      break;
+    }
+
+    case 'pair': {
+      try {
+        const res = await sendIpcCommand(socketPath, { command: 'pair' });
+        if (res.ok) {
+          const challenge = res.data as PairingChallenge;
+          console.log('\n=== CodeLink Terminal Device Pairing ===');
+          console.log(`Pairing Code:          ${challenge.code} (valid for 5 minutes)`);
+          console.log(`Host Key Fingerprint:  ${challenge.fingerprint}`);
+          console.log('\nSafety Warning:');
+          console.log(
+            `  The paired client will have full access to your files and execute commands as '${os.userInfo().username}'.`
+          );
+          console.log(
+            '  Verify that the Short Authentication String (SAS) matches on both devices before approving.'
+          );
+        } else {
+          console.error('Pairing error:', res.error);
+        }
+      } catch (err) {
+        console.error('Could not initiate pairing with companion daemon:', err);
+      }
+      break;
+    }
+
+    case 'devices': {
+      try {
+        const res = await sendIpcCommand(socketPath, { command: 'list-devices' });
+        if (res.ok) {
+          console.log('Paired Devices:', JSON.stringify(res.data, null, 2));
+        } else {
+          console.error('Failed to list devices:', res.error);
+        }
+      } catch (err) {
+        console.error('Could not communicate with companion daemon:', err);
+      }
+      break;
+    }
+
+    case 'revoke': {
+      const deviceId = args[1];
+      if (!deviceId) {
+        console.error('Usage: codelink-terminal revoke <deviceId>');
+        process.exit(1);
+      }
+      try {
+        const res = await sendIpcCommand(socketPath, { command: 'revoke', args: { deviceId } });
+        if (res.ok) {
+          console.log(`✓ Device ${deviceId} has been revoked.`);
+        } else {
+          console.error('Failed to revoke device:', res.error);
+        }
+      } catch (err) {
+        console.error('Could not communicate with companion daemon:', err);
       }
       break;
     }
@@ -211,6 +315,9 @@ Commands:
   status         Show companion status, configuration, and active sessions
   enable         Enable remote terminal capability and configure systemd service
   disable        Disable remote terminal capability and close all sessions
+  pair           Generate a one-time pairing code and QR data for a new device
+  devices        List all paired remote devices
+  revoke <id>    Revoke an approved paired device
   kill-all       Emergency kill-switch: terminate all active terminal sessions
   list           List all active terminal sessions
   start-daemon   Run companion daemon in foreground (for systemd or testing)

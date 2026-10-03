@@ -3,3 +3,6 @@ export * from './session/RingBuffer';
 export * from './session/SessionTable';
 export * from './ipc/SocketServer';
 export * from './service/CompanionConfig';
+export * from './auth/PairedDeviceStore';
+export * from './crypto/E2EESession';
+export * from './crypto/PairingManager';
