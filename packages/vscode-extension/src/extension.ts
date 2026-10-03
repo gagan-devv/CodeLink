@@ -64,6 +64,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.window.setStatusBarMessage('$(debug-disconnected) CodeLink: Disconnected', 3_000);
     },
     onMessage: async (type, payload, id) => {
+      if (type.startsWith('TERM_')) {
+        // Managed terminal frames are handled by companion daemon, ignore in extension
+        return;
+      }
       switch (type) {
         case 'SNAPSHOT_REQUEST': {
           if (!isSnapshotRequestPayload(payload)) {

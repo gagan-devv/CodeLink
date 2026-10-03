@@ -11,13 +11,17 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var ErrHostAlreadyConnected = errors.New("session already has a host connection")
+var (
+	ErrHostAlreadyConnected      = errors.New("session already has a host connection")
+	ErrCompanionAlreadyConnected = errors.New("session already has a companion connection")
+)
 
 type internalSession struct {
-	mu      sync.RWMutex
-	ID      string
-	Host    *Connection
-	Clients map[string]*Connection
+	mu        sync.RWMutex
+	ID        string
+	Host      *Connection
+	Companion *Connection
+	Clients   map[string]*Connection
 }
 
 type Manager struct {
@@ -51,6 +55,11 @@ func (m *Manager) Register(conn *Connection) error {
 			return ErrHostAlreadyConnected
 		}
 		sess.Host = conn
+	case RoleCompanion:
+		if sess.Companion != nil {
+			return ErrCompanionAlreadyConnected
+		}
+		sess.Companion = conn
 	case RoleClient:
 		sess.Clients[conn.ID] = conn
 	}
@@ -74,11 +83,15 @@ func (m *Manager) Unregister(conn *Connection) {
 		if sess.Host != nil && sess.Host.ID == conn.ID {
 			sess.Host = nil
 		}
+	case RoleCompanion:
+		if sess.Companion != nil && sess.Companion.ID == conn.ID {
+			sess.Companion = nil
+		}
 	case RoleClient:
 		delete(sess.Clients, conn.ID)
 	}
 
-	if sess.Host == nil && len(sess.Clients) == 0 {
+	if sess.Host == nil && sess.Companion == nil && len(sess.Clients) == 0 {
 		delete(m.sessions, conn.SessionID)
 	}
 }
@@ -99,7 +112,23 @@ func (m *Manager) Route(from *Connection, msg []byte) {
 		for _, client := range sess.Clients {
 			safeSend(client.SendCh, msg)
 		}
+	case RoleCompanion:
+		// Route companion output frames (e.g. TERM_OUTPUT, TERM_ATTACH) to clients
+		for _, client := range sess.Clients {
+			safeSend(client.SendCh, msg)
+		}
 	case RoleClient:
+		msgType, err := ParseMessageType(msg)
+		if err == nil && IsTerminalMessageType(msgType) {
+			if sess.Companion != nil {
+				safeSend(sess.Companion.SendCh, msg)
+			} else {
+				// No companion connected: return error frame to client
+				safeSend(from.SendCh, BuildCompanionNotConnectedError())
+			}
+			return
+		}
+		// Non-terminal frame routes to VS Code extension host
 		if sess.Host != nil {
 			safeSend(sess.Host.SendCh, msg)
 		}
@@ -165,6 +194,11 @@ func (m *Manager) broadcastAndClose(sessionID string, msg []byte) {
 		sess.Host.CloseSend()
 		sess.Host = nil
 	}
+	if sess.Companion != nil {
+		safeSend(sess.Companion.SendCh, msg)
+		sess.Companion.CloseSend()
+		sess.Companion = nil
+	}
 	for id, c := range sess.Clients {
 		safeSend(c.SendCh, msg)
 		c.CloseSend()
@@ -185,6 +219,9 @@ func (m *Manager) broadcast(sessionID string, msg []byte) {
 
 	if sess.Host != nil {
 		safeSend(sess.Host.SendCh, msg)
+	}
+	if sess.Companion != nil {
+		safeSend(sess.Companion.SendCh, msg)
 	}
 	for _, c := range sess.Clients {
 		safeSend(c.SendCh, msg)

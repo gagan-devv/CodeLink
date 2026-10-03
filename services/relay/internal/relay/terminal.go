@@ -1,23 +1,25 @@
 package relay
 
 import (
-	"bytes"
 	"sync"
 	"time"
+
+	"github.com/gagan-devv/codelink/services/relay/internal/session"
 )
 
 const MaxTerminalFrameSize = 32 * 1024 // 32 KB
 
 // IsOversizedTerminalFrame checks if a frame is a terminal message exceeding 32 KB.
+// Parses the message type properly from JSON rather than relying on substring matching.
 func IsOversizedTerminalFrame(data []byte) bool {
 	if len(data) <= MaxTerminalFrameSize {
 		return false
 	}
-	// Check if this is a terminal message type
-	if bytes.Contains(data, []byte(`"type":"TERM_`)) || bytes.Contains(data, []byte(`"type": "TERM_`)) {
-		return true
+	msgType, err := session.ParseMessageType(data)
+	if err != nil {
+		return false
 	}
-	return false
+	return session.IsTerminalMessageType(msgType)
 }
 
 // RateLimiter is a thread-safe token-bucket rate limiter.
