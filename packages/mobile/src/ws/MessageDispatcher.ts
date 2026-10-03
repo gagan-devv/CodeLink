@@ -2,6 +2,7 @@ import { patchEngine } from '../diff/PatchEngine';
 import { useDiffStore } from '../store/useDiffStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { usePromptStore } from '../store/usePromptStore';
+import { useTerminalStore } from '../terminal/useTerminalStore';
 import { clearStoredSession } from '../api/authClient';
 import { wsManager } from './WsManager';
 import { isFileSnapshotPayload, isFilePatchPayload } from '@codelink/protocol';
@@ -64,12 +65,61 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
       break;
     }
 
+    case 'TERM_OUTPUT': {
+      const p = payload as { sessionId: string; data: string };
+      if (p && typeof p.sessionId === 'string' && typeof p.data === 'string') {
+        useTerminalStore.getState().appendOutput(p.sessionId, p.data);
+      }
+      break;
+    }
+
+    case 'TERM_GAP': {
+      useTerminalStore.getState().setGapNotice(true);
+      break;
+    }
+
+    case 'TERM_ATTACH_RESP': {
+      const p = payload as { sessionId: string; mode: 'observe' | 'control'; hasGap: boolean };
+      if (p && (p.mode === 'observe' || p.mode === 'control')) {
+        useTerminalStore.getState().setMode(p.mode);
+        if (p.hasGap) {
+          useTerminalStore.getState().setGapNotice(true);
+        }
+      }
+      break;
+    }
+
+    case 'TERM_MODE_CHANGE': {
+      const p = payload as { sessionId: string; mode: 'observe' | 'control' };
+      if (p && (p.mode === 'observe' || p.mode === 'control')) {
+        useTerminalStore.getState().setMode(p.mode);
+      }
+      break;
+    }
+
+    case 'TERM_SESSIONS_LIST': {
+      const p = payload as {
+        sessions: Array<{
+          id: string;
+          title: string;
+          controllerDeviceId: string | null;
+          observerCount: number;
+          active: boolean;
+        }>;
+      };
+      if (p && Array.isArray(p.sessions)) {
+        useTerminalStore.getState().setSessions(p.sessions);
+      }
+      break;
+    }
+
     case 'SESSION_REVOKED': {
       wsManager.disconnect();
       clearStoredSession();
       patchEngine.clearAll();
       useDiffStore.getState().clear();
       usePromptStore.getState().clear();
+      useTerminalStore.getState().reset();
       useSessionStore.getState().setRevoked();
       break;
     }

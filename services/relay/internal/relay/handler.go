@@ -140,6 +140,8 @@ func (h *Handler) readPump(conn *session.Connection) {
 		return nil
 	})
 
+	limiter := NewRateLimiter(100, 200)
+
 	for {
 		_, msg, err := conn.Conn.ReadMessage()
 		if err != nil {
@@ -150,6 +152,14 @@ func (h *Handler) readPump(conn *session.Connection) {
 				log.Printf("relay: read [%s]: %v", conn.ID, err)
 			}
 			return
+		}
+		if !limiter.Allow() {
+			log.Printf("relay: rate limit exceeded [%s]", conn.ID)
+			continue
+		}
+		if IsOversizedTerminalFrame(msg) {
+			log.Printf("relay: dropped oversized terminal frame [%s] (%d bytes)", conn.ID, len(msg))
+			continue
 		}
 		h.manager.Route(conn, msg)
 	}
