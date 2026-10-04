@@ -8,6 +8,8 @@ import { PairedDeviceStore } from '../auth/PairedDeviceStore';
 import { AuditLogger } from '../audit/AuditLogger';
 import { SessionRecorder } from '../recording/SessionRecorder';
 
+import { DaemonRelayManager } from '../transport/DaemonRelayManager';
+
 export interface IpcCommand {
   command:
     | 'status'
@@ -21,7 +23,9 @@ export interface IpcCommand {
     | 'pair'
     | 'approve-pairing'
     | 'list-devices'
-    | 'audit';
+    | 'audit'
+    | 'attach-session'
+    | 'detach-session';
   args?: Record<string, unknown>;
 }
 
@@ -42,7 +46,8 @@ export class SocketServer {
     private pairingManager?: PairingManager,
     private deviceStore?: PairedDeviceStore,
     private auditLogger?: AuditLogger,
-    private sessionRecorder?: SessionRecorder
+    private sessionRecorder?: SessionRecorder,
+    private relayManager?: DaemonRelayManager
   ) {}
 
   public async start(): Promise<void> {
@@ -128,6 +133,9 @@ export class SocketServer {
 
       case 'enable': {
         this.config.setEnabled(true);
+        if (this.relayManager) {
+          this.relayManager.autoAttachIfAvailable().catch(() => {});
+        }
         return {
           ok: true,
           data: { enabled: true, message: 'Terminal service enabled' },
@@ -136,6 +144,9 @@ export class SocketServer {
 
       case 'disable': {
         this.config.setEnabled(false);
+        if (this.relayManager) {
+          await this.relayManager.detachSession();
+        }
         if (this.sessionTable) {
           await this.sessionTable.closeAll();
         }
@@ -237,6 +248,36 @@ export class SocketServer {
           ok: true,
           data: { devices },
         };
+      }
+
+      case 'attach-session': {
+        if (!this.relayManager) {
+          return { ok: false, error: 'Relay manager not configured on daemon' };
+        }
+        const sessionId = cmd.args?.sessionId as string;
+        if (!sessionId) {
+          return { ok: false, error: 'sessionId required for attach-session' };
+        }
+        try {
+          await this.relayManager.attachSession({
+            sessionId,
+            relayWssUrl: cmd.args?.relayWssUrl as string | undefined,
+            authUrl: cmd.args?.authUrl as string | undefined,
+            laptopId: cmd.args?.laptopId as string | undefined,
+            privateKeyPem: cmd.args?.privateKeyPem as string | undefined,
+          });
+          return { ok: true, data: { attached: true, sessionId } };
+        } catch (err) {
+          return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        }
+      }
+
+      case 'detach-session': {
+        if (!this.relayManager) {
+          return { ok: false, error: 'Relay manager not configured on daemon' };
+        }
+        await this.relayManager.detachSession();
+        return { ok: true, data: { detached: true } };
       }
 
       default:

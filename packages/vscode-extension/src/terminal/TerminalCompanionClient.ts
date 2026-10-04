@@ -25,7 +25,9 @@ export interface IpcCommand {
     | 'pair'
     | 'approve-pairing'
     | 'list-devices'
-    | 'audit';
+    | 'audit'
+    | 'attach-session'
+    | 'detach-session';
   args?: Record<string, unknown>;
 }
 

@@ -58,12 +58,14 @@ describe('PtyManager', () => {
     session.write('sleep 60 &\n');
 
     // Give the shell a moment to spawn the background child
-    await new Promise((r) => setTimeout(r, 500));
-
-    // Verify background child process exists under session pid
-    const childPidRaw = execSync(`pgrep -P ${session.pid} || true`, {
-      encoding: 'utf8',
-    }).trim();
+    let childPidRaw = '';
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      childPidRaw = execSync(`pgrep -P ${session.pid} || true`, {
+        encoding: 'utf8',
+      }).trim();
+      if (childPidRaw) break;
+    }
 
     expect(childPidRaw).not.toBe('');
     const childPid = childPidRaw.split(/\s+/)[0];

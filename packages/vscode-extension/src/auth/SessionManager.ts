@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { KeyManager } from './KeyManager';
 import { LaptopIdentity } from './LaptopIdentity';
 import { authFetch } from './authClient';
+import { TerminalCompanionClient } from '../terminal/TerminalCompanionClient';
 
 export type SessionState = 'idle' | 'pending' | 'active' | 'revoked';
 
@@ -155,6 +159,7 @@ export class SessionManager {
             };
             this._session = session;
             this._setState('active');
+            this.syncCompanionSession(session).catch(() => {});
             return resolve(session);
           }
 
@@ -196,7 +201,90 @@ export class SessionManager {
 
     this._session = null;
     this._setState('revoked');
+    this.cleanupCompanionSession().catch(() => {});
     setTimeout(() => this._setState('idle'), 1_000);
+  }
+
+  private async syncCompanionSession(session: ActiveSession): Promise<void> {
+    try {
+      const codelinkDir = path.join(os.homedir(), '.codelink');
+      if (!fs.existsSync(codelinkDir)) {
+        fs.mkdirSync(codelinkDir, { recursive: true, mode: 0o700 });
+      }
+
+      const keyPair = await this.keyManager.getOrCreateKeyPair();
+      const authUrl = this.getAuthUrl();
+
+      // Persist laptop identity with secure permissions
+      const identityPath = path.join(codelinkDir, 'laptop_identity.json');
+      fs.writeFileSync(
+        identityPath,
+        JSON.stringify(
+          {
+            laptopId: this.laptopId,
+            privateKeyPem: keyPair.privateKeyPem,
+            publicKeyPem: keyPair.publicKeyPem,
+            authUrl,
+            updatedAt: Date.now(),
+          },
+          null,
+          2
+        ),
+        { mode: 0o600, encoding: 'utf8' }
+      );
+
+      // Persist active session
+      const sessionPath = path.join(codelinkDir, 'active_session.json');
+      fs.writeFileSync(
+        sessionPath,
+        JSON.stringify(
+          {
+            sessionId: session.sessionId,
+            relayWssUrl: session.relayWssUrl,
+            authUrl,
+            laptopId: this.laptopId,
+            updatedAt: Date.now(),
+          },
+          null,
+          2
+        ),
+        { mode: 0o600, encoding: 'utf8' }
+      );
+
+      // Notify companion daemon if running
+      const companionClient = new TerminalCompanionClient();
+      if (await companionClient.isDaemonAvailable()) {
+        await companionClient.sendCommand({
+          command: 'attach-session',
+          args: {
+            sessionId: session.sessionId,
+            relayWssUrl: session.relayWssUrl,
+            authUrl,
+            laptopId: this.laptopId,
+            privateKeyPem: keyPair.privateKeyPem,
+          },
+        });
+      }
+    } catch {
+      // Fire-and-forget; do not block main flow
+    }
+  }
+
+  private async cleanupCompanionSession(): Promise<void> {
+    try {
+      const sessionPath = path.join(os.homedir(), '.codelink', 'active_session.json');
+      if (fs.existsSync(sessionPath)) {
+        fs.unlinkSync(sessionPath);
+      }
+      const companionClient = new TerminalCompanionClient();
+      if (await companionClient.isDaemonAvailable()) {
+        await companionClient.sendCommand({
+          command: 'detach-session',
+        });
+      }
+    } catch {
+      // Fire-and-forget
+    }
   }
 
   dispose(): void {

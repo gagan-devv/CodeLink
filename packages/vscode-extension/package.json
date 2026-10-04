@@ -52,6 +52,16 @@
           "type": "string",
           "default": "ws://localhost:8082",
           "description": "WebSocket URL of the CodeLink Relay Service"
+        },
+        "codelink.terminal.companionPath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to the CodeLink Terminal Companion binary (codelink-terminal.js)"
+        },
+        "codelink.terminal.nodePath": {
+          "type": "string",
+          "default": "node",
+          "description": "Path to Node.js binary used to spawn the companion daemon"
         }
       }
     }

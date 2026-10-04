@@ -12,6 +12,7 @@ import { PairingManager, PairingChallenge, KeyPair } from '../crypto/PairingMana
 import { PairedDeviceStore } from '../auth/PairedDeviceStore';
 import { AuditLogger } from '../audit/AuditLogger';
 import { SessionRecorder } from '../recording/SessionRecorder';
+import { DaemonRelayManager } from '../transport/DaemonRelayManager';
 
 function getDefaultSocketPath(): string {
   if (process.env.XDG_RUNTIME_DIR) {
@@ -151,6 +152,14 @@ async function runDaemon(): Promise<void> {
   });
   sessionTable.startIdleTimer(60000);
 
+  const relayManager = new DaemonRelayManager(
+    config,
+    sessionTable,
+    pairingManager,
+    deviceStore,
+    hostKeys
+  );
+
   const server = new SocketServer(
     socketPath,
     config,
@@ -158,7 +167,8 @@ async function runDaemon(): Promise<void> {
     pairingManager,
     deviceStore,
     auditLogger,
-    sessionRecorder
+    sessionRecorder,
+    relayManager
   );
 
   console.log(`[codelink-terminal] Starting companion service...`);
@@ -178,8 +188,16 @@ async function runDaemon(): Promise<void> {
   await server.start();
   console.log(`[codelink-terminal] Companion daemon running and listening for local commands.`);
 
+  // Auto-attach if active session and identity exist
+  if (config.isEnabled()) {
+    relayManager.autoAttachIfAvailable().catch((err) => {
+      console.warn('[codelink-terminal] Could not auto-attach to session:', err.message);
+    });
+  }
+
   const shutdown = async () => {
     console.log('\n[codelink-terminal] Shutting down companion service...');
+    await relayManager.shutdown();
     sessionTable.stopIdleTimer();
     await sessionTable.closeAll();
     await server.stop();
@@ -388,6 +406,44 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'attach': {
+      const sessionId = args[1];
+      if (!sessionId) {
+        console.error('Usage: codelink-terminal attach <sessionId> [relayUrl] [authUrl]');
+        process.exit(1);
+      }
+      const relayWssUrl = args[2];
+      const authUrl = args[3];
+      try {
+        const res = await sendIpcCommand(socketPath, {
+          command: 'attach-session',
+          args: { sessionId, relayWssUrl, authUrl },
+        });
+        if (res.ok) {
+          console.log(`✓ Attached to session ${sessionId}.`);
+        } else {
+          console.error('Failed to attach session:', res.error);
+        }
+      } catch (err) {
+        console.error('Could not communicate with companion daemon:', err);
+      }
+      break;
+    }
+
+    case 'detach': {
+      try {
+        const res = await sendIpcCommand(socketPath, { command: 'detach-session' });
+        if (res.ok) {
+          console.log('✓ Detached active session.');
+        } else {
+          console.error('Failed to detach session:', res.error);
+        }
+      } catch (err) {
+        console.error('Could not communicate with companion daemon:', err);
+      }
+      break;
+    }
+
     default: {
       console.log(`Usage: codelink-terminal <command>
 
@@ -395,6 +451,8 @@ Commands:
   status         Show companion status, configuration, and active sessions
   enable         Enable remote terminal capability and configure systemd service
   disable        Disable remote terminal capability and close all sessions
+  attach <id>    Attach companion daemon to an active session
+  detach         Detach companion daemon from active session
   pair           Generate a one-time pairing code and QR data for a new device
   devices        List all paired remote devices
   revoke <id>    Revoke an approved paired device
