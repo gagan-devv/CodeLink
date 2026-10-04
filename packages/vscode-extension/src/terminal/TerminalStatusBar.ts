@@ -2,7 +2,18 @@ import * as vscode from 'vscode';
 import * as child_process from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { TerminalCompanionClient } from './TerminalCompanionClient';
+import { TerminalCompanionClient, PendingPairingInfo } from './TerminalCompanionClient';
+
+/**
+ * Sanitize untrusted client device name to prevent markdown formatting
+ * or control code injection in VS Code notification / modal dialogs.
+ */
+export function sanitizeDisplayName(name: string): string {
+  if (typeof name !== 'string') return 'Unknown Device';
+  // eslint-disable-next-line no-control-regex
+  const cleaned = name.replace(/[\x00-\x1f\x7f`$*[\]()_~<>|\\"'#]/g, '').trim();
+  return cleaned.slice(0, 50) || 'Unknown Device';
+}
 
 /**
  * Safely format a shell invocation for display/copying without command injection.
@@ -306,10 +317,29 @@ export class TerminalStatusBar {
       return;
     }
 
+    let pendingCount = 0;
+    try {
+      const pendingList = await this.client.listPendingPairings();
+      pendingCount = pendingList.length;
+    } catch {
+      // ignore pending lookup failure in menu
+    }
+
     const items: vscode.QuickPickItem[] = [
       {
         label: `$(info) Status: ${status.enabled ? 'Enabled' : 'Disabled'} (${status.activeSessions} sessions, uptime ${status.uptimeSeconds}s)`,
-        description: 'Daemon running on local host',
+        description: `Relay: ${status.relayConnected ? 'Connected' : 'Disconnected'} | Session: ${status.activeSessionId ? status.activeSessionId.slice(0, 12) + '...' : 'Detached'}`,
+      },
+      {
+        label: '$(key) Generate Pairing Code',
+        description: 'Generate a 6-digit one-time code to pair a mobile device',
+      },
+      {
+        label: `$(shield) Review Pending Pairings${pendingCount > 0 ? ` (${pendingCount})` : ''}`,
+        description:
+          pendingCount > 0
+            ? `${pendingCount} incoming pairing request(s) awaiting SAS verification`
+            : 'Check and approve incoming pairing requests',
       },
       {
         label: '$(device-desktop) Reclaim Control (Host Takeover)',
@@ -339,7 +369,11 @@ export class TerminalStatusBar {
 
     if (!selected) return;
 
-    if (selected.label.includes('Reclaim Control')) {
+    if (selected.label.includes('Generate Pairing Code')) {
+      await this.generatePairingCode();
+    } else if (selected.label.includes('Review Pending Pairings')) {
+      await this.reviewPendingPairings();
+    } else if (selected.label.includes('Reclaim Control')) {
       const sessions = await this.client.listSessions();
       if (sessions.length === 0) {
         vscode.window.showInformationMessage('No active terminal sessions to take over.');
@@ -398,6 +432,139 @@ export class TerminalStatusBar {
       await this.client.enableService();
       vscode.window.showInformationMessage('CodeLink Terminal companion service enabled.');
       await this.updateStatus();
+    }
+  }
+
+  public async generatePairingCode(): Promise<void> {
+    if (vscode.workspace.isTrusted === false) {
+      vscode.window.showErrorMessage(
+        'Generating terminal pairing codes requires a trusted workspace.'
+      );
+      return;
+    }
+
+    const isAvail = await this.client.isDaemonAvailable();
+    if (!isAvail) {
+      vscode.window.showErrorMessage(
+        'CodeLink Terminal companion is offline. Start the companion service first.'
+      );
+      return;
+    }
+
+    try {
+      const challenge = await this.client.createPairingChallenge();
+      const warningText = challenge.warning ? `\n\n⚠️ ${challenge.warning}` : '';
+      const action = await vscode.window.showInformationMessage(
+        `CodeLink Terminal Pairing Code:\n\n${challenge.code}\n\nHost Key Fingerprint:\n${challenge.fingerprint}\n\nEnter this 6-digit code in CodeLink mobile Settings > Terminal Companion, then review and approve the request here.${warningText}`,
+        { modal: true },
+        'Copy Code'
+      );
+      if (action === 'Copy Code') {
+        await vscode.env.clipboard.writeText(challenge.code);
+        vscode.window.showInformationMessage(`Copied pairing code ${challenge.code} to clipboard.`);
+      }
+    } catch (err) {
+      vscode.window.showErrorMessage(
+        `Failed to generate pairing code: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  public async reviewPendingPairings(): Promise<void> {
+    if (vscode.workspace.isTrusted === false) {
+      vscode.window.showErrorMessage(
+        'Reviewing and approving terminal pairings requires a trusted workspace.'
+      );
+      return;
+    }
+
+    const isAvail = await this.client.isDaemonAvailable();
+    if (!isAvail) {
+      vscode.window.showErrorMessage(
+        'CodeLink Terminal companion is offline. Start the companion service first.'
+      );
+      return;
+    }
+
+    let pendingList: PendingPairingInfo[];
+    try {
+      pendingList = await this.client.listPendingPairings();
+    } catch (err) {
+      vscode.window.showErrorMessage(
+        `Failed to list pending pairing requests: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return;
+    }
+
+    if (pendingList.length === 0) {
+      vscode.window.showInformationMessage('No pending terminal pairing requests found.');
+      return;
+    }
+
+    let selected = pendingList[0];
+    if (pendingList.length > 1) {
+      const picks = pendingList.map((p) => {
+        const remainingSec = Math.max(0, Math.floor((p.expiresAt - Date.now()) / 1000));
+        return {
+          label: `$(device-mobile) ${sanitizeDisplayName(p.clientDeviceName)}`,
+          description: `SAS: ${p.sas} | Expires in: ${remainingSec}s`,
+          pending: p,
+        };
+      });
+
+      const picked = await vscode.window.showQuickPick(picks, {
+        placeHolder: 'Select a pending terminal pairing request to review',
+      });
+      if (!picked) return;
+      selected = picked.pending;
+    }
+
+    const safeDeviceName = sanitizeDisplayName(selected.clientDeviceName);
+    const remainingSec = Math.max(0, Math.floor((selected.expiresAt - Date.now()) / 1000));
+
+    const modalDetail =
+      `Device Name: ${safeDeviceName}\n` +
+      `Host SAS Code: ${selected.sas}\n` +
+      `Client Key Fingerprint: ${selected.fingerprint}\n` +
+      `Expires in: ${remainingSec} seconds\n\n` +
+      `⚠️ SECURITY WARNING:\n` +
+      `Approving gives this remote client full interactive terminal and file access with your local user privileges.\n\n` +
+      `Verify that the SAS code '${selected.sas}' matches the code displayed on your mobile device before approving.`;
+
+    const choice = await vscode.window.showWarningMessage(
+      `Pair Terminal Device: ${safeDeviceName}?`,
+      { modal: true, detail: modalDetail },
+      'Codes Match - Approve',
+      'Reject',
+      'Cancel'
+    );
+
+    if (choice === 'Codes Match - Approve') {
+      try {
+        const res = await this.client.approvePairing(selected.sessionToken);
+        if (res.ok && (res.data as { approved?: boolean })?.approved) {
+          vscode.window.showInformationMessage(
+            `✓ Successfully approved ${safeDeviceName} (SAS ${selected.sas} verified).`
+          );
+        } else {
+          vscode.window.showErrorMessage(
+            `Pairing approval failed: ${res.error || 'Request expired or rejected.'}`
+          );
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Failed to approve pairing: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    } else if (choice === 'Reject') {
+      try {
+        await this.client.rejectPairing(selected.sessionToken);
+        vscode.window.showInformationMessage(`Pairing request from ${safeDeviceName} rejected.`);
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Failed to reject pairing: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
   }
 

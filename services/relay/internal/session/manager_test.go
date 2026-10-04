@@ -441,6 +441,9 @@ func TestManager_RouteTerminalFrame_NoCompanionConnected(t *testing.T) {
 		if !strings.Contains(string(errFrame), "COMPANION_NOT_CONNECTED") {
 			t.Errorf("expected error payload to contain COMPANION_NOT_CONNECTED, got %s", errFrame)
 		}
+		if !strings.Contains(string(errFrame), `"message"`) || !strings.Contains(string(errFrame), `"error"`) {
+			t.Errorf("expected error payload to contain both message and error fields, got %s", errFrame)
+		}
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timed out waiting for client to receive error frame when companion not connected")
 	}

@@ -138,6 +138,7 @@ export class DaemonRelayManager {
   private tokenExpiresAt = 0;
   private isConnecting = false;
   private reconnectAttempts = 0;
+  private lastError: string | null = null;
 
   constructor(
     private config: CompanionConfig,
@@ -159,6 +160,20 @@ export class DaemonRelayManager {
 
   public getActiveSession(): ActiveSessionConfig | null {
     return this.activeSession;
+  }
+
+  public getStatusDetails(): {
+    enabled: boolean;
+    activeSessionId: string | null;
+    relayConnected: boolean;
+    lastError: string | null;
+  } {
+    return {
+      enabled: this.config.isEnabled(),
+      activeSessionId: this.activeSession?.sessionId ?? null,
+      relayConnected: this.isConnected(),
+      lastError: this.lastError,
+    };
   }
 
   public async autoAttachIfAvailable(): Promise<boolean> {
@@ -207,6 +222,7 @@ export class DaemonRelayManager {
     this.currentToken = null;
     this.tokenExpiresAt = 0;
     this.reconnectAttempts = 0;
+    this.lastError = null;
     clearPersistedSession();
 
     if (this.relayClient) {
@@ -329,6 +345,7 @@ export class DaemonRelayManager {
         hostKeyPair: this.hostKeyPair,
         onConnected: () => {
           this.reconnectAttempts = 0;
+          this.lastError = null;
           console.log('[DaemonRelayManager] RelayClient connected successfully.');
         },
         onDisconnected: (code, reason) => {
@@ -337,17 +354,24 @@ export class DaemonRelayManager {
           );
         },
         onError: (err) => {
-          console.error('[DaemonRelayManager] RelayClient error:', err.message);
+          const sanitized = (err.message || 'RelayClient error')
+            .replace(/(?:bearer\s+|token[=:]\s*)[a-zA-Z0-9_\-.]+/gi, 'token=[REDACTED]')
+            .replace(/-----BEGIN [A-Z ]+-----[\s\S]*?-----END [A-Z ]+-----/g, '[REDACTED KEY]');
+          this.lastError = sanitized;
+          console.error('[DaemonRelayManager] RelayClient error:', sanitized);
         },
       });
 
       await this.relayClient.connect();
       this.reconnectAttempts = 0;
+      this.lastError = null;
     } catch (err) {
-      console.error(
-        '[DaemonRelayManager] Connection attempt failed:',
-        err instanceof Error ? err.message : String(err)
-      );
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      const sanitized = rawMsg
+        .replace(/(?:bearer\s+|token[=:]\s*)[a-zA-Z0-9_\-.]+/gi, 'token=[REDACTED]')
+        .replace(/-----BEGIN [A-Z ]+-----[\s\S]*?-----END [A-Z ]+-----/g, '[REDACTED KEY]');
+      this.lastError = sanitized;
+      console.error('[DaemonRelayManager] Connection attempt failed:', sanitized);
       this.scheduleReconnectBackoff();
     } finally {
       this.isConnecting = false;

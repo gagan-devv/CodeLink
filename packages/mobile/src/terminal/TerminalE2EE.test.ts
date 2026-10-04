@@ -55,7 +55,7 @@ describe('Terminal E2EE and Mobile MessageDispatcher', () => {
   });
 
   it('encrypts input and transmits via wsManager when E2EE session exists', () => {
-    const sendSpy = vi.spyOn(wsManager, 'sendTerminal').mockImplementation(() => {});
+    const sendSpy = vi.spyOn(wsManager, 'sendTerminal').mockReturnValue(true);
 
     useTerminalStore.getState().setE2EESession(clientSession, 'dev-test-1');
     expect(useTerminalStore.getState().e2eeState).toBe('paired');

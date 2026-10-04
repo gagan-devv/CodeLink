@@ -124,6 +124,8 @@ export interface TerminalErrorPayload {
   code: string;
   message: string;
   sessionId?: string;
+  /** Legacy field retained for backward compatibility with older relays/clients */
+  error?: string;
 }
 
 export interface TerminalRevokePayload {
@@ -163,6 +165,7 @@ export interface TerminalPairRespPayload {
   success: boolean;
   sessionToken?: string;
   sas?: string;
+  hostPublicKey?: string;
   error?: string;
 }
 

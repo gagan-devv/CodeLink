@@ -34,7 +34,7 @@ export interface TerminalStoreState {
   multilinePasteModal: MultilinePasteModalState;
 
   // E2EE state
-  e2eeState: 'unpaired' | 'initiating' | 'pending_approval' | 'paired' | 'error';
+  e2eeState: 'unpaired' | 'initiating' | 'pending_approval' | 'paired' | 'error' | 'failed';
   e2eeSession: MobileE2EESession | null;
   e2eeError: string | null;
   sasCode: string | null;
@@ -61,7 +61,7 @@ export interface TerminalStoreState {
   confirmPaste: () => string;
   cancelPaste: () => void;
   setPairingState: (
-    state: 'unpaired' | 'initiating' | 'pending_approval' | 'paired' | 'error'
+    state: 'unpaired' | 'initiating' | 'pending_approval' | 'paired' | 'error' | 'failed'
   ) => void;
   setPendingApproval: (sessionToken: string, sasCode: string) => void;
   setE2EESession: (session: MobileE2EESession, deviceId: string) => void;

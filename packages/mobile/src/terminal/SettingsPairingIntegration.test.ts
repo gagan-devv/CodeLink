@@ -29,9 +29,9 @@ describe('Settings Pairing Integration (Fix A)', () => {
     MobilePairingService.stopApprovalPolling();
     vi.useRealTimers();
   });
-
   it('completes pairing from Settings, polls status, and transitions tab to visible upon host approval', async () => {
-    const sendSpy = vi.spyOn(wsManager, 'sendTerminal').mockImplementation(() => {});
+    vi.spyOn(wsManager, 'isConnected').mockReturnValue(true);
+    const sendSpy = vi.spyOn(wsManager, 'sendTerminal').mockReturnValue(true);
 
     // 1. Initial State: Unpaired with feature flag enabled
     const flagVal = 'true';

@@ -26,17 +26,49 @@ export default function SettingsTab() {
 
   const isTerminalEnabled = isTerminalFeatureFlagEnabled();
   const e2eeState = useTerminalStore((s) => s.e2eeState);
+  const e2eeError = useTerminalStore((s) => s.e2eeError);
   const sasCode = useTerminalStore((s) => s.sasCode);
   const deviceId = useTerminalStore((s) => s.deviceId);
   const [pairingCodeInput, setPairingCodeInput] = useState('');
   const [isPairing, setIsPairing] = useState(false);
 
+  const isPaired = e2eeState === 'paired';
+  const isPendingApproval = e2eeState === 'pending_approval';
+  const isInitiating = e2eeState === 'initiating';
+  const isFailed = e2eeState === 'error' || e2eeState === 'failed';
+
+  const terminalStatusLabel = isPaired
+    ? 'Paired'
+    : isPendingApproval
+      ? 'Pending Host Approval'
+      : isInitiating
+        ? 'Preparing / Sending...'
+        : isFailed
+          ? 'Pairing Failed'
+          : 'Not Paired';
+
+  const terminalStatusColor = isPaired
+    ? '#4ec94e'
+    : isPendingApproval || isInitiating
+      ? '#e5c07b'
+      : isFailed
+        ? '#f55'
+        : '#888';
+
   const handlePairTerminal = async () => {
-    if (!pairingCodeInput.trim() || isPairing) return;
+    const trimmed = pairingCodeInput.trim();
+    if (!/^\d{6}$/.test(trimmed)) {
+      useTerminalStore.getState().setE2EEError('Pairing code must be exactly 6 digits');
+      return;
+    }
+    if (isPairing || isInitiating || isPendingApproval) return;
     setIsPairing(true);
     try {
-      await MobilePairingService.initiatePairing(pairingCodeInput.trim());
-      setPairingCodeInput('');
+      await MobilePairingService.initiatePairing(trimmed);
+      // Keep input preserved on failure or timeout; clear when paired
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(msg);
     } finally {
       setIsPairing(false);
     }
@@ -53,6 +85,7 @@ export default function SettingsTab() {
           style: 'destructive',
           onPress: async () => {
             await MobilePairingService.unpair();
+            setPairingCodeInput('');
           },
         },
       ]
@@ -110,47 +143,17 @@ export default function SettingsTab() {
       {isTerminalEnabled && (
         <View style={s.card}>
           <Row label="Terminal Companion">
-            <View
-              style={[
-                s.dot,
-                {
-                  backgroundColor:
-                    e2eeState === 'paired'
-                      ? '#4ec94e'
-                      : e2eeState === 'pending_approval'
-                        ? '#e5c07b'
-                        : '#888',
-                },
-              ]}
-            />
-            <Text
-              style={[
-                s.value,
-                {
-                  color:
-                    e2eeState === 'paired'
-                      ? '#4ec94e'
-                      : e2eeState === 'pending_approval'
-                        ? '#e5c07b'
-                        : '#888',
-                },
-              ]}
-            >
-              {e2eeState === 'paired'
-                ? 'Paired'
-                : e2eeState === 'pending_approval'
-                  ? 'Pending Host Approval'
-                  : 'Not Paired'}
-            </Text>
+            <View style={[s.dot, { backgroundColor: terminalStatusColor }]} />
+            <Text style={[s.value, { color: terminalStatusColor }]}>{terminalStatusLabel}</Text>
           </Row>
 
-          {e2eeState === 'paired' && deviceId && (
+          {isPaired && deviceId && (
             <Row label="Host Device ID">
               <Text style={s.mono}>{deviceId.slice(0, 16)}…</Text>
             </Row>
           )}
 
-          {e2eeState === 'pending_approval' && sasCode && (
+          {isPendingApproval && sasCode && (
             <View style={s.sasBox}>
               <Text style={s.sasLabel}>SAS Verification Code:</Text>
               <Text style={s.sasText}>{sasCode}</Text>
@@ -158,7 +161,20 @@ export default function SettingsTab() {
             </View>
           )}
 
-          {e2eeState === 'paired' ? (
+          {e2eeError && (
+            <View style={s.errorBox} accessibilityRole="alert">
+              <Text style={s.errorTitle}>Pairing Error</Text>
+              <Text style={s.errorMsg}>{e2eeError}</Text>
+              {e2eeError.includes('COMPANION_NOT_CONNECTED') && (
+                <Text style={s.errorActionHelp}>
+                  Action required: Run "codelink-terminal enable" on your host (or start via the VS
+                  Code status bar menu) and ensure the companion is attached to this session.
+                </Text>
+              )}
+            </View>
+          )}
+
+          {isPaired ? (
             <TouchableOpacity style={s.unpairBtn} onPress={handleUnpairTerminal}>
               <Text style={s.unpairText}>Unpair Terminal Companion</Text>
             </TouchableOpacity>
@@ -170,20 +186,47 @@ export default function SettingsTab() {
                 placeholderTextColor="#666"
                 value={pairingCodeInput}
                 onChangeText={setPairingCodeInput}
+                keyboardType="numeric"
+                maxLength={6}
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!isInitiating && !isPendingApproval && !isPairing}
               />
               <TouchableOpacity
-                style={[s.pairSubmitBtn, !pairingCodeInput.trim() && s.pairSubmitBtnDisabled]}
+                style={[
+                  s.pairSubmitBtn,
+                  (!/^\d{6}$/.test(pairingCodeInput.trim()) ||
+                    isPairing ||
+                    isInitiating ||
+                    isPendingApproval) &&
+                    s.pairSubmitBtnDisabled,
+                ]}
                 onPress={handlePairTerminal}
-                disabled={!pairingCodeInput.trim() || isPairing}
+                disabled={
+                  !/^\d{6}$/.test(pairingCodeInput.trim()) ||
+                  isPairing ||
+                  isInitiating ||
+                  isPendingApproval
+                }
               >
-                {isPairing ? (
+                {isPairing || isInitiating ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={s.pairSubmitText}>Pair Terminal</Text>
+                  <Text style={s.pairSubmitText}>
+                    {isFailed ? 'Retry Pairing' : 'Pair Terminal'}
+                  </Text>
                 )}
               </TouchableOpacity>
+              {(isInitiating || isPendingApproval) && (
+                <TouchableOpacity
+                  style={s.cancelPairBtn}
+                  onPress={() => {
+                    MobilePairingService.cancelPairing();
+                  }}
+                >
+                  <Text style={s.cancelPairText}>Cancel Pairing</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -256,6 +299,27 @@ const s = StyleSheet.create({
   sasLabel: { color: '#888', fontSize: 12, marginBottom: 4 },
   sasText: { color: '#4ec94e', fontSize: 22, fontWeight: '700', letterSpacing: 2 },
   sasHelp: { color: '#aaa', fontSize: 12, marginTop: 4, textAlign: 'center' },
+  errorBox: {
+    padding: 12,
+    marginHorizontal: 14,
+    marginTop: 10,
+    backgroundColor: '#3b1c1c',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#7a2d2d',
+    gap: 4,
+  },
+  errorTitle: { color: '#ff7b72', fontSize: 13, fontWeight: '700' },
+  errorMsg: { color: '#f0f6fc', fontSize: 13, lineHeight: 18 },
+  errorActionHelp: { color: '#e5c07b', fontSize: 12, lineHeight: 16, marginTop: 4 },
+  cancelPairBtn: {
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#555',
+  },
+  cancelPairText: { color: '#aaa', fontSize: 13, fontWeight: '500' },
 });
 
 const r = StyleSheet.create({

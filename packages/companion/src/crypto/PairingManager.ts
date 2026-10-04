@@ -20,6 +20,15 @@ export interface InitiateResult {
   error?: string;
 }
 
+export interface PendingPairingInfo {
+  sessionToken: string;
+  clientDeviceName: string;
+  fingerprint: string;
+  sas: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 interface PendingPairing {
   sessionToken: string;
   code: string;
@@ -156,7 +165,81 @@ export class PairingManager {
     };
   }
 
+  private cleanExpiredPending(): void {
+    const now = Date.now();
+    for (const [token, p] of this.pendingPairings.entries()) {
+      if (now - p.createdAt > PairingManager.DEFAULT_TTL_MS) {
+        this.pendingPairings.delete(token);
+      }
+    }
+  }
+
+  public listPending(): PendingPairingInfo[] {
+    this.cleanExpiredPending();
+    const result: PendingPairingInfo[] = [];
+    for (const p of this.pendingPairings.values()) {
+      if (!p.approved) {
+        const hash = sodium.crypto_generichash(32, p.clientPublicKey, null);
+        const fingerprint = sodium.to_hex(hash);
+        const sas = PairingManager.computeClientSas(
+          this.hostKeyPair.publicKey,
+          p.clientPublicKey,
+          p.code
+        );
+        result.push({
+          sessionToken: p.sessionToken,
+          clientDeviceName: p.clientDeviceName,
+          fingerprint,
+          sas,
+          createdAt: p.createdAt,
+          expiresAt: p.createdAt + PairingManager.DEFAULT_TTL_MS,
+        });
+      }
+    }
+    return result;
+  }
+
+  public getPendingPairing(sessionToken: string): PendingPairingInfo | null {
+    this.cleanExpiredPending();
+    const p = this.pendingPairings.get(sessionToken);
+    if (!p || p.approved) {
+      return null;
+    }
+    const hash = sodium.crypto_generichash(32, p.clientPublicKey, null);
+    const fingerprint = sodium.to_hex(hash);
+    const sas = PairingManager.computeClientSas(
+      this.hostKeyPair.publicKey,
+      p.clientPublicKey,
+      p.code
+    );
+    return {
+      sessionToken: p.sessionToken,
+      clientDeviceName: p.clientDeviceName,
+      fingerprint,
+      sas,
+      createdAt: p.createdAt,
+      expiresAt: p.createdAt + PairingManager.DEFAULT_TTL_MS,
+    };
+  }
+
+  public reject(sessionToken: string): boolean {
+    this.cleanExpiredPending();
+    const pending = this.pendingPairings.get(sessionToken);
+    if (!pending) {
+      return false;
+    }
+    this.pendingPairings.delete(sessionToken);
+    return true;
+  }
+
+  public clearAllPending(): void {
+    this.pendingPairings.clear();
+    this.activeChallenge = null;
+    this.attemptCount = 0;
+  }
+
   public computeSas(sessionToken: string): string {
+    this.cleanExpiredPending();
     const pending = this.pendingPairings.get(sessionToken);
     if (!pending) {
       throw new Error('Pending pairing not found');
@@ -189,6 +272,7 @@ export class PairingManager {
   }
 
   public isPendingApproval(sessionToken: string): boolean {
+    this.cleanExpiredPending();
     const pending = this.pendingPairings.get(sessionToken);
     if (!pending) {
       return false;
@@ -197,8 +281,9 @@ export class PairingManager {
   }
 
   public approve(sessionToken: string): boolean {
+    this.cleanExpiredPending();
     const pending = this.pendingPairings.get(sessionToken);
-    if (!pending) {
+    if (!pending || pending.approved) {
       return false;
     }
 
@@ -234,6 +319,7 @@ export class PairingManager {
     clientPublicKey?: Uint8Array;
     error?: string;
   } {
+    this.cleanExpiredPending();
     const pending = this.pendingPairings.get(sessionToken);
     if (!pending) {
       return { approved: false, error: 'Pairing session not found or expired' };

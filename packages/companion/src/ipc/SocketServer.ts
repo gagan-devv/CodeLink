@@ -21,7 +21,9 @@ export interface IpcCommand {
     | 'revoke'
     | 'takeover'
     | 'pair'
+    | 'list-pending'
     | 'approve-pairing'
+    | 'reject-pairing'
     | 'list-devices'
     | 'audit'
     | 'attach-session'
@@ -119,6 +121,7 @@ export class SocketServer {
     switch (cmd.command) {
       case 'status': {
         const conf = this.config.get();
+        const relayDetails = this.relayManager ? this.relayManager.getStatusDetails() : null;
         return {
           ok: true,
           data: {
@@ -127,6 +130,9 @@ export class SocketServer {
             maxSessions: conf.maxSessions,
             activeSessions: this.sessionTable ? this.sessionTable.activeCount : 0,
             uptimeSeconds: Math.floor((Date.now() - this.startTime) / 1000),
+            activeSessionId: relayDetails?.activeSessionId ?? null,
+            relayConnected: relayDetails?.relayConnected ?? false,
+            lastError: relayDetails?.lastError ?? null,
           },
         };
       }
@@ -211,10 +217,43 @@ export class SocketServer {
         if (!this.pairingManager) {
           return { ok: false, error: 'Pairing manager not initialized' };
         }
+        if (!this.config.isEnabled()) {
+          return {
+            ok: false,
+            error:
+              'Terminal companion service is disabled. Enable it first using "codelink-terminal enable" or via VS Code status bar menu.',
+          };
+        }
+        const relayDetails = this.relayManager?.getStatusDetails();
+        if (!relayDetails?.activeSessionId) {
+          return {
+            ok: false,
+            error:
+              'Terminal companion is not attached to an active session. Attach to a session before generating a pairing code.',
+          };
+        }
         const challenge = this.pairingManager.createPairingChallenge();
         return {
           ok: true,
-          data: challenge,
+          data: {
+            ...challenge,
+            activeSessionId: relayDetails.activeSessionId,
+            relayConnected: relayDetails.relayConnected,
+            warning: !relayDetails.relayConnected
+              ? 'Warning: Companion daemon is not currently connected to the relay server. Remote pairing may fail until connected.'
+              : undefined,
+          },
+        };
+      }
+
+      case 'list-pending': {
+        if (!this.pairingManager) {
+          return { ok: false, error: 'Pairing manager not initialized' };
+        }
+        const pending = this.pairingManager.listPending();
+        return {
+          ok: true,
+          data: { pending },
         };
       }
 
@@ -226,7 +265,23 @@ export class SocketServer {
         const ok = this.pairingManager.approve(sessionToken);
         return {
           ok,
-          data: { approved: ok },
+          data: { approved: ok, sessionToken },
+          error: !ok
+            ? 'Pending pairing request not found, expired, or already approved'
+            : undefined,
+        };
+      }
+
+      case 'reject-pairing': {
+        const sessionToken = cmd.args?.sessionToken as string;
+        if (!sessionToken || !this.pairingManager) {
+          return { ok: false, error: 'sessionToken required' };
+        }
+        const ok = this.pairingManager.reject(sessionToken);
+        return {
+          ok,
+          data: { rejected: ok, sessionToken },
+          error: !ok ? 'Pending pairing request not found or already expired' : undefined,
         };
       }
 
@@ -277,6 +332,9 @@ export class SocketServer {
           return { ok: false, error: 'Relay manager not configured on daemon' };
         }
         await this.relayManager.detachSession();
+        if (this.pairingManager) {
+          this.pairingManager.clearAllPending();
+        }
         return { ok: true, data: { detached: true } };
       }
 

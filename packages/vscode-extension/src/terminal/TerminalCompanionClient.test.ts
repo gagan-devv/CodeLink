@@ -107,4 +107,83 @@ describe('TerminalCompanionClient', () => {
     const res = await client.killSession('sess-99');
     expect(res.ok).toBe(true);
   });
+
+  it('supports pairing challenge creation, listing pending, approving, and rejecting', async () => {
+    mockServer = net.createServer((socket) => {
+      let buf = '';
+      socket.on('data', (d) => {
+        buf += d.toString('utf8');
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const cmd = JSON.parse(line.trim());
+          if (cmd.command === 'pair') {
+            socket.write(
+              JSON.stringify({
+                ok: true,
+                data: {
+                  code: '123456',
+                  fingerprint: 'abcd1234abcd1234',
+                  qrPayload: 'mock-qr',
+                  expiresAt: Date.now() + 300000,
+                  activeSessionId: 'sess-test',
+                  relayConnected: true,
+                },
+              }) + '\n'
+            );
+          } else if (cmd.command === 'list-pending') {
+            socket.write(
+              JSON.stringify({
+                ok: true,
+                data: {
+                  pending: [
+                    {
+                      sessionToken: 'token-abc',
+                      clientDeviceName: 'Pixel 8',
+                      fingerprint: 'fp-1234',
+                      sas: 'FA3B91',
+                      createdAt: Date.now(),
+                      expiresAt: Date.now() + 300000,
+                    },
+                  ],
+                },
+              }) + '\n'
+            );
+          } else if (cmd.command === 'approve-pairing' && cmd.args?.sessionToken === 'token-abc') {
+            socket.write(
+              JSON.stringify({
+                ok: true,
+                data: { approved: true, sessionToken: 'token-abc' },
+              }) + '\n'
+            );
+          } else if (cmd.command === 'reject-pairing' && cmd.args?.sessionToken === 'token-abc') {
+            socket.write(
+              JSON.stringify({
+                ok: true,
+                data: { rejected: true, sessionToken: 'token-abc' },
+              }) + '\n'
+            );
+          }
+        }
+      });
+    });
+
+    await new Promise<void>((resolve) => mockServer!.listen(socketPath, () => resolve()));
+
+    const challenge = await client.createPairingChallenge();
+    expect(challenge.code).toBe('123456');
+    expect(challenge.relayConnected).toBe(true);
+
+    const pending = await client.listPendingPairings();
+    expect(pending.length).toBe(1);
+    expect(pending[0].sas).toBe('FA3B91');
+    expect(pending[0].clientDeviceName).toBe('Pixel 8');
+
+    const approveRes = await client.approvePairing('token-abc');
+    expect(approveRes.ok).toBe(true);
+
+    const rejectRes = await client.rejectPairing('token-abc');
+    expect(rejectRes.ok).toBe(true);
+  });
 });

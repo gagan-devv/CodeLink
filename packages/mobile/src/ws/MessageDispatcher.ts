@@ -139,10 +139,10 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
     }
 
     case 'TERM_ERROR': {
-      const p = payload as { code?: string; message?: string };
-      if (p && p.message) {
-        useTerminalStore.getState().setE2EEError(`[${p.code || 'TERM_ERROR'}] ${p.message}`);
-      }
+      const p = payload as { code?: string; message?: string; error?: string };
+      const code = p?.code || 'TERM_ERROR';
+      const msg = p?.message || p?.error || 'Unknown error';
+      MobilePairingService.handleTermError(code, msg);
       break;
     }
 

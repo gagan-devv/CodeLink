@@ -524,6 +524,7 @@ export class RelayClient {
             success: true,
             sessionToken: res.sessionToken,
             sas,
+            hostPublicKey: sodium.to_base64(this.options.pairingManager.getHostKeyPair().publicKey),
           });
         } else {
           this.sendTerminalEnvelope('TERM_PAIR_RESP', {

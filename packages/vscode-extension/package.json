@@ -38,6 +38,14 @@
       {
         "command": "codelink.terminalMenu",
         "title": "CodeLink: Managed Terminal Status & Controls"
+      },
+      {
+        "command": "codelink.terminal.pairDevice",
+        "title": "CodeLink: Generate Terminal Pairing Code"
+      },
+      {
+        "command": "codelink.terminal.reviewPending",
+        "title": "CodeLink: Review Pending Terminal Pairings"
       }
     ],
     "configuration": {
