@@ -26,7 +26,6 @@ export default function TerminalScreen() {
   const e2eeSession = useTerminalStore((s) => s.e2eeSession);
   const e2eeError = useTerminalStore((s) => s.e2eeError);
   const sasCode = useTerminalStore((s) => s.sasCode);
-  const sessionToken = useTerminalStore((s) => s.sessionToken);
 
   const [pairingCodeInput, setPairingCodeInput] = useState('');
   const [showPairingInput, setShowPairingInput] = useState(false);
@@ -35,16 +34,6 @@ export default function TerminalScreen() {
   useEffect(() => {
     MobilePairingService.restoreSessionIfPaired();
   }, []);
-
-  // Poll pairing approval status when pending approval
-  useEffect(() => {
-    if (e2eeState === 'pending_approval' && sessionToken && isConnected) {
-      const interval = setInterval(() => {
-        wsManager.sendTerminal('TERM_PAIR_STATUS', { sessionToken });
-      }, 1500);
-      return () => clearInterval(interval);
-    }
-  }, [e2eeState, sessionToken, isConnected]);
 
   // Request session list on mount or connect
   useEffect(() => {

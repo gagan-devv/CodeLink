@@ -12,6 +12,26 @@ import { useTerminalStore } from '../terminal/useTerminalStore';
 export class MobilePairingService {
   private static pendingCode: string | null = null;
   private static pendingHostPublicKey: Uint8Array | null = null;
+  private static pollTimer: NodeJS.Timeout | null = null;
+
+  public static startApprovalPolling(sessionToken: string, intervalMs = 1500): void {
+    MobilePairingService.stopApprovalPolling();
+    MobilePairingService.pollTimer = setInterval(() => {
+      const state = useTerminalStore.getState();
+      if (state.e2eeState !== 'pending_approval') {
+        MobilePairingService.stopApprovalPolling();
+        return;
+      }
+      wsManager.sendTerminal('TERM_PAIR_STATUS', { sessionToken });
+    }, intervalMs);
+  }
+
+  public static stopApprovalPolling(): void {
+    if (MobilePairingService.pollTimer) {
+      clearInterval(MobilePairingService.pollTimer);
+      MobilePairingService.pollTimer = null;
+    }
+  }
 
   public static async initiatePairing(
     code: string,
@@ -40,6 +60,7 @@ export class MobilePairingService {
     if (!resp.success) {
       MobilePairingService.pendingCode = null;
       MobilePairingService.pendingHostPublicKey = null;
+      MobilePairingService.stopApprovalPolling();
       useTerminalStore.getState().setE2EEError(resp.error || 'Pairing rejected');
       return;
     }
@@ -55,6 +76,7 @@ export class MobilePairingService {
         MobilePairingService.pendingCode
       );
       if (resp.sas && resp.sas !== computedSas) {
+        MobilePairingService.stopApprovalPolling();
         useTerminalStore
           .getState()
           .setE2EEError('Security warning: SAS mismatch. Possible MITM attack.');
@@ -64,15 +86,21 @@ export class MobilePairingService {
     }
 
     useTerminalStore.getState().setPendingApproval(resp.sessionToken || '', localSas);
+    if (resp.sessionToken) {
+      MobilePairingService.startApprovalPolling(resp.sessionToken);
+    }
   }
 
   public static async handlePairStatus(status: TerminalPairStatusRespPayload): Promise<void> {
     if (!status.approved || !status.hostPublicKey || !status.deviceId) {
       if (status.error) {
+        MobilePairingService.stopApprovalPolling();
         useTerminalStore.getState().setE2EEError(status.error);
       }
       return;
     }
+
+    MobilePairingService.stopApprovalPolling();
 
     const keyPair = await SecureDeviceStore.getClientKeyPair();
     if (!keyPair) {
@@ -119,6 +147,7 @@ export class MobilePairingService {
   }
 
   public static async unpair(): Promise<void> {
+    MobilePairingService.stopApprovalPolling();
     await SecureDeviceStore.clearPairedHost();
     useTerminalStore.getState().clearE2EE();
   }

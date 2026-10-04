@@ -161,9 +161,6 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
         useTerminalStore.getState().setMode(p.mode);
         if (p.hasGap) {
           useTerminalStore.getState().setGapNotice(true);
-          if (p.sessionId) {
-            useTerminalStore.getState().incrementGeneration(p.sessionId);
-          }
         }
       }
       break;
