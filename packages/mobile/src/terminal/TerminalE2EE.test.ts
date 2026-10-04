@@ -65,9 +65,10 @@ describe('Terminal E2EE and Mobile MessageDispatcher', () => {
 
     expect(sendSpy).toHaveBeenCalledTimes(1);
     const [msgType, rawPayload] = sendSpy.mock.calls[0];
-    const payload = rawPayload as { sessionId: string; data: string };
+    const payload = rawPayload as { sessionId: string; data: string; generation: number };
     expect(msgType).toBe('TERM_INPUT');
     expect(payload.sessionId).toBe('sess-1');
+    expect(payload.generation).toBe(1);
 
     // Assert that payload.data is a valid EncryptedPacket and NOT plaintext
     expect(payload.data).not.toContain('echo 42');

@@ -14,8 +14,10 @@ import { TerminalView } from '../../src/terminal/TerminalView';
 import { wsManager } from '../../src/ws/WsManager';
 import { useSessionStore } from '../../src/store/useSessionStore';
 import { MobilePairingService } from '../../src/crypto/MobilePairingService';
+import { isTerminalFeatureFlagEnabled } from '../../src/terminal/terminalGating';
 
 export default function TerminalScreen() {
+  const isTerminalEnabled = isTerminalFeatureFlagEnabled();
   const sessions = useTerminalStore((s) => s.sessions);
   const activeSessionId = useTerminalStore((s) => s.activeSessionId);
   const isConnected = useSessionStore((s) => s.status === 'connected');
@@ -89,6 +91,20 @@ export default function TerminalScreen() {
   const handleDismissError = () => {
     useTerminalStore.getState().setE2EEError(null);
   };
+
+  if (!isTerminalEnabled) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>Terminal Disabled</Text>
+          <Text style={styles.emptySubtitle}>
+            Remote terminal shell access is currently disabled. Set
+            EXPO_PUBLIC_TERMINAL_ENABLED=true in your environment to enable it.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>

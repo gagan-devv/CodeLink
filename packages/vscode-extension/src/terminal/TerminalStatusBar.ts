@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as child_process from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
 import { TerminalCompanionClient } from './TerminalCompanionClient';
 
 export class TerminalStatusBar {
@@ -16,6 +19,87 @@ export class TerminalStatusBar {
 
   public get item(): vscode.StatusBarItem {
     return this.statusBarItem;
+  }
+
+  public getCompanionScriptPath(): string | null {
+    if (vscode.workspace.workspaceFolders) {
+      for (const wf of vscode.workspace.workspaceFolders) {
+        const candidate = path.join(
+          wf.uri.fsPath,
+          'packages',
+          'companion',
+          'dist',
+          'bin',
+          'codelink-terminal.js'
+        );
+        if (fs.existsSync(candidate)) {
+          return candidate;
+        }
+      }
+    }
+    const extRelative = path.resolve(__dirname, '../../companion/dist/bin/codelink-terminal.js');
+    if (fs.existsSync(extRelative)) {
+      return extRelative;
+    }
+    return null;
+  }
+
+  public async startCompanionDaemon(): Promise<boolean> {
+    const scriptPath = this.getCompanionScriptPath();
+    if (!scriptPath) {
+      const action = await vscode.window.showErrorMessage(
+        'Could not locate built companion binary. Run "npm run build" in packages/companion first.',
+        'Build Companion'
+      );
+      if (action === 'Build Companion') {
+        const term = vscode.window.createTerminal('CodeLink Build');
+        term.show();
+        term.sendText('npm run build --workspace=@codelink/companion');
+      }
+      return false;
+    }
+
+    try {
+      const child = child_process.spawn(process.execPath, [scriptPath, 'start-daemon'], {
+        detached: true,
+        stdio: 'ignore',
+        env: process.env,
+      });
+      child.unref();
+
+      vscode.window.showInformationMessage('Spawning CodeLink Terminal companion daemon...');
+      for (let i = 0; i < 4; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        const online = await this.client.isDaemonAvailable();
+        if (online) {
+          await this.updateStatus();
+          vscode.window.showInformationMessage(
+            '✓ CodeLink Terminal companion daemon started successfully.'
+          );
+          return true;
+        }
+      }
+      await this.updateStatus();
+      vscode.window.showWarningMessage(
+        'Companion daemon was spawned, but socket is not ready yet. Check logs or run "systemctl --user status codelink-terminal".'
+      );
+      return false;
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to spawn companion daemon: ${err}`);
+      return false;
+    }
+  }
+
+  public showLocalCliCommands(): void {
+    const scriptPath =
+      this.getCompanionScriptPath() || 'packages/companion/dist/bin/codelink-terminal.js';
+    const term = vscode.window.createTerminal('CodeLink Companion');
+    term.show();
+    term.sendText(`# CodeLink Terminal Companion Commands:`);
+    term.sendText(`# 1. Check status:`);
+    term.sendText(`node "${scriptPath}" status`);
+    term.sendText(`# 2. If managed by systemd:`);
+    term.sendText(`systemctl --user status codelink-terminal`);
   }
 
   public async updateStatus(): Promise<void> {
@@ -57,15 +141,16 @@ export class TerminalStatusBar {
     if (!isAvail) {
       const choice = await vscode.window.showWarningMessage(
         'CodeLink Terminal daemon is offline. Shells require the companion service.',
-        'Retry',
-        'Open Terminal CLI Help'
+        'Start Companion',
+        'Show CLI Commands',
+        'Retry'
       );
-      if (choice === 'Retry') {
+      if (choice === 'Start Companion') {
+        await this.startCompanionDaemon();
+      } else if (choice === 'Show CLI Commands') {
+        this.showLocalCliCommands();
+      } else if (choice === 'Retry') {
         await this.updateStatus();
-      } else if (choice === 'Open Terminal CLI Help') {
-        const term = vscode.window.createTerminal('CodeLink Companion');
-        term.show();
-        term.sendText('npx codelink-terminal status');
       }
       return;
     }

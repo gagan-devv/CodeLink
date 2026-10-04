@@ -147,7 +147,11 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
     }
 
     case 'TERM_GAP': {
+      const p = payload as { sessionId?: string };
       useTerminalStore.getState().setGapNotice(true);
+      if (p && p.sessionId) {
+        useTerminalStore.getState().incrementGeneration(p.sessionId);
+      }
       break;
     }
 
@@ -157,6 +161,9 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
         useTerminalStore.getState().setMode(p.mode);
         if (p.hasGap) {
           useTerminalStore.getState().setGapNotice(true);
+          if (p.sessionId) {
+            useTerminalStore.getState().incrementGeneration(p.sessionId);
+          }
         }
       }
       break;
