@@ -185,6 +185,61 @@ npm start
 
 _Press `w` to run in your local web browser, `a` for Android Emulator, or `i` for iOS Simulator._
 
+### Step 4: Managed Interactive Terminal Companion (Optional)
+
+CodeLink includes an optional, zero-trust terminal companion service (`@codelink/companion`) providing real Linux PTY shells to paired mobile clients with end-to-end encryption.
+
+#### 1. Build Companion
+
+Compile the companion daemon executable from the monorepo root:
+
+```bash
+npm run build --workspace=@codelink/companion
+```
+
+The compiled CLI entry point is located at `packages/companion/dist/bin/codelink-terminal.js`.
+
+#### 2. Enable Terminal Feature
+
+For security, the terminal capability is disabled by default on the host. Enable it in the local host configuration:
+
+```bash
+node packages/companion/dist/bin/codelink-terminal.js enable
+```
+
+_This updates `~/.codelink/terminal.json` with mode `0o600`._
+
+#### 3. Run with systemd User Service
+
+To keep the companion running reliably in the background across reboots:
+
+```bash
+# Generate and install the user unit (~/.config/systemd/user/codelink-terminal.service)
+node packages/companion/dist/bin/codelink-terminal.js install-service
+
+# Reload systemd and enable/start the service
+systemctl --user daemon-reload
+systemctl --user enable --now codelink-terminal
+```
+
+#### 4. Check Status
+
+Verify the daemon is running and review active sessions:
+
+```bash
+# Check status via companion CLI
+node packages/companion/dist/bin/codelink-terminal.js status
+
+# Or check systemd service status
+systemctl --user status codelink-terminal
+```
+
+#### 5. Socket Location & IPC
+
+- **Socket Path**: The IPC domain socket lives at `$XDG_RUNTIME_DIR/codelink-terminal.sock` (typically `/run/user/<uid>/codelink-terminal.sock`). If `$XDG_RUNTIME_DIR` is not set, it defaults to `~/.codelink/terminal.sock`.
+- **Permissions**: The socket file is created with strict `0o600` permissions (restricted to the host user).
+- **Identity & Storage**: Host X25519 cryptographic keys are stored in `~/.codelink/host_identity.json` (mode `0o600`), and non-payload audit entries are logged to `~/.codelink/audit.log`.
+
 ---
 
 ## 🧪 Testing & Quality Assurance

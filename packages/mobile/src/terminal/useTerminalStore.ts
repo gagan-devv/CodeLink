@@ -41,6 +41,12 @@ export interface TerminalStoreState {
   sessionToken: string | null;
   deviceId: string | null;
 
+  // Session generation tracking for deduplication & replay protection
+  generations: Record<string, number>;
+  getGeneration: (sessionId: string) => number;
+  incrementGeneration: (sessionId: string) => number;
+  setGeneration: (sessionId: string, generation: number) => void;
+
   setSessions: (sessions: TerminalSessionInfo[]) => void;
   setActiveSession: (id: string) => void;
   setMode: (mode: 'observe' | 'control' | 'detached') => void;
@@ -103,6 +109,33 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
   sessionToken: null,
   deviceId: null,
 
+  generations: {},
+
+  getGeneration: (sessionId) => {
+    return get().generations[sessionId] ?? 1;
+  },
+
+  incrementGeneration: (sessionId) => {
+    const current = get().generations[sessionId] ?? 1;
+    const next = current + 1;
+    set((state) => ({
+      generations: {
+        ...state.generations,
+        [sessionId]: next,
+      },
+    }));
+    return next;
+  },
+
+  setGeneration: (sessionId, generation) => {
+    set((state) => ({
+      generations: {
+        ...state.generations,
+        [sessionId]: Math.max(1, Math.floor(generation)),
+      },
+    }));
+  },
+
   setPairingState: (state) => set({ e2eeState: state, e2eeError: null }),
 
   setPendingApproval: (sessionToken, sasCode) =>
@@ -135,13 +168,18 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       sessionToken: null,
     }),
 
-  sendEncryptedInput: (sessionId, data, generation = 0) => {
-    const { e2eeSession } = get();
+  sendEncryptedInput: (sessionId, data, generation) => {
+    const { e2eeSession, getGeneration } = get();
     if (!e2eeSession) {
       const err = 'Plaintext transmission refused: no active E2EE session exists';
       set({ e2eeError: err, e2eeState: 'error' });
       return { success: false, error: err };
     }
+
+    const effectiveGeneration =
+      typeof generation === 'number' && generation >= 1
+        ? Math.floor(generation)
+        : getGeneration(sessionId);
 
     try {
       const packet = e2eeSession.encrypt(data);
@@ -155,7 +193,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       const payload = {
         sessionId,
         inputId,
-        generation,
+        generation: effectiveGeneration,
         data: JSON.stringify(packet),
       };
       wsManager.sendTerminal('TERM_INPUT', payload);
@@ -292,6 +330,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       sasCode: null,
       sessionToken: null,
       deviceId: null,
+      generations: {},
     });
   },
 }));

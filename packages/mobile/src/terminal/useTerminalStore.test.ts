@@ -105,4 +105,33 @@ describe('useTerminalStore', () => {
     useTerminalStore.getState().setGapNotice(false);
     expect(useTerminalStore.getState().hasGap).toBe(false);
   });
+
+  it('tracks and increments session generations (defaults to 1, never 0)', () => {
+    const store = useTerminalStore.getState();
+
+    // Any untracked session defaults to generation 1
+    expect(store.getGeneration('sess-1')).toBe(1);
+    expect(store.getGeneration('sess-2')).toBe(1);
+
+    // Incrementing generation for sess-1
+    const nextGen = store.incrementGeneration('sess-1');
+    expect(nextGen).toBe(2);
+    expect(useTerminalStore.getState().getGeneration('sess-1')).toBe(2);
+
+    // sess-2 remains at 1
+    expect(useTerminalStore.getState().getGeneration('sess-2')).toBe(1);
+
+    // Incrementing again
+    expect(useTerminalStore.getState().incrementGeneration('sess-1')).toBe(3);
+    expect(useTerminalStore.getState().getGeneration('sess-1')).toBe(3);
+
+    // Explicit setGeneration
+    useTerminalStore.getState().setGeneration('sess-2', 5);
+    expect(useTerminalStore.getState().getGeneration('sess-2')).toBe(5);
+
+    // Reset clears generations back to default 1
+    useTerminalStore.getState().reset();
+    expect(useTerminalStore.getState().getGeneration('sess-1')).toBe(1);
+    expect(useTerminalStore.getState().getGeneration('sess-2')).toBe(1);
+  });
 });
