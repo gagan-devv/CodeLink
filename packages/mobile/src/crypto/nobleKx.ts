@@ -138,23 +138,40 @@ export function nobleKxServer(
 }
 
 /**
+ * Computes connection epoch matching companion E2EESession.computeEpoch bit-for-bit:
+ * epoch = toHex(blake2b(clientNonce || hostNonce, dkLen=32))
+ */
+export function computeEpoch(
+  clientNonce: Uint8Array | string,
+  hostNonce: Uint8Array | string
+): string {
+  const cBytes = typeof clientNonce === 'string' ? fromHex(clientNonce) : clientNonce;
+  const hBytes = typeof hostNonce === 'string' ? fromHex(hostNonce) : hostNonce;
+  const combined = new Uint8Array(cBytes.length + hBytes.length);
+  combined.set(cBytes, 0);
+  combined.set(hBytes, cBytes.length);
+  const hash = blake2b(combined, { dkLen: 32 });
+  return toHex(hash);
+}
+
+/**
  * Computes deterministic Short Authentication String (SAS) matching PairingManager.computeClientSas:
- * hash = blake2b(hostPublicKey || clientPublicKey || code, dkLen=16)
- * sas = toHex(hash).slice(0, 6).toUpperCase()
+ * hash = blake2b(codelink-sas-v2:attemptId:sessionToken:hostPk:clientPk:code, dkLen=16)
+ * sas = 12 hex chars in 3 groups of 4 (48 bits entropy)
  */
 export function computeClientSas(
   hostPublicKey: Uint8Array,
   clientPublicKey: Uint8Array,
-  code: string
+  code: string,
+  attemptId?: string,
+  sessionToken?: string
 ): string {
-  const codeBytes = encodeUtf8(code);
-  const combined = new Uint8Array(hostPublicKey.length + clientPublicKey.length + codeBytes.length);
-  combined.set(hostPublicKey, 0);
-  combined.set(clientPublicKey, hostPublicKey.length);
-  combined.set(codeBytes, hostPublicKey.length + clientPublicKey.length);
-
-  const hash = blake2b(combined, { dkLen: 16 });
-  return toHex(hash).slice(0, 6).toUpperCase();
+  const hostHex = toHex(hostPublicKey);
+  const clientHex = toHex(clientPublicKey);
+  const transcript = `codelink-sas-v2:${attemptId || ''}:${sessionToken || ''}:${hostHex}:${clientHex}:${code}`;
+  const hash = blake2b(encodeUtf8(transcript), { dkLen: 16 });
+  const hex = toHex(hash).slice(0, 12).toUpperCase();
+  return `${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}`;
 }
 
 /**
@@ -164,4 +181,37 @@ export function computeClientSas(
 export function computeDeviceId(clientPublicKey: Uint8Array): string {
   const hash = blake2b(clientPublicKey, { dkLen: 8 });
   return `dev-${toHex(hash)}`;
+}
+
+/**
+ * Computes authenticated host approval proof matching Companion PairingManager:
+ * hash = blake2b(transcript, { key, dkLen: 32 })
+ *
+ * Note: approvalProof proves key possession consistency between key exchange and approval,
+ * not host identity (which is established via SAS or out-of-band host key confirmation).
+ */
+export function computeApprovalProof(
+  attemptId: string,
+  sessionToken: string,
+  hostPublicKey: Uint8Array,
+  clientPublicKey: Uint8Array,
+  key: Uint8Array
+): string {
+  const hostPubKeyB64 = toBase64(hostPublicKey);
+  const clientPubKeyB64 = toBase64(clientPublicKey);
+  const transcript = `codelink-pairing-approval-v1:${attemptId}:${sessionToken}:${hostPubKeyB64}:${clientPubKeyB64}`;
+  const proofBytes = blake2b(encodeUtf8(transcript), { key, dkLen: 32 });
+  return toBase64(proofBytes);
+}
+
+/**
+ * Constant-time comparison of two Uint8Arrays to prevent timing attacks.
+ */
+export function compareBytesConstantTime(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a[i] ^ b[i];
+  }
+  return diff === 0;
 }

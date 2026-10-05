@@ -231,15 +231,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch (err) {
         vscode.window.showErrorMessage(`CodeLink: Failed to re-register laptop: ${err}`);
       }
-    }),
-
-    vscode.commands.registerCommand('codelink.terminalMenu', async () => {
-      await terminalStatusBar.showMenu();
     })
   );
 
   const terminalStatusBar = new TerminalStatusBar();
   context.subscriptions.push({ dispose: () => terminalStatusBar.dispose() });
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codelink.terminalMenu', async () => {
+      await terminalStatusBar.showMenu();
+    }),
+    vscode.commands.registerCommand('codelink.terminal.pairDevice', async () => {
+      await terminalStatusBar.generatePairingCode();
+    }),
+    vscode.commands.registerCommand('codelink.terminal.reviewPending', async () => {
+      await terminalStatusBar.reviewPendingPairings();
+    })
+  );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (e) => {

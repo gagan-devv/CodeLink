@@ -8,7 +8,12 @@ import { CompanionConfig } from '../service/CompanionConfig';
 import { PtyManager } from '../pty/PtyManager';
 import { SessionTable } from '../session/SessionTable';
 import { SocketServer, IpcCommand, IpcResponse } from '../ipc/SocketServer';
-import { PairingManager, PairingChallenge, KeyPair } from '../crypto/PairingManager';
+import {
+  PairingManager,
+  PairingChallenge,
+  KeyPair,
+  PendingPairingInfo,
+} from '../crypto/PairingManager';
 import { PairedDeviceStore } from '../auth/PairedDeviceStore';
 import { AuditLogger } from '../audit/AuditLogger';
 import { SessionRecorder } from '../recording/SessionRecorder';
@@ -233,9 +238,26 @@ async function main(): Promise<void> {
       try {
         const res = await sendIpcCommand(socketPath, { command: 'status' });
         if (res.ok) {
-          const d = res.data as { activeSessions: number; uptimeSeconds: number };
+          const d = res.data as {
+            enabled: boolean;
+            recordingEnabled: boolean;
+            maxSessions: number;
+            activeSessions: number;
+            uptimeSeconds: number;
+            activeSessionId: string | null;
+            relayConnected: boolean;
+            lastError: string | null;
+          };
           console.log(`Daemon Status: RUNNING (uptime: ${d.uptimeSeconds}s)`);
-          console.log(`Active Sessions: ${d.activeSessions}`);
+          console.log(`Service Enabled: ${d.enabled ? 'YES' : 'NO (default OFF)'}`);
+          console.log(`Active VS Code Session: ${d.activeSessionId || 'None (detached)'}`);
+          console.log(`Relay Connection: ${d.relayConnected ? 'CONNECTED' : 'DISCONNECTED'}`);
+          if (d.lastError) {
+            console.log(`Last Relay Error: ${d.lastError}`);
+          }
+          console.log(`Active Terminal Sessions: ${d.activeSessions} / ${d.maxSessions}`);
+        } else {
+          console.log(`Daemon Status: ERROR (${res.error})`);
         }
       } catch {
         console.log(`Daemon Status: NOT RUNNING`);
@@ -247,10 +269,23 @@ async function main(): Promise<void> {
       try {
         const res = await sendIpcCommand(socketPath, { command: 'pair' });
         if (res.ok) {
-          const challenge = res.data as PairingChallenge;
+          const challenge = res.data as PairingChallenge & {
+            activeSessionId?: string;
+            relayConnected?: boolean;
+            warning?: string;
+          };
           console.log('\n=== CodeLink Terminal Device Pairing ===');
           console.log(`Pairing Code:          ${challenge.code} (valid for 5 minutes)`);
           console.log(`Host Key Fingerprint:  ${challenge.fingerprint}`);
+          if (challenge.activeSessionId) {
+            console.log(`Active Session:        ${challenge.activeSessionId}`);
+          }
+          console.log(
+            `Relay Status:          ${challenge.relayConnected ? 'CONNECTED' : 'NOT CONNECTED'}`
+          );
+          if (challenge.warning) {
+            console.log(`\n${challenge.warning}`);
+          }
           console.log('\nSafety Warning:');
           console.log(
             `  The paired client will have full access to your files and execute commands as '${os.userInfo().username}'.`
@@ -258,11 +293,182 @@ async function main(): Promise<void> {
           console.log(
             '  Verify that the Short Authentication String (SAS) matches on both devices before approving.'
           );
+          console.log(
+            '\nNext Steps:\n  1. Enter the pairing code in CodeLink Settings > Terminal Companion on your mobile device.'
+          );
+          console.log('  2. Run "codelink-terminal pending" to see incoming pairing requests.');
+          console.log(
+            '  3. Run "codelink-terminal approve <token>" to confirm the SAS code and approve.'
+          );
         } else {
-          console.error('Pairing error:', res.error);
+          console.error(`Pairing error: ${res.error}`);
+          process.exit(1);
         }
       } catch (err) {
         console.error('Could not initiate pairing with companion daemon:', err);
+        process.exit(1);
+      }
+      break;
+    }
+
+    case 'pending': {
+      try {
+        const res = await sendIpcCommand(socketPath, { command: 'list-pending' });
+        if (res.ok) {
+          const data = res.data as {
+            pending: PendingPairingInfo[];
+            activeSessionId?: string | null;
+          };
+          const list = data?.pending || [];
+          if (list.length === 0) {
+            console.log('No pending pairing requests.');
+            break;
+          }
+          console.log('\n=== Pending Terminal Pairing Requests ===');
+          if (data.activeSessionId) {
+            console.log(`Active VS Code Session:  ${data.activeSessionId}`);
+          }
+          for (const p of list) {
+            const remainingSec = Math.max(0, Math.floor((p.expiresAt - Date.now()) / 1000));
+            console.log(`\n  Request / Session Token: ${p.sessionToken}`);
+            if (p.attemptId) {
+              console.log(`  Attempt ID:              ${p.attemptId}`);
+            }
+            if (p.relaySessionId) {
+              console.log(`  Bound Session ID:        ${p.relaySessionId}`);
+            }
+            console.log(`  Device Name:             ${p.clientDeviceName}`);
+            console.log(`  Host SAS Code:           ${p.sas}`);
+            console.log(`  Key Fingerprint:         ${p.fingerprint}`);
+            console.log(`  Expires In:              ${remainingSec}s`);
+          }
+          console.log('\nTo approve after verifying the SAS matches on your phone:');
+          console.log('  codelink-terminal approve <token>');
+          console.log('To reject:');
+          console.log('  codelink-terminal reject <token>\n');
+        } else {
+          console.error('Failed to list pending pairing requests:', res.error);
+          process.exit(1);
+        }
+      } catch (err) {
+        console.error('Could not communicate with companion daemon:', err);
+        process.exit(1);
+      }
+      break;
+    }
+
+    case 'approve': {
+      const sessionToken = args[1];
+      if (!sessionToken) {
+        console.error('Usage: codelink-terminal approve <sessionToken>');
+        process.exit(1);
+      }
+
+      try {
+        // Fetch pending requests to locate that exact request
+        const listRes = await sendIpcCommand(socketPath, { command: 'list-pending' });
+        if (!listRes.ok) {
+          console.error('Failed to query pending pairings:', listRes.error);
+          process.exit(1);
+        }
+        const data = listRes.data as {
+          pending: PendingPairingInfo[];
+          activeSessionId?: string | null;
+        };
+        const pending = (data?.pending || []).find((p) => p.sessionToken === sessionToken);
+        if (!pending) {
+          console.error(
+            `Error: No pending pairing request found for token '${sessionToken}' (or it has expired).`
+          );
+          process.exit(1);
+        }
+
+        console.log('\n=== Approve Terminal Device Pairing ===');
+        console.log(`Request Token:          ${pending.sessionToken}`);
+        if (pending.attemptId) {
+          console.log(`Attempt ID:             ${pending.attemptId}`);
+        }
+        if (data.activeSessionId || pending.relaySessionId) {
+          console.log(
+            `Active Session ID:      ${data.activeSessionId || pending.relaySessionId || 'none'}`
+          );
+        }
+        console.log(`Client Device Name:     ${pending.clientDeviceName}`);
+        console.log(`Host-Computed SAS:      ${pending.sas}`);
+        console.log(`Client Key Fingerprint: ${pending.fingerprint}`);
+        const remainingSec = Math.max(0, Math.floor((pending.expiresAt - Date.now()) / 1000));
+        console.log(`Expires In:             ${remainingSec}s`);
+
+        console.log('\n⚠️  SECURITY WARNING:');
+        console.log(
+          `   Approving this device grants full remote interactive shell and filesystem access`
+        );
+        console.log(`   with your user privileges ('${os.userInfo().username}').`);
+        console.log(
+          `   You MUST verify that the SAS code '${pending.sas}' matches the code on your mobile device.`
+        );
+
+        // Interactive confirmation prompt
+        const readline = await import('readline');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        const answer = await new Promise<string>((resolve) => {
+          rl.question(
+            '\nConfirm that SAS codes match and approve this device? (type "yes" to approve, default cancel): ',
+            (ans) => {
+              rl.close();
+              resolve(ans.trim());
+            }
+          );
+        });
+
+        if (answer.toLowerCase() !== 'yes') {
+          console.log('Approval canceled. Device was not approved.');
+          process.exit(0);
+        }
+
+        const approveRes = await sendIpcCommand(socketPath, {
+          command: 'approve-pairing',
+          args: { sessionToken },
+        });
+
+        if (approveRes.ok && (approveRes.data as { approved?: boolean })?.approved) {
+          console.log(`\n✓ Device successfully paired and approved! SAS verified: ${pending.sas}`);
+        } else {
+          console.error(`Approval failed: ${approveRes.error || 'Request expired or rejected'}`);
+          process.exit(1);
+        }
+      } catch (err) {
+        console.error('Could not complete approval:', err);
+        process.exit(1);
+      }
+      break;
+    }
+
+    case 'reject': {
+      const sessionToken = args[1];
+      if (!sessionToken) {
+        console.error('Usage: codelink-terminal reject <sessionToken>');
+        process.exit(1);
+      }
+
+      try {
+        const res = await sendIpcCommand(socketPath, {
+          command: 'reject-pairing',
+          args: { sessionToken },
+        });
+        if (res.ok) {
+          console.log(`✓ Pairing request rejected: ${sessionToken}`);
+        } else {
+          console.error(`Rejection failed: ${res.error || 'Request not found or expired'}`);
+          process.exit(1);
+        }
+      } catch (err) {
+        console.error('Could not complete rejection:', err);
+        process.exit(1);
       }
       break;
     }
@@ -444,6 +650,47 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'list': {
+      try {
+        const res = await sendIpcCommand(socketPath, { command: 'list-sessions' });
+        if (res.ok) {
+          const sessions =
+            ((res.data as Record<string, unknown>)?.sessions as Array<Record<string, unknown>>) ||
+            [];
+          if (sessions.length === 0) {
+            console.log('No active terminal sessions.');
+          } else {
+            console.log(`--- Active Terminal Sessions (${sessions.length}) ---`);
+            for (const s of sessions) {
+              console.log(
+                `  Session ID: ${s.id} | Title: ${s.title || 'Terminal'} | Controller: ${s.controllerDeviceId || 'none'} | Observers: ${s.observerCount || 0}`
+              );
+            }
+          }
+        } else {
+          console.error('Failed to list sessions:', res.error);
+        }
+      } catch (err) {
+        console.error('Could not communicate with companion daemon:', err);
+      }
+      break;
+    }
+
+    case 'stop':
+    case 'stop-daemon': {
+      try {
+        const res = await sendIpcCommand(socketPath, { command: 'shutdown' });
+        if (res.ok) {
+          console.log('✓ Companion daemon shutdown signal sent.');
+        } else {
+          console.error('Failed to stop daemon:', res.error);
+        }
+      } catch {
+        console.log('Companion daemon is not running (or already stopped).');
+      }
+      break;
+    }
+
     default: {
       console.log(`Usage: codelink-terminal <command>
 
@@ -454,6 +701,9 @@ Commands:
   attach <id>    Attach companion daemon to an active session
   detach         Detach companion daemon from active session
   pair           Generate a one-time pairing code and QR data for a new device
+  pending        List pending pairing requests with host-computed SAS codes
+  approve <id>   Approve a pending device pairing after interactive SAS comparison
+  reject <id>    Reject and discard a pending device pairing request
   devices        List all paired remote devices
   revoke <id>    Revoke an approved paired device
   kill <id>      Emergency kill-switch: terminate a specific active session
@@ -461,6 +711,7 @@ Commands:
   takeover <id>  Reclaim control of a session back to the local host
   audit [limit]  Display recent structured audit log records
   list           List all active terminal sessions
+  stop           Stop the running companion daemon
   start-daemon   Run companion daemon in foreground (for systemd or testing)
 
 Safety Model:

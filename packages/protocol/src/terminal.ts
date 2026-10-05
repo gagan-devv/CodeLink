@@ -77,6 +77,8 @@ export interface TerminalAttachPayload {
   sessionId: string;
   requestedMode: 'observe' | 'control';
   lastOffset?: number;
+  deviceId?: string;
+  clientNonce?: string;
 }
 
 export interface TerminalAttachRespPayload {
@@ -86,6 +88,8 @@ export interface TerminalAttachRespPayload {
   rows: number;
   startOffset: number;
   hasGap: boolean;
+  hostNonce?: string;
+  epoch?: string;
 }
 
 export interface TerminalDetachPayload {
@@ -124,6 +128,8 @@ export interface TerminalErrorPayload {
   code: string;
   message: string;
   sessionId?: string;
+  /** Legacy field retained for backward compatibility with older relays/clients */
+  error?: string;
 }
 
 export interface TerminalRevokePayload {
@@ -151,9 +157,11 @@ export interface EncryptedPacket {
   seq: number;
   nonce: string;
   ciphertext: string;
+  epoch?: string;
 }
 
 export interface TerminalPairPayload {
+  attemptId: string;
   code: string;
   clientPublicKey: string;
   clientDeviceName: string;
@@ -161,19 +169,25 @@ export interface TerminalPairPayload {
 
 export interface TerminalPairRespPayload {
   success: boolean;
+  attemptId?: string;
   sessionToken?: string;
   sas?: string;
+  hostPublicKey?: string;
   error?: string;
 }
 
 export interface TerminalPairStatusPayload {
+  attemptId: string;
   sessionToken: string;
 }
 
 export interface TerminalPairStatusRespPayload {
   approved: boolean;
+  attemptId?: string;
+  sessionToken?: string;
   deviceId?: string;
   hostPublicKey?: string;
+  approvalProof?: string;
   error?: string;
 }
 

@@ -43,22 +43,25 @@ describe('PairingManager', () => {
     const hostInitiate = pm.verifyAndInitiate(
       challenge.code,
       sodium.to_base64(clientKeys.publicKey),
-      'Client Phone'
+      'Client Phone',
+      'attempt-sas-test-1'
     );
     expect(hostInitiate.success).toBe(true);
 
     // Compute SAS on host side
     const hostSas = pm.computeSas(hostInitiate.sessionToken!);
 
-    // Compute SAS on client side from host public key + client public key + pairing code
+    // Compute SAS on client side from host public key + client public key + pairing code + attemptId + sessionToken
     const clientSas = PairingManager.computeClientSas(
       hostKeys.publicKey,
       clientKeys.publicKey,
-      challenge.code
+      challenge.code,
+      'attempt-sas-test-1',
+      hostInitiate.sessionToken!
     );
 
     expect(hostSas).toBe(clientSas);
-    expect(hostSas).toHaveLength(6); // 6-character comparison string
+    expect(hostSas).toHaveLength(14); // 14-character formatted SAS (XXXX-XXXX-XXXX)
   });
 
   it('requires host approval before device is registered', () => {
@@ -197,6 +200,58 @@ describe('PairingManager', () => {
       expect(PairingManager.constantTimeCompare('123456', undefined as unknown as string)).toBe(
         false
       );
+    });
+
+    it('lists pending pairings and supports rejection', () => {
+      const hostKeys = sodium.crypto_kx_keypair();
+      const clientKeys = sodium.crypto_kx_keypair();
+      const pm = new PairingManager(hostKeys);
+      const challenge = pm.createPairingChallenge();
+
+      const initRes = pm.verifyAndInitiate(
+        challenge.code,
+        sodium.to_base64(clientKeys.publicKey),
+        'My Pixel Phone'
+      );
+      expect(initRes.success).toBe(true);
+
+      const pendingList = pm.listPending();
+      expect(pendingList.length).toBe(1);
+      expect(pendingList[0].sessionToken).toBe(initRes.sessionToken);
+      expect(pendingList[0].clientDeviceName).toBe('My Pixel Phone');
+      expect(pendingList[0].sas).toHaveLength(14);
+      expect(pendingList[0].fingerprint).toHaveLength(64);
+
+      // Rejection
+      const rejRes = pm.reject(initRes.sessionToken!);
+      expect(rejRes).toBe(true);
+      expect(pm.listPending().length).toBe(0);
+      expect(pm.approve(initRes.sessionToken!)).toBe(false);
+    });
+
+    it('enforces TTL on pending pairing sessions', () => {
+      const hostKeys = sodium.crypto_kx_keypair();
+      const clientKeys = sodium.crypto_kx_keypair();
+      const pm = new PairingManager(hostKeys);
+      const challenge = pm.createPairingChallenge();
+
+      const initRes = pm.verifyAndInitiate(
+        challenge.code,
+        sodium.to_base64(clientKeys.publicKey),
+        'Pixel'
+      );
+      expect(initRes.success).toBe(true);
+
+      // Manually simulate expiration by modifying creation time internally
+      const pendingMap = (pm as any).pendingPairings;
+      const record = pendingMap.get(initRes.sessionToken!);
+      record.createdAt = Date.now() - (6 * 60 * 1000); // 6 mins ago (> 5 mins)
+
+      expect(pm.listPending().length).toBe(0);
+      expect(pm.approve(initRes.sessionToken!)).toBe(false);
+      const status = pm.getPairingStatus(initRes.sessionToken!);
+      expect(status.approved).toBe(false);
+      expect(status.error).toContain('expired');
     });
   });
 });

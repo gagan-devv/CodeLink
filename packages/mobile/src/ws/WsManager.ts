@@ -73,10 +73,13 @@ class WsManagerClass {
     }
   }
 
-  sendTerminal<T extends TerminalMessageType>(type: T, payload: TerminalPayloadFor<T>): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(buildTerminalEnvelope(type, payload)));
+  sendTerminal<T extends TerminalMessageType>(type: T, payload: TerminalPayloadFor<T>): boolean {
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      throw new Error('WebSocket is not connected');
     }
+    const env = buildTerminalEnvelope(type, payload);
+    this.ws.send(JSON.stringify(env));
+    return true;
   }
 
   disconnect(): void {

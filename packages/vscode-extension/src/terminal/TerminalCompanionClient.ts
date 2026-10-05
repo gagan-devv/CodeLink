@@ -10,6 +10,30 @@ export interface CompanionStatus {
   maxSessions: number;
   activeSessions: number;
   uptimeSeconds: number;
+  activeSessionId?: string | null;
+  relayConnected?: boolean;
+  lastError?: string | null;
+}
+
+export interface PendingPairingInfo {
+  sessionToken: string;
+  attemptId?: string;
+  relaySessionId?: string;
+  clientDeviceName: string;
+  fingerprint: string;
+  sas: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface PairingChallenge {
+  code: string;
+  fingerprint: string;
+  qrPayload: string;
+  expiresAt: number;
+  activeSessionId?: string;
+  relayConnected?: boolean;
+  warning?: string;
 }
 
 export interface IpcCommand {
@@ -23,7 +47,9 @@ export interface IpcCommand {
     | 'revoke'
     | 'takeover'
     | 'pair'
+    | 'list-pending'
     | 'approve-pairing'
+    | 'reject-pairing'
     | 'list-devices'
     | 'audit'
     | 'attach-session'
@@ -156,5 +182,29 @@ export class TerminalCompanionClient {
       throw new Error(res.error || 'Failed to query audit log');
     }
     return ((res.data as { events: unknown[] })?.events || []) as unknown[];
+  }
+
+  public async createPairingChallenge(): Promise<PairingChallenge> {
+    const res = await this.sendCommand({ command: 'pair' });
+    if (!res.ok) {
+      throw new Error(res.error || 'Failed to generate pairing code');
+    }
+    return res.data as PairingChallenge;
+  }
+
+  public async listPendingPairings(): Promise<PendingPairingInfo[]> {
+    const res = await this.sendCommand({ command: 'list-pending' });
+    if (!res.ok) {
+      throw new Error(res.error || 'Failed to list pending pairing requests');
+    }
+    return ((res.data as { pending: PendingPairingInfo[] })?.pending || []) as PendingPairingInfo[];
+  }
+
+  public async approvePairing(sessionToken: string): Promise<IpcResponse> {
+    return this.sendCommand({ command: 'approve-pairing', args: { sessionToken } });
+  }
+
+  public async rejectPairing(sessionToken: string): Promise<IpcResponse> {
+    return this.sendCommand({ command: 'reject-pairing', args: { sessionToken } });
   }
 }

@@ -38,43 +38,66 @@ export default function TerminalScreen() {
   // Request session list on mount or connect
   useEffect(() => {
     if (isConnected) {
-      wsManager.sendTerminal('TERM_ATTACH', {
-        sessionId: '',
-        requestedMode: 'observe',
-      });
+      try {
+        MobilePairingService.sendAttach('', 'observe');
+      } catch (err) {
+        console.warn('[TerminalScreen] Failed to attach on connect:', err);
+      }
     }
   }, [isConnected]);
 
   const handleCreateSession = () => {
     const nextIndex = sessions.length + 1;
-    wsManager.sendTerminal('TERM_NEW_SESSION', {
-      title: `Terminal ${nextIndex}`,
-      cols: 80,
-      rows: 24,
-    });
+    try {
+      wsManager.sendTerminal('TERM_NEW_SESSION', {
+        title: `Terminal ${nextIndex}`,
+        cols: 80,
+        rows: 24,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to create terminal session: ${msg}`);
+    }
   };
 
   const handleCloseSession = (sessionId: string) => {
-    wsManager.sendTerminal('TERM_CLOSE_SESSION', { sessionId });
+    try {
+      wsManager.sendTerminal('TERM_CLOSE_SESSION', { sessionId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to close session: ${msg}`);
+    }
   };
 
   const handleSendInput = (data: string) => {
     if (!activeSessionId) return;
-    useTerminalStore.getState().sendEncryptedInput(activeSessionId, data);
+    try {
+      useTerminalStore.getState().sendEncryptedInput(activeSessionId, data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to send terminal input: ${msg}`);
+    }
   };
 
   const handleRequestMode = (mode: 'observe' | 'control') => {
     if (!activeSessionId) return;
-    wsManager.sendTerminal('TERM_ATTACH', {
-      sessionId: activeSessionId,
-      requestedMode: mode,
-    });
+    try {
+      MobilePairingService.sendAttach(activeSessionId, mode);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to change mode: ${msg}`);
+    }
   };
 
   const handleInitiatePairing = async () => {
     if (!pairingCodeInput.trim()) return;
-    await MobilePairingService.initiatePairing(pairingCodeInput.trim());
-    setPairingCodeInput('');
+    try {
+      await MobilePairingService.initiatePairing(pairingCodeInput.trim());
+      setPairingCodeInput('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Pairing failed: ${msg}`);
+    }
   };
 
   const handleDismissError = () => {
@@ -108,14 +131,49 @@ export default function TerminalScreen() {
           </View>
         ) : null}
 
+        {/* E2EE Awaiting User SAS Confirmation Banner */}
+        {e2eeState === 'awaiting_user_confirmation' && sasCode ? (
+          <View style={styles.sasBanner}>
+            <Text style={styles.sasTitle}>Pairing Verification SAS</Text>
+            <Text style={styles.sasCode}>{sasCode}</Text>
+            <Text style={styles.sasInstructions}>
+              Verify this code matches on your laptop companion before confirming.
+            </Text>
+            <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => MobilePairingService.confirmSasMatch()}
+                style={{
+                  backgroundColor: '#4ec94e',
+                  padding: 8,
+                  borderRadius: 6,
+                  flex: 1,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Confirm SAS Match</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => MobilePairingService.cancelPairing()}
+                style={{
+                  backgroundColor: '#f55',
+                  padding: 8,
+                  borderRadius: 6,
+                  flex: 1,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Doesn't Match</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
         {/* E2EE Pending Approval SAS Banner */}
         {e2eeState === 'pending_approval' && sasCode ? (
           <View style={styles.sasBanner}>
             <Text style={styles.sasTitle}>Pairing Verification SAS</Text>
             <Text style={styles.sasCode}>{sasCode}</Text>
-            <Text style={styles.sasInstructions}>
-              Verify this code matches on your laptop companion and approve on host.
-            </Text>
+            <Text style={styles.sasInstructions}>Awaiting host companion approval.</Text>
             <ActivityIndicator size="small" color="#0078d4" style={{ marginTop: 8 }} />
           </View>
         ) : null}

@@ -31,8 +31,9 @@ func BuildCompanionNotConnectedError() []byte {
 		"v":    1,
 		"type": "TERM_ERROR",
 		"payload": map[string]string{
-			"code":  "COMPANION_NOT_CONNECTED",
-			"error": "Terminal companion daemon is not connected to this session",
+			"code":    "COMPANION_NOT_CONNECTED",
+			"message": "Terminal companion daemon is not connected to this session",
+			"error":   "Terminal companion daemon is not connected to this session",
 		},
 	})
 	return b

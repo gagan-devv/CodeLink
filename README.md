@@ -297,6 +297,47 @@ _This hook automatically executes `npm run precommit` before every commit, enfor
 
 ---
 
+## 🖥️ Managed Interactive Terminal
+
+CodeLink includes an optional Managed Interactive Terminal providing secure, end-to-end encrypted remote PTY shell access to your Linux host.
+
+### Build & Enable
+
+```bash
+# Build the companion daemon package
+npm run build --workspace=@codelink/companion
+
+# Enable terminal service (default is OFF)
+codelink-terminal enable
+```
+
+### Systemd User Unit (Auto-start on Login)
+
+```bash
+# Install user systemd service
+codelink-terminal install-service
+
+# Reload systemd and enable daemon
+systemctl --user daemon-reload
+systemctl --user enable --now codelink-terminal
+```
+
+### Status & Socket Location
+
+- **Daemon Status:** `codelink-terminal status`
+- **Socket Path:** `~/.codelink/terminal.sock` (mode `0600`)
+- **Audit Log:** `~/.codelink/terminal-audit.log` (mode `0600`)
+
+> [!NOTE]
+> **Pairing Security & Compatibility:**
+>
+> - **Host Authentication via SAS**: The 6-digit pairing challenge code is transported via the relay (untrusted). Because an adversary on the transport could substitute keys, host authenticity and MITM resistance rest solely on the **48-bit Short Authentication String (SAS)** (`XXXX-XXXX-XXXX`). Users must visually verify and confirm matching SAS codes on both the host (CLI or VS Code) and the mobile device before approval.
+> - **Cryptographic Approval Proof**: The `approvalProof` verified upon pairing proves key possession consistency between key exchange and host approval (proving the approving host holds the private key matching `hostPublicKey`), but does not itself replace SAS verification of host identity.
+> - **Pairing Lifetime**: Pairing attempts have a strict 5-minute lifetime limit and are bound to unique per-attempt request identifiers.
+> - **Per-Connection Epochs**: Client and host exchange fresh 16-byte nonces on every (re)attach to establish ephemeral connection epochs (`BLAKE2b(clientNonce || hostNonce)`), preventing replay attacks across daemon or client restarts. Older companion/daemon versions cannot pair or communicate with this app. Rebuild and restart the daemon together with the updated app.
+
+---
+
 ## 🚢 Production Deployment
 
 For production deployments, the modular microservices scale independently:

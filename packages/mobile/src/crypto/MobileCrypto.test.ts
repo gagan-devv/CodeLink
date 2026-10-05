@@ -76,8 +76,8 @@ describe('MobileCrypto Cross-Compatibility and E2EE', () => {
       serverKx.publicKey
     );
 
-    const mobileSession = new MobileE2EESession('client', clientKeys.sharedTx, clientKeys.sharedRx);
-    const companionSession = new E2EESession('host', serverKeys.sharedTx, serverKeys.sharedRx);
+    const mobileSession = new MobileE2EESession('client', clientKeys.sharedTx, clientKeys.sharedRx, 'test-epoch');
+    const companionSession = new E2EESession('host', serverKeys.sharedTx, serverKeys.sharedRx, 'test-epoch');
 
     const testPayload = 'ls -la /home/user\n';
     const encryptedByMobile = mobileSession.encrypt(testPayload);
@@ -106,8 +106,8 @@ describe('MobileCrypto Cross-Compatibility and E2EE', () => {
       serverKx.publicKey
     );
 
-    const mobileSession = new MobileE2EESession('client', clientKeys.sharedTx, clientKeys.sharedRx);
-    const companionSession = new E2EESession('host', serverKeys.sharedTx, serverKeys.sharedRx);
+    const mobileSession = new MobileE2EESession('client', clientKeys.sharedTx, clientKeys.sharedRx, 'test-epoch');
+    const companionSession = new E2EESession('host', serverKeys.sharedTx, serverKeys.sharedRx, 'test-epoch');
 
     const ptyOutput = '\x1b[32muser@laptop\x1b[0m:~$ total 42\r\n';
     const encryptedByCompanion = companionSession.encrypt(ptyOutput);
@@ -130,9 +130,9 @@ describe('MobileCrypto Cross-Compatibility and E2EE', () => {
       clientKx.publicKey
     );
 
-    const rogueSession = new MobileE2EESession('client', rogueKeys.sharedTx, rogueKeys.sharedRx);
-    const legitimateSession = new MobileE2EESession('client', legitimateKeys.sharedTx, legitimateKeys.sharedRx);
-    const companionSession = new E2EESession('host', companionKeys.sharedTx, companionKeys.sharedRx);
+    const rogueSession = new MobileE2EESession('client', rogueKeys.sharedTx, rogueKeys.sharedRx, 'test-epoch');
+    const legitimateSession = new MobileE2EESession('client', legitimateKeys.sharedTx, legitimateKeys.sharedRx, 'test-epoch');
+    const companionSession = new E2EESession('host', companionKeys.sharedTx, companionKeys.sharedRx, 'test-epoch');
 
     // Rogue packet sent to companion
     const roguePacket = rogueSession.encrypt('malicious payload');
@@ -159,8 +159,8 @@ describe('MobileCrypto Cross-Compatibility and E2EE', () => {
       serverKx.publicKey
     );
 
-    const mobileSession = new MobileE2EESession('client', clientKeys.sharedTx, clientKeys.sharedRx);
-    const companionSession = new E2EESession('host', serverKeys.sharedTx, serverKeys.sharedRx);
+    const mobileSession = new MobileE2EESession('client', clientKeys.sharedTx, clientKeys.sharedRx, 'test-epoch');
+    const companionSession = new E2EESession('host', serverKeys.sharedTx, serverKeys.sharedRx, 'test-epoch');
 
     const pkt1 = mobileSession.encrypt('cmd 1');
     const pkt2 = mobileSession.encrypt('cmd 2');
@@ -186,19 +186,25 @@ describe('MobileCrypto Cross-Compatibility and E2EE', () => {
     const hostKx = sodium.crypto_kx_keypair();
     const clientKx = sodium.crypto_kx_keypair();
     const pairingCode = '849201';
+    const attemptId = 'att-xyz';
+    const sessionToken = 'tok-123';
 
     const companionSas = PairingManager.computeClientSas(
       hostKx.publicKey,
       clientKx.publicKey,
-      pairingCode
+      pairingCode,
+      attemptId,
+      sessionToken
     );
     const nobleSas = computeClientSas(
       hostKx.publicKey,
       clientKx.publicKey,
-      pairingCode
+      pairingCode,
+      attemptId,
+      sessionToken
     );
 
-    expect(nobleSas).toHaveLength(6);
+    expect(nobleSas).toHaveLength(14);
     expect(nobleSas).toBe(companionSas);
   });
 

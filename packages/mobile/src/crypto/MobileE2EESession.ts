@@ -6,12 +6,26 @@ import { toBase64, fromBase64, encodeUtf8, decodeUtf8 } from './nobleKx';
 export class MobileE2EESession {
   private outboundSeq = 0;
   private lastInboundSeq = 0;
+  private epoch?: string;
 
   constructor(
     public readonly role: 'client' | 'host',
     private txKey: Uint8Array,
-    private rxKey: Uint8Array
-  ) {}
+    private rxKey: Uint8Array,
+    epoch?: string
+  ) {
+    this.epoch = epoch;
+  }
+
+  public getEpoch(): string | undefined {
+    return this.epoch;
+  }
+
+  public setEpoch(epoch: string): void {
+    this.epoch = epoch;
+    this.outboundSeq = 0;
+    this.lastInboundSeq = 0;
+  }
 
   public rotateKeys(newTxKey: Uint8Array, newRxKey: Uint8Array): void {
     this.txKey = newTxKey;
@@ -19,12 +33,17 @@ export class MobileE2EESession {
   }
 
   public encrypt(plaintext: string): EncryptedPacket {
+    if (!this.epoch) {
+      throw new Error('E2EE session has no epoch: cannot encrypt without established epoch');
+    }
+
     this.outboundSeq++;
     const seq = this.outboundSeq;
 
     // Fresh 24-byte random nonce using CSPRNG per packet
     const nonce = secureRandomBytes(24);
-    const additionalData = encodeUtf8(`seq:${seq}`);
+    const additionalDataStr = `epoch:${this.epoch}:seq:${seq}`;
+    const additionalData = encodeUtf8(additionalDataStr);
     const messageBytes = encodeUtf8(plaintext);
 
     const cipher = xchacha20poly1305(this.txKey, nonce, additionalData);
@@ -32,12 +51,21 @@ export class MobileE2EESession {
 
     return {
       seq,
+      epoch: this.epoch,
       nonce: toBase64(nonce),
       ciphertext: toBase64(ciphertext),
     };
   }
 
   public decrypt(packet: EncryptedPacket): string {
+    if (!this.epoch) {
+      throw new Error('E2EE session has no epoch: cannot decrypt without established epoch');
+    }
+
+    if (packet.epoch !== this.epoch) {
+      throw new Error(`Replay detected: packet epoch mismatch (${packet.epoch} !== ${this.epoch})`);
+    }
+
     // Replay attack and re-ordering protection
     if (packet.seq <= this.lastInboundSeq) {
       throw new Error(
@@ -49,7 +77,8 @@ export class MobileE2EESession {
     try {
       const nonceBytes = fromBase64(packet.nonce);
       const ciphertextBytes = fromBase64(packet.ciphertext);
-      const additionalData = encodeUtf8(`seq:${packet.seq}`);
+      const additionalDataStr = `epoch:${packet.epoch}:seq:${packet.seq}`;
+      const additionalData = encodeUtf8(additionalDataStr);
 
       const cipher = xchacha20poly1305(this.rxKey, nonceBytes, additionalData);
       decryptedBytes = cipher.decrypt(ciphertextBytes);

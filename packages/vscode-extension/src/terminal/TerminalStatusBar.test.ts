@@ -108,4 +108,39 @@ describe('TerminalStatusBar Launcher Security (Fix B)', () => {
       expect(fs.existsSync(res.path!)).toBe(true);
     });
   });
+
+  describe('sanitizeDisplayName', () => {
+    it('cleanses markdown characters, HTML, control chars, and code injection', async () => {
+      const { sanitizeDisplayName } = await import('./TerminalStatusBar');
+      expect(sanitizeDisplayName('Pixel 8')).toBe('Pixel 8');
+      expect(sanitizeDisplayName('**bold**_italic_`code`')).toBe('bolditaliccode');
+      expect(sanitizeDisplayName('<script>alert(1)</script>')).toBe('scriptalert1/script');
+      expect(sanitizeDisplayName('Phone $(whoami) `cat /etc/passwd`')).toBe('Phone whoami cat /etc/passwd');
+      expect(sanitizeDisplayName("Device's \"quoted\" name")).toBe('Devices quoted name');
+      expect(sanitizeDisplayName('   ')).toBe('Unknown Device');
+      expect(sanitizeDisplayName(null as any)).toBe('Unknown Device');
+    });
+  });
+
+  describe('Host Pairing & Workspace Trust Guards', () => {
+    it('refuses pairing operations when workspace is untrusted', async () => {
+      const vscode = await import('vscode');
+      (vscode.workspace as any).isTrusted = false;
+
+      const { TerminalStatusBar } = await import('./TerminalStatusBar');
+      const bar = new TerminalStatusBar();
+
+      await bar.generatePairingCode();
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        'Generating terminal pairing codes requires a trusted workspace.'
+      );
+
+      await bar.reviewPendingPairings();
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        'Reviewing and approving terminal pairings requires a trusted workspace.'
+      );
+
+      (vscode.workspace as any).isTrusted = true;
+    });
+  });
 });

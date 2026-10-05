@@ -197,6 +197,10 @@ describe('Manual E2E Pipeline: Client -> Relay -> Companion -> PTY -> Client', (
       if (!envelope) return;
 
       if (envelope.type === 'TERM_ATTACH_RESP') {
+        const payload = envelope.payload as any;
+        if (payload?.epoch) {
+          phoneE2EESession.setEpoch(payload.epoch);
+        }
         attachRespReceived = true;
       } else if (envelope.type === 'TERM_OUTPUT') {
         const payload = envelope.payload as TerminalOutputPayload;
@@ -210,7 +214,8 @@ describe('Manual E2E Pipeline: Client -> Relay -> Companion -> PTY -> Client', (
       }
     });
 
-    // 3. Phone sends TERM_ATTACH
+    // 3. Phone sends TERM_ATTACH with clientNonce
+    const clientNonce = sodium.to_hex(sodium.randombytes_buf(16));
     const attachEnvelope = buildTerminalEnvelope('TERM_ATTACH', {
       sessionId: 'sess-terminal-pty',
       requestedMode: 'control',
@@ -218,6 +223,7 @@ describe('Manual E2E Pipeline: Client -> Relay -> Companion -> PTY -> Client', (
       rows: 24,
       lastOffset: 0,
       deviceId: 'mobile-phone-1',
+      clientNonce,
     } as any);
     phoneWs.send(JSON.stringify(attachEnvelope));
 

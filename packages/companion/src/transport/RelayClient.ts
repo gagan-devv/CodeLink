@@ -21,7 +21,7 @@ import { CompanionConfig } from '../service/CompanionConfig';
 import { SessionTable, TerminalSession } from '../session/SessionTable';
 import { PairingManager, KeyPair } from '../crypto/PairingManager';
 import { PairedDeviceStore } from '../auth/PairedDeviceStore';
-import { E2EESession } from '../crypto/E2EESession';
+import { E2EESession, computeEpoch } from '../crypto/E2EESession';
 import { InputDeduplicator } from './InputDeduplicator';
 import { ReattachHandler } from './ReattachHandler';
 
@@ -35,10 +35,12 @@ export interface RelayClientOptions {
   hostKeyPair?: KeyPair;
   requireE2EE?: boolean;
   defaultDeviceId?: string;
+  relaySessionId?: string;
   reconnectInitialDelayMs?: number;
   reconnectMaxDelayMs?: number;
   reconnectBackoffFactor?: number;
   maxReconnectAttempts?: number;
+  attachCooldownMs?: number;
   onConnected?: () => void;
   onDisconnected?: (code?: number, reason?: string) => void;
   onError?: (err: Error) => void;
@@ -58,6 +60,8 @@ export class RelayClient {
   private hostKeyPair?: KeyPair;
   private requireE2EE: boolean;
   private e2eeSessions = new Map<string, E2EESession>();
+  private attachCooldownMs: number;
+  private lastAttachTimestamps = new Map<string, number>();
 
   constructor(private options: RelayClientOptions) {
     this.activeDeviceId = options.defaultDeviceId || 'remote-client';
@@ -66,6 +70,7 @@ export class RelayClient {
       options.deviceStore ||
       (this.requireE2EE ? options.pairingManager?.getDeviceStore() : undefined);
     this.hostKeyPair = options.hostKeyPair || options.pairingManager?.getHostKeyPair();
+    this.attachCooldownMs = options.attachCooldownMs ?? 2000;
   }
 
   public isConnected(): boolean {
@@ -92,9 +97,13 @@ export class RelayClient {
     return this.relayConnectionId;
   }
 
-  public getOrCreateE2EESession(deviceId: string): E2EESession | null {
+  public getOrCreateE2EESession(deviceId: string, epoch?: string): E2EESession | null {
     if (this.e2eeSessions.has(deviceId)) {
-      return this.e2eeSessions.get(deviceId)!;
+      const existing = this.e2eeSessions.get(deviceId)!;
+      if (epoch) {
+        existing.setEpoch(epoch);
+      }
+      return existing;
     }
 
     if (!this.deviceStore || !this.hostKeyPair) {
@@ -113,7 +122,7 @@ export class RelayClient {
         this.hostKeyPair.privateKey,
         clientPubKey
       );
-      const session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx);
+      const session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx, epoch);
       this.e2eeSessions.set(deviceId, session);
       return session;
     } catch {
@@ -135,8 +144,23 @@ export class RelayClient {
 
     let outputData = data;
     if (session) {
-      const packet = session.encrypt(data);
-      outputData = JSON.stringify(packet);
+      if (!session.getEpoch()) {
+        // If an E2EE session exists but has no established epoch yet,
+        // do NOT encrypt and do NOT send plaintext over the relay.
+        // Drop the chunk (it remains recorded in session.ringBuffer for re-attach replay).
+        return;
+      }
+      try {
+        const packet = session.encrypt(data);
+        outputData = JSON.stringify(packet);
+      } catch (err) {
+        // PTY callback must never throw an uncaught exception that crashes the daemon
+        console.error('[RelayClient] Failed to encrypt output packet:', err);
+        return;
+      }
+    } else if (this.requireE2EE) {
+      // E2EE is required but no E2EE session exists for device: never leak plaintext
+      return;
     }
 
     this.sendTerminalEnvelope('TERM_OUTPUT', {
@@ -267,16 +291,54 @@ export class RelayClient {
       case 'TERM_ATTACH': {
         const payload = envelope.payload as TerminalAttachPayload;
         const deviceId =
+          payload.deviceId ||
           ((payload as unknown as Record<string, unknown>).deviceId as string) ||
           this.activeDeviceId;
 
-        if (this.requireE2EE && this.deviceStore && !this.deviceStore.isApproved(deviceId)) {
-          this.sendTerminalEnvelope('TERM_ERROR', {
-            code: 'DEVICE_NOT_APPROVED',
-            message: 'Device is not approved or pairing was revoked',
-            sessionId: payload.sessionId,
-          });
-          return;
+        if (this.requireE2EE) {
+          if (!deviceId || !payload.clientNonce) {
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'ATTACH_NONCE_REQUIRED',
+              message: 'Client nonce and approved device ID are required when E2EE is enabled',
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+          if (this.deviceStore && !this.deviceStore.isApproved(deviceId)) {
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'DEVICE_NOT_APPROVED',
+              message: 'Device is not approved or pairing was revoked',
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+
+          // Rate-limit epoch resets per approved device (DoS hardening: only reset epoch if no live attach completed in cooldown window)
+          const now = Date.now();
+          const lastAttach = this.lastAttachTimestamps.get(deviceId) || 0;
+          if (this.attachCooldownMs > 0 && now - lastAttach < this.attachCooldownMs) {
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'ATTACH_RATE_LIMITED',
+              message: 'Rapid re-attach rejected: connection epoch was recently established',
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+          this.lastAttachTimestamps.set(deviceId, now);
+        }
+
+        let hostNonceHex: string | undefined;
+        let derivedEpoch: string | undefined;
+
+        if (deviceId && payload.clientNonce && this.hostKeyPair) {
+          const e2eeSession = this.getOrCreateE2EESession(deviceId);
+          if (e2eeSession) {
+            const hostNonceBytes = sodium.randombytes_buf(16);
+            hostNonceHex = sodium.to_hex(hostNonceBytes);
+            derivedEpoch = computeEpoch(payload.clientNonce, hostNonceHex);
+            e2eeSession.setEpoch(derivedEpoch);
+            this.activeDeviceId = deviceId;
+          }
         }
 
         let session = this.options.sessionTable.get(payload.sessionId);
@@ -305,7 +367,7 @@ export class RelayClient {
           payload.lastOffset ?? 0
         );
 
-        // Send TERM_ATTACH_RESP back
+        // Send TERM_ATTACH_RESP back with fresh hostNonce and derived connection epoch
         this.sendTerminalEnvelope('TERM_ATTACH_RESP', {
           sessionId: payload.sessionId,
           mode: attachResult.mode,
@@ -313,6 +375,8 @@ export class RelayClient {
           rows: session.pty.rows,
           startOffset: payload.lastOffset ?? 0,
           hasGap: reattachResult.hasGap,
+          hostNonce: hostNonceHex,
+          epoch: derivedEpoch,
         });
 
         if (reattachResult.hasGap && reattachResult.gapNotice) {
@@ -507,6 +571,7 @@ export class RelayClient {
         if (!this.options.pairingManager) {
           this.sendTerminalEnvelope('TERM_PAIR_RESP', {
             success: false,
+            attemptId: payload.attemptId,
             error: 'Pairing manager not available',
           });
           break;
@@ -515,19 +580,24 @@ export class RelayClient {
         const res = this.options.pairingManager.verifyAndInitiate(
           payload.code,
           payload.clientPublicKey,
-          payload.clientDeviceName
+          payload.clientDeviceName,
+          payload.attemptId,
+          this.options.relaySessionId
         );
 
         if (res.success && res.sessionToken) {
           const sas = this.options.pairingManager.computeSas(res.sessionToken);
           this.sendTerminalEnvelope('TERM_PAIR_RESP', {
             success: true,
+            attemptId: payload.attemptId,
             sessionToken: res.sessionToken,
             sas,
+            hostPublicKey: sodium.to_base64(this.options.pairingManager.getHostKeyPair().publicKey),
           });
         } else {
           this.sendTerminalEnvelope('TERM_PAIR_RESP', {
             success: false,
+            attemptId: payload.attemptId,
             error: res.error || 'Pairing code verification failed',
           });
         }
@@ -539,37 +609,45 @@ export class RelayClient {
         if (!this.options.pairingManager) {
           this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
             approved: false,
+            attemptId: payload.attemptId,
+            sessionToken: payload.sessionToken,
             error: 'Pairing manager not available',
           });
           break;
         }
 
-        const status = this.options.pairingManager.getPairingStatus(payload.sessionToken);
+        const status = this.options.pairingManager.getPairingStatus(
+          payload.sessionToken,
+          this.options.relaySessionId
+        );
         if (status.approved && status.deviceId && status.clientPublicKey && this.hostKeyPair) {
-          try {
-            const kxKeys = sodium.crypto_kx_server_session_keys(
-              this.hostKeyPair.publicKey,
-              this.hostKeyPair.privateKey,
-              status.clientPublicKey
-            );
-            const session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx);
-            this.e2eeSessions.set(status.deviceId, session);
-            this.activeDeviceId = status.deviceId;
-          } catch {
-            // ignore
+          // Idempotent: Only create E2EESession if not already established to prevent sequence counter reset
+          let session = this.e2eeSessions.get(status.deviceId);
+          if (!session) {
+            try {
+              const kxKeys = sodium.crypto_kx_server_session_keys(
+                this.hostKeyPair.publicKey,
+                this.hostKeyPair.privateKey,
+                status.clientPublicKey
+              );
+              session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx);
+              this.e2eeSessions.set(status.deviceId, session);
+              this.activeDeviceId = status.deviceId;
+            } catch {
+              // ignore
+            }
           }
-
-          this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
-            approved: true,
-            deviceId: status.deviceId,
-            hostPublicKey: status.hostPublicKey,
-          });
-        } else {
-          this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
-            approved: false,
-            error: status.error,
-          });
         }
+
+        this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
+          approved: status.approved,
+          attemptId: status.attemptId || payload.attemptId,
+          sessionToken: status.sessionToken || payload.sessionToken,
+          deviceId: status.deviceId,
+          hostPublicKey: status.hostPublicKey,
+          approvalProof: status.approvalProof,
+          error: status.error,
+        });
         break;
       }
 
