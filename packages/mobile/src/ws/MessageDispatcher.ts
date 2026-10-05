@@ -129,12 +129,22 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
     }
 
     case 'TERM_PAIR_RESP': {
-      MobilePairingService.handlePairResp(payload as TerminalPairRespPayload);
+      MobilePairingService.handlePairResp(payload as TerminalPairRespPayload).catch((err) => {
+        console.error('[MessageDispatcher] Error handling TERM_PAIR_RESP:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        useTerminalStore.getState().setE2EEError(`Pairing response error: ${msg}`);
+      });
       break;
     }
 
     case 'TERM_PAIR_STATUS_RESP': {
-      MobilePairingService.handlePairStatus(payload as TerminalPairStatusRespPayload);
+      MobilePairingService.handlePairStatus(payload as TerminalPairStatusRespPayload).catch(
+        (err) => {
+          console.error('[MessageDispatcher] Error handling TERM_PAIR_STATUS_RESP:', err);
+          const msg = err instanceof Error ? err.message : String(err);
+          useTerminalStore.getState().setE2EEError(`Pairing status error: ${msg}`);
+        }
+      );
       break;
     }
 
@@ -142,6 +152,30 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
       const p = payload as { code?: string; message?: string; error?: string };
       const code = p?.code || 'TERM_ERROR';
       const msg = p?.message || p?.error || 'Unknown error';
+
+      // Route pairing and authorization errors
+      if (
+        code === 'COMPANION_NOT_CONNECTED' ||
+        code === 'DEVICE_NOT_APPROVED' ||
+        code === 'PAIRING_REVOKED' ||
+        code === 'NO_ACTIVE_CHALLENGE' ||
+        code === 'INVALID_PAIRING_CODE' ||
+        code === 'PAIRING_EXPIRED' ||
+        code === 'PAIRING_ATTEMPTS_EXCEEDED'
+      ) {
+        MobilePairingService.handleTermError(code, msg);
+        break;
+      }
+
+      // If already paired, ordinary terminal session errors (e.g. INPUT_REJECTED, RESIZE_REJECTED)
+      // must not wipe or disrupt the E2EE paired state
+      const { e2eeState } = useTerminalStore.getState();
+      if (e2eeState === 'paired') {
+        console.warn(`[MessageDispatcher] Routine terminal session error: [${code}] ${msg}`);
+        break;
+      }
+
+      // If initiating or pending, route to pairing handler
       MobilePairingService.handleTermError(code, msg);
       break;
     }

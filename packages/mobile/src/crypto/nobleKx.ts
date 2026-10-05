@@ -165,3 +165,33 @@ export function computeDeviceId(clientPublicKey: Uint8Array): string {
   const hash = blake2b(clientPublicKey, { dkLen: 8 });
   return `dev-${toHex(hash)}`;
 }
+
+/**
+ * Computes authenticated host approval proof matching Companion PairingManager:
+ * hash = blake2b(transcript, { key, dkLen: 32 })
+ */
+export function computeApprovalProof(
+  attemptId: string,
+  sessionToken: string,
+  hostPublicKey: Uint8Array,
+  clientPublicKey: Uint8Array,
+  key: Uint8Array
+): string {
+  const hostPubKeyB64 = toBase64(hostPublicKey);
+  const clientPubKeyB64 = toBase64(clientPublicKey);
+  const transcript = `codelink-pairing-approval-v1:${attemptId}:${sessionToken}:${hostPubKeyB64}:${clientPubKeyB64}`;
+  const proofBytes = blake2b(encodeUtf8(transcript), { key, dkLen: 32 });
+  return toBase64(proofBytes);
+}
+
+/**
+ * Constant-time comparison of two Uint8Arrays to prevent timing attacks.
+ */
+export function compareBytesConstantTime(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a[i] ^ b[i];
+  }
+  return diff === 0;
+}

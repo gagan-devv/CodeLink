@@ -35,6 +35,7 @@ export interface RelayClientOptions {
   hostKeyPair?: KeyPair;
   requireE2EE?: boolean;
   defaultDeviceId?: string;
+  relaySessionId?: string;
   reconnectInitialDelayMs?: number;
   reconnectMaxDelayMs?: number;
   reconnectBackoffFactor?: number;
@@ -507,6 +508,7 @@ export class RelayClient {
         if (!this.options.pairingManager) {
           this.sendTerminalEnvelope('TERM_PAIR_RESP', {
             success: false,
+            attemptId: payload.attemptId,
             error: 'Pairing manager not available',
           });
           break;
@@ -515,13 +517,16 @@ export class RelayClient {
         const res = this.options.pairingManager.verifyAndInitiate(
           payload.code,
           payload.clientPublicKey,
-          payload.clientDeviceName
+          payload.clientDeviceName,
+          payload.attemptId,
+          this.options.relaySessionId
         );
 
         if (res.success && res.sessionToken) {
           const sas = this.options.pairingManager.computeSas(res.sessionToken);
           this.sendTerminalEnvelope('TERM_PAIR_RESP', {
             success: true,
+            attemptId: payload.attemptId,
             sessionToken: res.sessionToken,
             sas,
             hostPublicKey: sodium.to_base64(this.options.pairingManager.getHostKeyPair().publicKey),
@@ -529,6 +534,7 @@ export class RelayClient {
         } else {
           this.sendTerminalEnvelope('TERM_PAIR_RESP', {
             success: false,
+            attemptId: payload.attemptId,
             error: res.error || 'Pairing code verification failed',
           });
         }
@@ -540,37 +546,50 @@ export class RelayClient {
         if (!this.options.pairingManager) {
           this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
             approved: false,
+            attemptId: payload.attemptId,
+            sessionToken: payload.sessionToken,
             error: 'Pairing manager not available',
           });
           break;
         }
 
-        const status = this.options.pairingManager.getPairingStatus(payload.sessionToken);
+        const status = this.options.pairingManager.getPairingStatus(
+          payload.sessionToken,
+          this.options.relaySessionId
+        );
         if (status.approved && status.deviceId && status.clientPublicKey && this.hostKeyPair) {
-          try {
-            const kxKeys = sodium.crypto_kx_server_session_keys(
-              this.hostKeyPair.publicKey,
-              this.hostKeyPair.privateKey,
-              status.clientPublicKey
-            );
-            const session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx);
-            this.e2eeSessions.set(status.deviceId, session);
-            this.activeDeviceId = status.deviceId;
-          } catch {
-            // ignore
+          // Idempotent: Only create E2EESession if not already established to prevent sequence counter reset
+          let session = this.e2eeSessions.get(status.deviceId);
+          if (!session) {
+            try {
+              const kxKeys = sodium.crypto_kx_server_session_keys(
+                this.hostKeyPair.publicKey,
+                this.hostKeyPair.privateKey,
+                status.clientPublicKey
+              );
+              session = new E2EESession(
+                'host',
+                kxKeys.sharedTx,
+                kxKeys.sharedRx,
+                payload.sessionToken
+              );
+              this.e2eeSessions.set(status.deviceId, session);
+              this.activeDeviceId = status.deviceId;
+            } catch {
+              // ignore
+            }
           }
-
-          this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
-            approved: true,
-            deviceId: status.deviceId,
-            hostPublicKey: status.hostPublicKey,
-          });
-        } else {
-          this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
-            approved: false,
-            error: status.error,
-          });
         }
+
+        this.sendTerminalEnvelope('TERM_PAIR_STATUS_RESP', {
+          approved: status.approved,
+          attemptId: status.attemptId || payload.attemptId,
+          sessionToken: status.sessionToken || payload.sessionToken,
+          deviceId: status.deviceId,
+          hostPublicKey: status.hostPublicKey,
+          approvalProof: status.approvalProof,
+          error: status.error,
+        });
         break;
       }
 

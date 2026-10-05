@@ -127,11 +127,14 @@ describe('Mobile Pairing Lifecycle & Error Handling (Stage A)', () => {
     vi.spyOn(wsManager, 'isConnected').mockReturnValue(true);
     vi.spyOn(wsManager, 'sendTerminal').mockReturnValue(true);
 
+    const hostKp = generateKeyPair();
     await MobilePairingService.initiatePairing('123456');
+    const attempt = MobilePairingService.getActiveAttempt();
     await MobilePairingService.handlePairResp({
       success: true,
+      attemptId: attempt?.attemptId,
       sessionToken: 'token-test',
-      sas: 'ABCDEF',
+      hostPublicKey: toBase64(hostKp.publicKey),
     });
 
     expect(useTerminalStore.getState().e2eeState).toBe('pending_approval');

@@ -17,6 +17,8 @@ export interface CompanionStatus {
 
 export interface PendingPairingInfo {
   sessionToken: string;
+  attemptId?: string;
+  relaySessionId?: string;
   clientDeviceName: string;
   fingerprint: string;
   sas: string;

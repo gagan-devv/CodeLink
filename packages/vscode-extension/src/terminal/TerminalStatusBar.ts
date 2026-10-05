@@ -521,9 +521,15 @@ export class TerminalStatusBar {
 
     const safeDeviceName = sanitizeDisplayName(selected.clientDeviceName);
     const remainingSec = Math.max(0, Math.floor((selected.expiresAt - Date.now()) / 1000));
+    const sessionInfo = selected.relaySessionId
+      ? `Bound Session ID: ${selected.relaySessionId}\n`
+      : '';
+    const attemptInfo = selected.attemptId ? `Attempt ID: ${selected.attemptId}\n` : '';
 
     const modalDetail =
       `Device Name: ${safeDeviceName}\n` +
+      sessionInfo +
+      attemptInfo +
       `Host SAS Code: ${selected.sas}\n` +
       `Client Key Fingerprint: ${selected.fingerprint}\n` +
       `Expires in: ${remainingSec} seconds\n\n` +

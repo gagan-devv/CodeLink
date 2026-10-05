@@ -22,20 +22,26 @@ export interface InitiateResult {
 
 export interface PendingPairingInfo {
   sessionToken: string;
+  attemptId: string;
   clientDeviceName: string;
   fingerprint: string;
   sas: string;
   createdAt: number;
   expiresAt: number;
+  relaySessionId?: string;
 }
 
 interface PendingPairing {
   sessionToken: string;
+  attemptId: string;
+  relaySessionId?: string;
   code: string;
   clientPublicKey: Uint8Array;
   clientDeviceName: string;
   createdAt: number;
+  expiresAt: number;
   approved: boolean;
+  approvalProof?: string;
 }
 
 export class PairingManager {
@@ -113,7 +119,9 @@ export class PairingManager {
   public verifyAndInitiate(
     code: string,
     clientPublicKeyBase64: string,
-    clientDeviceName: string
+    clientDeviceName: string,
+    attemptId?: string,
+    relaySessionId?: string
   ): InitiateResult {
     if (!this.activeChallenge) {
       return { success: false, error: 'No active pairing challenge' };
@@ -141,17 +149,25 @@ export class PairingManager {
     let clientPubKeyBytes: Uint8Array;
     try {
       clientPubKeyBytes = sodium.from_base64(clientPublicKeyBase64);
+      if (clientPubKeyBytes.length !== 32) {
+        return { success: false, error: 'Invalid client public key length (expected 32 bytes)' };
+      }
     } catch {
       return { success: false, error: 'Invalid client public key' };
     }
 
+    const now = Date.now();
     const sessionToken = sodium.to_hex(sodium.randombytes_buf(16));
+    const effectiveAttemptId = attemptId || sessionToken;
     this.pendingPairings.set(sessionToken, {
       sessionToken,
+      attemptId: effectiveAttemptId,
+      relaySessionId,
       code,
       clientPublicKey: clientPubKeyBytes,
       clientDeviceName,
-      createdAt: Date.now(),
+      createdAt: now,
+      expiresAt: now + PairingManager.DEFAULT_TTL_MS,
       approved: false,
     });
 
@@ -165,20 +181,29 @@ export class PairingManager {
     };
   }
 
+  private isExpired(p: PendingPairing, now: number): boolean {
+    if (p.expiresAt && now >= p.expiresAt) return true;
+    if (now - p.createdAt >= PairingManager.DEFAULT_TTL_MS) return true;
+    return false;
+  }
+
   private cleanExpiredPending(): void {
     const now = Date.now();
     for (const [token, p] of this.pendingPairings.entries()) {
-      if (now - p.createdAt > PairingManager.DEFAULT_TTL_MS) {
+      if (this.isExpired(p, now)) {
         this.pendingPairings.delete(token);
       }
     }
   }
 
-  public listPending(): PendingPairingInfo[] {
+  public listPending(activeRelaySessionId?: string): PendingPairingInfo[] {
     this.cleanExpiredPending();
     const result: PendingPairingInfo[] = [];
     for (const p of this.pendingPairings.values()) {
-      if (!p.approved) {
+      if (
+        !p.approved &&
+        (!activeRelaySessionId || !p.relaySessionId || p.relaySessionId === activeRelaySessionId)
+      ) {
         const hash = sodium.crypto_generichash(32, p.clientPublicKey, null);
         const fingerprint = sodium.to_hex(hash);
         const sas = PairingManager.computeClientSas(
@@ -188,21 +213,29 @@ export class PairingManager {
         );
         result.push({
           sessionToken: p.sessionToken,
+          attemptId: p.attemptId,
+          relaySessionId: p.relaySessionId,
           clientDeviceName: p.clientDeviceName,
           fingerprint,
           sas,
           createdAt: p.createdAt,
-          expiresAt: p.createdAt + PairingManager.DEFAULT_TTL_MS,
+          expiresAt: p.expiresAt,
         });
       }
     }
     return result;
   }
 
-  public getPendingPairing(sessionToken: string): PendingPairingInfo | null {
+  public getPendingPairing(
+    sessionToken: string,
+    activeRelaySessionId?: string
+  ): PendingPairingInfo | null {
     this.cleanExpiredPending();
     const p = this.pendingPairings.get(sessionToken);
     if (!p || p.approved) {
+      return null;
+    }
+    if (activeRelaySessionId && p.relaySessionId && p.relaySessionId !== activeRelaySessionId) {
       return null;
     }
     const hash = sodium.crypto_generichash(32, p.clientPublicKey, null);
@@ -214,18 +247,31 @@ export class PairingManager {
     );
     return {
       sessionToken: p.sessionToken,
+      attemptId: p.attemptId,
+      relaySessionId: p.relaySessionId,
       clientDeviceName: p.clientDeviceName,
       fingerprint,
       sas,
       createdAt: p.createdAt,
-      expiresAt: p.createdAt + PairingManager.DEFAULT_TTL_MS,
+      expiresAt: p.expiresAt,
     };
   }
 
-  public reject(sessionToken: string): boolean {
+  public reject(sessionToken: string, activeRelaySessionId?: string): boolean {
     this.cleanExpiredPending();
     const pending = this.pendingPairings.get(sessionToken);
     if (!pending) {
+      return false;
+    }
+    if (pending.approved) {
+      // Rejection cannot revoke an already-approved device; revocation must use PairedDeviceStore
+      return false;
+    }
+    if (
+      activeRelaySessionId &&
+      pending.relaySessionId &&
+      pending.relaySessionId !== activeRelaySessionId
+    ) {
       return false;
     }
     this.pendingPairings.delete(sessionToken);
@@ -234,6 +280,16 @@ export class PairingManager {
 
   public clearAllPending(): void {
     this.pendingPairings.clear();
+    this.activeChallenge = null;
+    this.attemptCount = 0;
+  }
+
+  public invalidateForRelaySession(sessionId: string): void {
+    for (const [token, p] of this.pendingPairings.entries()) {
+      if (!p.relaySessionId || p.relaySessionId === sessionId) {
+        this.pendingPairings.delete(token);
+      }
+    }
     this.activeChallenge = null;
     this.attemptCount = 0;
   }
@@ -280,10 +336,43 @@ export class PairingManager {
     return !pending.approved;
   }
 
-  public approve(sessionToken: string): boolean {
+  public approve(sessionToken: string, activeRelaySessionId?: string): boolean {
     this.cleanExpiredPending();
     const pending = this.pendingPairings.get(sessionToken);
     if (!pending || pending.approved) {
+      return false;
+    }
+
+    if (this.isExpired(pending, Date.now())) {
+      this.pendingPairings.delete(sessionToken);
+      return false;
+    }
+
+    if (
+      activeRelaySessionId &&
+      pending.relaySessionId &&
+      pending.relaySessionId !== activeRelaySessionId
+    ) {
+      return false;
+    }
+
+    // Derive host session keys and calculate authenticated approval proof
+    try {
+      const kxKeys = sodium.crypto_kx_server_session_keys(
+        this.hostKeyPair.publicKey,
+        this.hostKeyPair.privateKey,
+        pending.clientPublicKey
+      );
+      const hostPubKeyB64 = sodium.to_base64(this.hostKeyPair.publicKey);
+      const clientPubKeyB64 = sodium.to_base64(pending.clientPublicKey);
+      const transcript = `codelink-pairing-approval-v1:${pending.attemptId}:${pending.sessionToken}:${hostPubKeyB64}:${clientPubKeyB64}`;
+      const proofBytes = sodium.crypto_generichash(
+        32,
+        sodium.from_string(transcript),
+        kxKeys.sharedTx
+      );
+      pending.approvalProof = sodium.to_base64(proofBytes);
+    } catch {
       return false;
     }
 
@@ -312,11 +401,17 @@ export class PairingManager {
     return this.deviceStore;
   }
 
-  public getPairingStatus(sessionToken: string): {
+  public getPairingStatus(
+    sessionToken: string,
+    activeRelaySessionId?: string
+  ): {
     approved: boolean;
+    attemptId?: string;
+    sessionToken?: string;
     deviceId?: string;
     hostPublicKey?: string;
     clientPublicKey?: Uint8Array;
+    approvalProof?: string;
     error?: string;
   } {
     this.cleanExpiredPending();
@@ -324,15 +419,33 @@ export class PairingManager {
     if (!pending) {
       return { approved: false, error: 'Pairing session not found or expired' };
     }
+    if (this.isExpired(pending, Date.now())) {
+      this.pendingPairings.delete(sessionToken);
+      return { approved: false, error: 'Pairing session not found or expired' };
+    }
+    if (
+      activeRelaySessionId &&
+      pending.relaySessionId &&
+      pending.relaySessionId !== activeRelaySessionId
+    ) {
+      return { approved: false, error: 'Pairing session does not match active relay session' };
+    }
     if (!pending.approved) {
-      return { approved: false };
+      return {
+        approved: false,
+        attemptId: pending.attemptId,
+        sessionToken: pending.sessionToken,
+      };
     }
     const deviceId = `dev-${sodium.to_hex(sodium.crypto_generichash(8, pending.clientPublicKey, null))}`;
     return {
       approved: true,
+      attemptId: pending.attemptId,
+      sessionToken: pending.sessionToken,
       deviceId,
       hostPublicKey: sodium.to_base64(this.hostKeyPair.publicKey),
       clientPublicKey: pending.clientPublicKey,
+      approvalProof: pending.approvalProof,
     };
   }
 }

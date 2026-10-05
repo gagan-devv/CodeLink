@@ -195,6 +195,9 @@ export class DaemonRelayManager {
     session: ActiveSessionConfig,
     identity?: LaptopIdentityConfig
   ): Promise<void> {
+    if (this.activeSession && this.activeSession.sessionId !== session.sessionId) {
+      this.pairingManager?.invalidateForRelaySession(this.activeSession.sessionId);
+    }
     this.activeSession = { ...session };
 
     if (identity) {
@@ -223,6 +226,7 @@ export class DaemonRelayManager {
     this.tokenExpiresAt = 0;
     this.reconnectAttempts = 0;
     this.lastError = null;
+    this.pairingManager?.clearAllPending();
     clearPersistedSession();
 
     if (this.relayClient) {
@@ -343,6 +347,7 @@ export class DaemonRelayManager {
         pairingManager: this.pairingManager,
         deviceStore: this.deviceStore,
         hostKeyPair: this.hostKeyPair,
+        relaySessionId: this.activeSession.sessionId,
         onConnected: () => {
           this.reconnectAttempts = 0;
           this.lastError = null;

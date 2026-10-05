@@ -315,16 +315,28 @@ async function main(): Promise<void> {
       try {
         const res = await sendIpcCommand(socketPath, { command: 'list-pending' });
         if (res.ok) {
-          const data = res.data as { pending: PendingPairingInfo[] };
+          const data = res.data as {
+            pending: PendingPairingInfo[];
+            activeSessionId?: string | null;
+          };
           const list = data?.pending || [];
           if (list.length === 0) {
             console.log('No pending pairing requests.');
             break;
           }
           console.log('\n=== Pending Terminal Pairing Requests ===');
+          if (data.activeSessionId) {
+            console.log(`Active VS Code Session:  ${data.activeSessionId}`);
+          }
           for (const p of list) {
             const remainingSec = Math.max(0, Math.floor((p.expiresAt - Date.now()) / 1000));
             console.log(`\n  Request / Session Token: ${p.sessionToken}`);
+            if (p.attemptId) {
+              console.log(`  Attempt ID:              ${p.attemptId}`);
+            }
+            if (p.relaySessionId) {
+              console.log(`  Bound Session ID:        ${p.relaySessionId}`);
+            }
             console.log(`  Device Name:             ${p.clientDeviceName}`);
             console.log(`  Host SAS Code:           ${p.sas}`);
             console.log(`  Key Fingerprint:         ${p.fingerprint}`);
@@ -359,7 +371,10 @@ async function main(): Promise<void> {
           console.error('Failed to query pending pairings:', listRes.error);
           process.exit(1);
         }
-        const data = listRes.data as { pending: PendingPairingInfo[] };
+        const data = listRes.data as {
+          pending: PendingPairingInfo[];
+          activeSessionId?: string | null;
+        };
         const pending = (data?.pending || []).find((p) => p.sessionToken === sessionToken);
         if (!pending) {
           console.error(
@@ -370,6 +385,14 @@ async function main(): Promise<void> {
 
         console.log('\n=== Approve Terminal Device Pairing ===');
         console.log(`Request Token:          ${pending.sessionToken}`);
+        if (pending.attemptId) {
+          console.log(`Attempt ID:             ${pending.attemptId}`);
+        }
+        if (data.activeSessionId || pending.relaySessionId) {
+          console.log(
+            `Active Session ID:      ${data.activeSessionId || pending.relaySessionId || 'none'}`
+          );
+        }
         console.log(`Client Device Name:     ${pending.clientDeviceName}`);
         console.log(`Host-Computed SAS:      ${pending.sas}`);
         console.log(`Client Key Fingerprint: ${pending.fingerprint}`);
@@ -627,6 +650,47 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'list': {
+      try {
+        const res = await sendIpcCommand(socketPath, { command: 'list-sessions' });
+        if (res.ok) {
+          const sessions =
+            ((res.data as Record<string, unknown>)?.sessions as Array<Record<string, unknown>>) ||
+            [];
+          if (sessions.length === 0) {
+            console.log('No active terminal sessions.');
+          } else {
+            console.log(`--- Active Terminal Sessions (${sessions.length}) ---`);
+            for (const s of sessions) {
+              console.log(
+                `  Session ID: ${s.id} | Title: ${s.title || 'Terminal'} | Controller: ${s.controllerDeviceId || 'none'} | Observers: ${s.observerCount || 0}`
+              );
+            }
+          }
+        } else {
+          console.error('Failed to list sessions:', res.error);
+        }
+      } catch (err) {
+        console.error('Could not communicate with companion daemon:', err);
+      }
+      break;
+    }
+
+    case 'stop':
+    case 'stop-daemon': {
+      try {
+        const res = await sendIpcCommand(socketPath, { command: 'shutdown' });
+        if (res.ok) {
+          console.log('✓ Companion daemon shutdown signal sent.');
+        } else {
+          console.error('Failed to stop daemon:', res.error);
+        }
+      } catch {
+        console.log('Companion daemon is not running (or already stopped).');
+      }
+      break;
+    }
+
     default: {
       console.log(`Usage: codelink-terminal <command>
 
@@ -647,6 +711,7 @@ Commands:
   takeover <id>  Reclaim control of a session back to the local host
   audit [limit]  Display recent structured audit log records
   list           List all active terminal sessions
+  stop           Stop the running companion daemon
   start-daemon   Run companion daemon in foreground (for systemd or testing)
 
 Safety Model:

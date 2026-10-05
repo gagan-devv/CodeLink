@@ -27,7 +27,8 @@ export interface IpcCommand {
     | 'list-devices'
     | 'audit'
     | 'attach-session'
-    | 'detach-session';
+    | 'detach-session'
+    | 'shutdown';
   args?: Record<string, unknown>;
 }
 
@@ -150,6 +151,9 @@ export class SocketServer {
 
       case 'disable': {
         this.config.setEnabled(false);
+        if (this.pairingManager) {
+          this.pairingManager.clearAllPending();
+        }
         if (this.relayManager) {
           await this.relayManager.detachSession();
         }
@@ -250,10 +254,14 @@ export class SocketServer {
         if (!this.pairingManager) {
           return { ok: false, error: 'Pairing manager not initialized' };
         }
-        const pending = this.pairingManager.listPending();
+        const relayDetails = this.relayManager?.getStatusDetails();
+        const pending = this.pairingManager.listPending(relayDetails?.activeSessionId || undefined);
         return {
           ok: true,
-          data: { pending },
+          data: {
+            pending,
+            activeSessionId: relayDetails?.activeSessionId ?? null,
+          },
         };
       }
 
@@ -262,12 +270,19 @@ export class SocketServer {
         if (!sessionToken || !this.pairingManager) {
           return { ok: false, error: 'sessionToken required' };
         }
-        const ok = this.pairingManager.approve(sessionToken);
+        if (!this.config.isEnabled()) {
+          return { ok: false, error: 'Terminal service is disabled' };
+        }
+        const relayDetails = this.relayManager?.getStatusDetails();
+        if (!relayDetails?.activeSessionId) {
+          return { ok: false, error: 'Companion is not attached to an active session' };
+        }
+        const ok = this.pairingManager.approve(sessionToken, relayDetails.activeSessionId);
         return {
           ok,
           data: { approved: ok, sessionToken },
           error: !ok
-            ? 'Pending pairing request not found, expired, or already approved'
+            ? 'Pending pairing request not found, expired, session mismatch, or already approved'
             : undefined,
         };
       }
@@ -277,11 +292,32 @@ export class SocketServer {
         if (!sessionToken || !this.pairingManager) {
           return { ok: false, error: 'sessionToken required' };
         }
-        const ok = this.pairingManager.reject(sessionToken);
+        const relayDetails = this.relayManager?.getStatusDetails();
+        const ok = this.pairingManager.reject(
+          sessionToken,
+          relayDetails?.activeSessionId || undefined
+        );
         return {
           ok,
           data: { rejected: ok, sessionToken },
-          error: !ok ? 'Pending pairing request not found or already expired' : undefined,
+          error: !ok
+            ? 'Pending pairing request not found, session mismatch, or already expired'
+            : undefined,
+        };
+      }
+
+      case 'shutdown': {
+        setTimeout(async () => {
+          try {
+            await this.stop();
+          } catch {
+            // ignore
+          }
+          process.exit(0);
+        }, 50);
+        return {
+          ok: true,
+          data: { message: 'Companion daemon shutting down' },
         };
       }
 

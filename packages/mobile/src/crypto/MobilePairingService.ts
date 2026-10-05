@@ -5,50 +5,73 @@ import {
 } from '@codelink/protocol';
 import { wsManager } from '../ws/WsManager';
 import { SecureDeviceStore } from './SecureDeviceStore';
-import { toBase64, fromBase64, nobleKxClient, computeClientSas } from './nobleKx';
+import {
+  toBase64,
+  fromBase64,
+  toHex,
+  nobleKxClient,
+  computeClientSas,
+  computeApprovalProof,
+  compareBytesConstantTime,
+} from './nobleKx';
+import { secureRandomBytes } from './random';
 import { MobileE2EESession } from './MobileE2EESession';
 import { useTerminalStore } from '../terminal/useTerminalStore';
 
+export interface ActivePairingAttempt {
+  attemptId: string;
+  code: string;
+  expectedHostPublicKey: Uint8Array | null;
+  candidateHostPublicKey: Uint8Array | null;
+  sessionToken: string | null;
+  state: 'initiating' | 'pending_approval';
+  createdAt: number;
+}
+
 export class MobilePairingService {
-  private static pendingCode: string | null = null;
-  private static pendingHostPublicKey: Uint8Array | null = null;
+  private static activeAttempt: ActivePairingAttempt | null = null;
   private static pollTimer: NodeJS.Timeout | null = null;
   private static responseTimeoutTimer: NodeJS.Timeout | null = null;
-  private static currentAttemptId = 0;
 
   public static readonly INITIAL_RESPONSE_TIMEOUT_MS = 10_000;
   public static readonly APPROVAL_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
+  public static getActiveAttempt(): ActivePairingAttempt | null {
+    return MobilePairingService.activeAttempt;
+  }
+
   public static startApprovalPolling(
+    attemptId: string,
     sessionToken: string,
     intervalMs = 1500,
     maxDurationMs = MobilePairingService.APPROVAL_POLL_TIMEOUT_MS
   ): void {
     MobilePairingService.stopApprovalPolling();
-    const pollAttemptId = MobilePairingService.currentAttemptId;
     const startTime = Date.now();
 
     MobilePairingService.pollTimer = setInterval(() => {
-      if (pollAttemptId !== MobilePairingService.currentAttemptId) {
+      const attempt = MobilePairingService.activeAttempt;
+      if (!attempt || attempt.attemptId !== attemptId || attempt.state !== 'pending_approval') {
         MobilePairingService.stopApprovalPolling();
         return;
       }
+
       const state = useTerminalStore.getState();
       if (state.e2eeState !== 'pending_approval') {
         MobilePairingService.stopApprovalPolling();
         return;
       }
+
       if (Date.now() - startTime > maxDurationMs) {
-        MobilePairingService.stopApprovalPolling();
-        MobilePairingService.pendingCode = null;
-        MobilePairingService.pendingHostPublicKey = null;
+        MobilePairingService.cancelPairing();
         useTerminalStore
           .getState()
           .setE2EEError('Pairing approval timed out after 5 minutes. Please try pairing again.');
         return;
       }
+
       try {
-        wsManager.sendTerminal('TERM_PAIR_STATUS', { sessionToken });
+        wsManager.sendTerminal('TERM_PAIR_STATUS', { attemptId, sessionToken });
       } catch (err) {
         MobilePairingService.stopApprovalPolling();
         const msg = err instanceof Error ? err.message : String(err);
@@ -74,27 +97,41 @@ export class MobilePairingService {
   }
 
   public static cancelPairing(): void {
-    MobilePairingService.currentAttemptId++;
+    MobilePairingService.activeAttempt = null;
     MobilePairingService.stopResponseTimeout();
     MobilePairingService.stopApprovalPolling();
-    MobilePairingService.pendingCode = null;
-    MobilePairingService.pendingHostPublicKey = null;
     useTerminalStore.getState().clearE2EE();
   }
 
   public static handleTermError(code: string, message: string): void {
-    MobilePairingService.stopResponseTimeout();
-    MobilePairingService.stopApprovalPolling();
-    MobilePairingService.pendingCode = null;
-    MobilePairingService.pendingHostPublicKey = null;
+    // Only handle terminal errors that are pairing-relevant or occur during an active pairing lifecycle
+    const attempt = MobilePairingService.activeAttempt;
+    const currentState = useTerminalStore.getState().e2eeState;
 
-    if (code === 'COMPANION_NOT_CONNECTED') {
+    if (code === 'DEVICE_NOT_APPROVED' || code === 'PAIRING_REVOKED') {
+      MobilePairingService.cancelPairing();
+      SecureDeviceStore.clearPairedHost().catch(() => {});
       useTerminalStore
         .getState()
-        .setE2EEError(
-          `[COMPANION_NOT_CONNECTED] ${message || 'Terminal companion daemon is not connected to this session'}. Please start/enable the companion service on your host machine ("codelink-terminal enable" or via VS Code status bar) and ensure it is attached.`
-        );
-    } else {
+        .setE2EEError(`[${code}] Device pairing was revoked or refused by host companion.`);
+      return;
+    }
+
+    if (code === 'COMPANION_NOT_CONNECTED') {
+      if (currentState === 'initiating' || currentState === 'pending_approval' || attempt) {
+        MobilePairingService.cancelPairing();
+        useTerminalStore
+          .getState()
+          .setE2EEError(
+            `[COMPANION_NOT_CONNECTED] ${message || 'Terminal companion daemon is not connected to this session'}. Please start/enable the companion service on your host machine ("codelink-terminal enable" or via VS Code status bar) and ensure it is attached.`
+          );
+      }
+      return;
+    }
+
+    // If currently initiating or pending approval, terminate pairing attempt on error
+    if (attempt) {
+      MobilePairingService.cancelPairing();
       useTerminalStore.getState().setE2EEError(`[${code}] ${message}`);
     }
   }
@@ -113,23 +150,57 @@ export class MobilePairingService {
       throw new Error('WebSocket is not connected. Reconnect to session before pairing.');
     }
 
-    MobilePairingService.currentAttemptId++;
-    const attemptId = MobilePairingService.currentAttemptId;
-    MobilePairingService.stopResponseTimeout();
-    MobilePairingService.stopApprovalPolling();
+    // Cancel any previous attempt
+    MobilePairingService.cancelPairing();
 
-    const keyPair = await SecureDeviceStore.getOrCreateClientKeyPair();
-    MobilePairingService.pendingCode = trimmedCode;
-
+    let expectedHostPublicKey: Uint8Array | null = null;
     if (hostPublicKeyBase64) {
-      MobilePairingService.pendingHostPublicKey = fromBase64(hostPublicKeyBase64);
-    } else {
-      MobilePairingService.pendingHostPublicKey = null;
+      try {
+        expectedHostPublicKey = fromBase64(hostPublicKeyBase64);
+        if (expectedHostPublicKey.length !== 32) {
+          throw new Error('Expected 32-byte host public key');
+        }
+      } catch (err) {
+        throw new Error(
+          `Invalid trusted host public key: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
+
+    const attemptId = toHex(secureRandomBytes(16));
+    const attempt: ActivePairingAttempt = {
+      attemptId,
+      code: trimmedCode,
+      expectedHostPublicKey,
+      candidateHostPublicKey: null,
+      sessionToken: null,
+      state: 'initiating',
+      createdAt: Date.now(),
+    };
+    MobilePairingService.activeAttempt = attempt;
 
     useTerminalStore.getState().setPairingState('initiating');
 
+    let keyPair;
+    try {
+      keyPair = await SecureDeviceStore.getOrCreateClientKeyPair();
+    } catch (err) {
+      MobilePairingService.cancelPairing();
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to load device keypair: ${msg}`);
+      throw err;
+    }
+
+    // Verify attempt wasn't cancelled while loading keypair
+    if (
+      !MobilePairingService.activeAttempt ||
+      MobilePairingService.activeAttempt.attemptId !== attemptId
+    ) {
+      return;
+    }
+
     const payload: TerminalPairPayload = {
+      attemptId,
       code: trimmedCode,
       clientPublicKey: toBase64(keyPair.publicKey),
       clientDeviceName: deviceName || 'CodeLink Mobile',
@@ -137,13 +208,13 @@ export class MobilePairingService {
 
     // Start 10-second initial response timeout
     MobilePairingService.responseTimeoutTimer = setTimeout(() => {
-      if (attemptId !== MobilePairingService.currentAttemptId) {
+      if (
+        !MobilePairingService.activeAttempt ||
+        MobilePairingService.activeAttempt.attemptId !== attemptId
+      ) {
         return;
       }
-      MobilePairingService.stopResponseTimeout();
-      MobilePairingService.stopApprovalPolling();
-      MobilePairingService.pendingCode = null;
-      MobilePairingService.pendingHostPublicKey = null;
+      MobilePairingService.cancelPairing();
       useTerminalStore
         .getState()
         .setE2EEError(
@@ -154,9 +225,7 @@ export class MobilePairingService {
     try {
       wsManager.sendTerminal('TERM_PAIR', payload);
     } catch (err) {
-      MobilePairingService.stopResponseTimeout();
-      MobilePairingService.pendingCode = null;
-      MobilePairingService.pendingHostPublicKey = null;
+      MobilePairingService.cancelPairing();
       const msg = err instanceof Error ? err.message : String(err);
       useTerminalStore.getState().setE2EEError(`Failed to send pairing request: ${msg}`);
       throw err;
@@ -164,62 +233,118 @@ export class MobilePairingService {
   }
 
   public static async handlePairResp(resp: TerminalPairRespPayload): Promise<void> {
-    MobilePairingService.stopResponseTimeout();
-
-    if (!resp.success) {
-      MobilePairingService.pendingCode = null;
-      MobilePairingService.pendingHostPublicKey = null;
-      MobilePairingService.stopApprovalPolling();
-      useTerminalStore.getState().setE2EEError(resp.error || 'Pairing rejected');
+    const attempt = MobilePairingService.activeAttempt;
+    if (
+      !attempt ||
+      attempt.state !== 'initiating' ||
+      (resp.attemptId && resp.attemptId !== attempt.attemptId)
+    ) {
+      // Discard stale or unsolicited response
       return;
     }
 
-    if (resp.hostPublicKey) {
-      try {
-        MobilePairingService.pendingHostPublicKey = fromBase64(resp.hostPublicKey);
-      } catch {
-        MobilePairingService.stopApprovalPolling();
+    MobilePairingService.stopResponseTimeout();
+
+    if (!resp.success) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore.getState().setE2EEError(resp.error || 'Pairing rejected by host companion');
+      return;
+    }
+
+    if (!resp.sessionToken || typeof resp.sessionToken !== 'string') {
+      MobilePairingService.cancelPairing();
+      useTerminalStore.getState().setE2EEError('Malformed pairing response: missing session token');
+      return;
+    }
+
+    if (!resp.hostPublicKey || typeof resp.hostPublicKey !== 'string') {
+      MobilePairingService.cancelPairing();
+      useTerminalStore
+        .getState()
+        .setE2EEError('Malformed pairing response: missing candidate host public key');
+      return;
+    }
+
+    let hostPublicKeyBytes: Uint8Array;
+    try {
+      hostPublicKeyBytes = fromBase64(resp.hostPublicKey);
+      if (hostPublicKeyBytes.length !== 32) {
+        MobilePairingService.cancelPairing();
         useTerminalStore
           .getState()
-          .setE2EEError('Malformed host public key received from pairing response');
+          .setE2EEError('Malformed host public key received (expected 32 bytes)');
+        return;
+      }
+    } catch {
+      MobilePairingService.cancelPairing();
+      useTerminalStore
+        .getState()
+        .setE2EEError('Malformed host public key received from pairing response');
+      return;
+    }
+
+    // If an out-of-band host key was provided (e.g. from QR code), enforce exact match
+    if (attempt.expectedHostPublicKey) {
+      if (!compareBytesConstantTime(hostPublicKeyBytes, attempt.expectedHostPublicKey)) {
+        MobilePairingService.cancelPairing();
+        useTerminalStore
+          .getState()
+          .setE2EEError(
+            'Security warning: Candidate host public key does not match trusted key from QR code.'
+          );
         return;
       }
     }
 
     const keyPair = await SecureDeviceStore.getClientKeyPair();
-    let localSas = resp.sas || '';
-
-    // If host public key was provided (either via QR code or returned in pair response), verify SAS matches locally
-    if (MobilePairingService.pendingHostPublicKey && keyPair && MobilePairingService.pendingCode) {
-      const computedSas = computeClientSas(
-        MobilePairingService.pendingHostPublicKey,
-        keyPair.publicKey,
-        MobilePairingService.pendingCode
-      );
-      if (resp.sas && resp.sas !== computedSas) {
-        MobilePairingService.stopApprovalPolling();
-        MobilePairingService.pendingCode = null;
-        MobilePairingService.pendingHostPublicKey = null;
-        useTerminalStore
-          .getState()
-          .setE2EEError('Security warning: SAS mismatch. Possible MITM attack.');
-        return;
-      }
-      localSas = computedSas;
+    // Guard against cancellation during async read
+    if (
+      !MobilePairingService.activeAttempt ||
+      MobilePairingService.activeAttempt.attemptId !== attempt.attemptId
+    ) {
+      return;
     }
 
-    useTerminalStore.getState().setPendingApproval(resp.sessionToken || '', localSas);
-    if (resp.sessionToken) {
-      MobilePairingService.startApprovalPolling(resp.sessionToken);
+    if (!keyPair) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore.getState().setE2EEError('Client keypair missing during SAS verification');
+      return;
     }
+
+    // Compute SAS locally from (hostPublicKey, clientPublicKey, pairingCode)
+    const computedSas = computeClientSas(hostPublicKeyBytes, keyPair.publicKey, attempt.code);
+    if (resp.sas && resp.sas !== computedSas) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore
+        .getState()
+        .setE2EEError('Security warning: SAS mismatch. Possible MITM attack.');
+      return;
+    }
+
+    // Transition to pending_approval state
+    attempt.state = 'pending_approval';
+    attempt.sessionToken = resp.sessionToken;
+    attempt.candidateHostPublicKey = hostPublicKeyBytes;
+
+    useTerminalStore.getState().setPendingApproval(resp.sessionToken, computedSas);
+    MobilePairingService.startApprovalPolling(attempt.attemptId, resp.sessionToken);
   }
 
   public static async handlePairStatus(status: TerminalPairStatusRespPayload): Promise<void> {
-    if (!status.approved || !status.hostPublicKey || !status.deviceId) {
+    const attempt = MobilePairingService.activeAttempt;
+    if (
+      !attempt ||
+      attempt.state !== 'pending_approval' ||
+      (status.attemptId && status.attemptId !== attempt.attemptId) ||
+      (status.sessionToken && status.sessionToken !== attempt.sessionToken)
+    ) {
+      // Discard stale or unsolicited approval status
+      return;
+    }
+
+    if (!status.approved) {
       if (status.error) {
-        MobilePairingService.stopApprovalPolling();
-        MobilePairingService.pendingCode = null;
-        MobilePairingService.pendingHostPublicKey = null;
+        MobilePairingService.cancelPairing();
         useTerminalStore.getState().setE2EEError(status.error);
       }
       return;
@@ -227,46 +352,120 @@ export class MobilePairingService {
 
     MobilePairingService.stopApprovalPolling();
 
-    const keyPair = await SecureDeviceStore.getClientKeyPair();
-    if (!keyPair) {
-      useTerminalStore.getState().setE2EEError('Client keypair missing during pairing completion');
+    if (!status.hostPublicKey || !status.deviceId) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore
+        .getState()
+        .setE2EEError('Malformed approval response: missing host public key or device ID');
       return;
     }
 
-    // Verify host public key didn't change from initial SAS verification
-    if (MobilePairingService.pendingHostPublicKey) {
-      const expectedHostPubBase64 = toBase64(MobilePairingService.pendingHostPublicKey);
-      if (status.hostPublicKey !== expectedHostPubBase64) {
-        MobilePairingService.pendingCode = null;
-        MobilePairingService.pendingHostPublicKey = null;
+    let hostPublicKeyBytes: Uint8Array;
+    try {
+      hostPublicKeyBytes = fromBase64(status.hostPublicKey);
+      if (hostPublicKeyBytes.length !== 32) {
+        MobilePairingService.cancelPairing();
         useTerminalStore
           .getState()
-          .setE2EEError('Security warning: Host public key changed during pairing approval.');
+          .setE2EEError('Invalid host public key length in approval response');
         return;
       }
-    }
-
-    let hostPublicKey: Uint8Array;
-    try {
-      hostPublicKey = fromBase64(status.hostPublicKey);
     } catch {
+      MobilePairingService.cancelPairing();
       useTerminalStore.getState().setE2EEError('Malformed host public key in approval response');
       return;
     }
 
-    const sessionKeys = nobleKxClient(keyPair.publicKey, keyPair.privateKey, hostPublicKey);
+    // Verify host public key matches the candidate host key authenticated via SAS
+    if (
+      attempt.candidateHostPublicKey &&
+      !compareBytesConstantTime(hostPublicKeyBytes, attempt.candidateHostPublicKey)
+    ) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore
+        .getState()
+        .setE2EEError('Security warning: Host public key changed during pairing approval.');
+      return;
+    }
 
-    const session = new MobileE2EESession('client', sessionKeys.sharedTx, sessionKeys.sharedRx);
+    // Verify host approval cryptographic proof
+    if (!status.approvalProof) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore
+        .getState()
+        .setE2EEError(
+          'Security warning: Host approval missing cryptographic confirmation proof. Refusing unauthenticated approval.'
+        );
+      return;
+    }
 
-    await SecureDeviceStore.setPairedHost({
-      hostPublicKey: status.hostPublicKey,
-      deviceId: status.deviceId,
-      pairedAt: Date.now(),
-    });
+    const keyPair = await SecureDeviceStore.getClientKeyPair();
+    // Guard against cancellation during async read
+    if (
+      !MobilePairingService.activeAttempt ||
+      MobilePairingService.activeAttempt.attemptId !== attempt.attemptId
+    ) {
+      return;
+    }
+
+    if (!keyPair) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore.getState().setE2EEError('Client keypair missing during pairing completion');
+      return;
+    }
+
+    const sessionKeys = nobleKxClient(keyPair.publicKey, keyPair.privateKey, hostPublicKeyBytes);
+    const expectedProof = computeApprovalProof(
+      attempt.attemptId,
+      attempt.sessionToken || '',
+      hostPublicKeyBytes,
+      keyPair.publicKey,
+      sessionKeys.sharedRx
+    );
+
+    if (status.approvalProof !== expectedProof) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore
+        .getState()
+        .setE2EEError(
+          'Security warning: Invalid host approval confirmation proof. Refusing unauthenticated approval.'
+        );
+      return;
+    }
+
+    // Save to secure device store
+    try {
+      await SecureDeviceStore.setPairedHost({
+        hostPublicKey: status.hostPublicKey,
+        deviceId: status.deviceId,
+        pairedAt: Date.now(),
+      });
+    } catch (err) {
+      MobilePairingService.cancelPairing();
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to save paired device key: ${msg}`);
+      return;
+    }
+
+    // Guard again after async write
+    if (
+      !MobilePairingService.activeAttempt ||
+      MobilePairingService.activeAttempt.attemptId !== attempt.attemptId
+    ) {
+      // Reverted or cancelled while saving: purge stored state to prevent resurrection
+      await SecureDeviceStore.clearPairedHost().catch(() => {});
+      return;
+    }
+
+    const session = new MobileE2EESession(
+      'client',
+      sessionKeys.sharedTx,
+      sessionKeys.sharedRx,
+      attempt.sessionToken || undefined
+    );
 
     useTerminalStore.getState().setE2EESession(session, status.deviceId);
-    MobilePairingService.pendingCode = null;
-    MobilePairingService.pendingHostPublicKey = null;
+    MobilePairingService.activeAttempt = null;
   }
 
   public static async restoreSessionIfPaired(): Promise<boolean> {
@@ -282,7 +481,12 @@ export class MobilePairingService {
     try {
       const hostPublicKey = fromBase64(pairedHost.hostPublicKey);
       const sessionKeys = nobleKxClient(keyPair.publicKey, keyPair.privateKey, hostPublicKey);
-      const session = new MobileE2EESession('client', sessionKeys.sharedTx, sessionKeys.sharedRx);
+      const session = new MobileE2EESession(
+        'client',
+        sessionKeys.sharedTx,
+        sessionKeys.sharedRx,
+        pairedHost.deviceId
+      );
       useTerminalStore.getState().setE2EESession(session, pairedHost.deviceId);
       return true;
     } catch (err) {

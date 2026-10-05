@@ -38,43 +38,72 @@ export default function TerminalScreen() {
   // Request session list on mount or connect
   useEffect(() => {
     if (isConnected) {
-      wsManager.sendTerminal('TERM_ATTACH', {
-        sessionId: '',
-        requestedMode: 'observe',
-      });
+      try {
+        wsManager.sendTerminal('TERM_ATTACH', {
+          sessionId: '',
+          requestedMode: 'observe',
+        });
+      } catch (err) {
+        console.warn('[TerminalScreen] Failed to attach on connect:', err);
+      }
     }
   }, [isConnected]);
 
   const handleCreateSession = () => {
     const nextIndex = sessions.length + 1;
-    wsManager.sendTerminal('TERM_NEW_SESSION', {
-      title: `Terminal ${nextIndex}`,
-      cols: 80,
-      rows: 24,
-    });
+    try {
+      wsManager.sendTerminal('TERM_NEW_SESSION', {
+        title: `Terminal ${nextIndex}`,
+        cols: 80,
+        rows: 24,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to create terminal session: ${msg}`);
+    }
   };
 
   const handleCloseSession = (sessionId: string) => {
-    wsManager.sendTerminal('TERM_CLOSE_SESSION', { sessionId });
+    try {
+      wsManager.sendTerminal('TERM_CLOSE_SESSION', { sessionId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to close session: ${msg}`);
+    }
   };
 
   const handleSendInput = (data: string) => {
     if (!activeSessionId) return;
-    useTerminalStore.getState().sendEncryptedInput(activeSessionId, data);
+    try {
+      useTerminalStore.getState().sendEncryptedInput(activeSessionId, data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to send terminal input: ${msg}`);
+    }
   };
 
   const handleRequestMode = (mode: 'observe' | 'control') => {
     if (!activeSessionId) return;
-    wsManager.sendTerminal('TERM_ATTACH', {
-      sessionId: activeSessionId,
-      requestedMode: mode,
-    });
+    try {
+      wsManager.sendTerminal('TERM_ATTACH', {
+        sessionId: activeSessionId,
+        requestedMode: mode,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Failed to change mode: ${msg}`);
+    }
   };
 
   const handleInitiatePairing = async () => {
     if (!pairingCodeInput.trim()) return;
-    await MobilePairingService.initiatePairing(pairingCodeInput.trim());
-    setPairingCodeInput('');
+    try {
+      await MobilePairingService.initiatePairing(pairingCodeInput.trim());
+      setPairingCodeInput('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useTerminalStore.getState().setE2EEError(`Pairing failed: ${msg}`);
+    }
   };
 
   const handleDismissError = () => {

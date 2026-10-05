@@ -153,9 +153,11 @@ export interface EncryptedPacket {
   seq: number;
   nonce: string;
   ciphertext: string;
+  epoch?: string;
 }
 
 export interface TerminalPairPayload {
+  attemptId: string;
   code: string;
   clientPublicKey: string;
   clientDeviceName: string;
@@ -163,6 +165,7 @@ export interface TerminalPairPayload {
 
 export interface TerminalPairRespPayload {
   success: boolean;
+  attemptId?: string;
   sessionToken?: string;
   sas?: string;
   hostPublicKey?: string;
@@ -170,13 +173,17 @@ export interface TerminalPairRespPayload {
 }
 
 export interface TerminalPairStatusPayload {
+  attemptId: string;
   sessionToken: string;
 }
 
 export interface TerminalPairStatusRespPayload {
   approved: boolean;
+  attemptId?: string;
+  sessionToken?: string;
   deviceId?: string;
   hostPublicKey?: string;
+  approvalProof?: string;
   error?: string;
 }
 
