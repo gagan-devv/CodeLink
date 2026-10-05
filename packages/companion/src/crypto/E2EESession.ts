@@ -7,6 +7,19 @@ export interface EncryptedPacket {
   epoch?: string;
 }
 
+export function computeEpoch(
+  clientNonce: Uint8Array | string,
+  hostNonce: Uint8Array | string
+): string {
+  const cBytes = typeof clientNonce === 'string' ? sodium.from_hex(clientNonce) : clientNonce;
+  const hBytes = typeof hostNonce === 'string' ? sodium.from_hex(hostNonce) : hostNonce;
+  const combined = new Uint8Array(cBytes.length + hBytes.length);
+  combined.set(cBytes, 0);
+  combined.set(hBytes, cBytes.length);
+  const hash = sodium.crypto_generichash(32, combined, null);
+  return sodium.to_hex(hash);
+}
+
 export class E2EESession {
   private outboundSeq = 0;
   private lastInboundSeq = 0;
@@ -37,13 +50,17 @@ export class E2EESession {
   }
 
   public encrypt(plaintext: string): EncryptedPacket {
+    if (!this.epoch) {
+      throw new Error('E2EE session has no epoch: cannot encrypt without established epoch');
+    }
+
     this.outboundSeq++;
     const seq = this.outboundSeq;
 
     const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
 
     const messageBytes = sodium.from_string(plaintext);
-    const additionalDataStr = this.epoch ? `epoch:${this.epoch}:seq:${seq}` : `seq:${seq}`;
+    const additionalDataStr = `epoch:${this.epoch}:seq:${seq}`;
     const additionalData = sodium.from_string(additionalDataStr);
 
     const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
@@ -63,7 +80,11 @@ export class E2EESession {
   }
 
   public decrypt(packet: EncryptedPacket): string {
-    if (this.epoch && packet.epoch !== this.epoch) {
+    if (!this.epoch) {
+      throw new Error('E2EE session has no epoch: cannot decrypt without established epoch');
+    }
+
+    if (packet.epoch !== this.epoch) {
       throw new Error(`Replay detected: packet epoch mismatch (${packet.epoch} !== ${this.epoch})`);
     }
 
@@ -77,9 +98,7 @@ export class E2EESession {
     try {
       const nonceBytes = sodium.from_base64(packet.nonce);
       const ciphertextBytes = sodium.from_base64(packet.ciphertext);
-      const additionalDataStr = packet.epoch
-        ? `epoch:${packet.epoch}:seq:${packet.seq}`
-        : `seq:${packet.seq}`;
+      const additionalDataStr = `epoch:${packet.epoch}:seq:${packet.seq}`;
       const additionalData = sodium.from_string(additionalDataStr);
 
       decryptedBytes = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(

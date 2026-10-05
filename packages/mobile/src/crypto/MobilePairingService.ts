@@ -24,7 +24,10 @@ export interface ActivePairingAttempt {
   expectedHostPublicKey: Uint8Array | null;
   candidateHostPublicKey: Uint8Array | null;
   sessionToken: string | null;
-  state: 'initiating' | 'pending_approval';
+  sas: string | null;
+  state: 'initiating' | 'awaiting_user_confirmation' | 'pending_approval';
+  userConfirmedSas: boolean;
+  pendingApprovedStatus: TerminalPairStatusRespPayload | null;
   createdAt: number;
 }
 
@@ -32,12 +35,40 @@ export class MobilePairingService {
   private static activeAttempt: ActivePairingAttempt | null = null;
   private static pollTimer: NodeJS.Timeout | null = null;
   private static responseTimeoutTimer: NodeJS.Timeout | null = null;
+  private static pendingAttachClientNonce: string | null = null;
 
   public static readonly INITIAL_RESPONSE_TIMEOUT_MS = 10_000;
   public static readonly APPROVAL_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
   public static getActiveAttempt(): ActivePairingAttempt | null {
     return MobilePairingService.activeAttempt;
+  }
+
+  public static getPendingAttachClientNonce(): string | null {
+    return MobilePairingService.pendingAttachClientNonce;
+  }
+
+  public static clearPendingAttachClientNonce(): void {
+    MobilePairingService.pendingAttachClientNonce = null;
+  }
+
+  public static sendAttach(
+    sessionId = '',
+    requestedMode: 'observe' | 'control' = 'observe',
+    lastOffset?: number
+  ): void {
+    const clientNonceBytes = secureRandomBytes(16);
+    const clientNonce = toHex(clientNonceBytes);
+    MobilePairingService.pendingAttachClientNonce = clientNonce;
+
+    const deviceId = useTerminalStore.getState().deviceId;
+    wsManager.sendTerminal('TERM_ATTACH', {
+      sessionId,
+      requestedMode,
+      lastOffset,
+      deviceId: deviceId || undefined,
+      clientNonce,
+    });
   }
 
   public static startApprovalPolling(
@@ -51,13 +82,20 @@ export class MobilePairingService {
 
     MobilePairingService.pollTimer = setInterval(() => {
       const attempt = MobilePairingService.activeAttempt;
-      if (!attempt || attempt.attemptId !== attemptId || attempt.state !== 'pending_approval') {
+      if (
+        !attempt ||
+        attempt.attemptId !== attemptId ||
+        (attempt.state !== 'awaiting_user_confirmation' && attempt.state !== 'pending_approval')
+      ) {
         MobilePairingService.stopApprovalPolling();
         return;
       }
 
       const state = useTerminalStore.getState();
-      if (state.e2eeState !== 'pending_approval') {
+      if (
+        state.e2eeState !== 'awaiting_user_confirmation' &&
+        state.e2eeState !== 'pending_approval'
+      ) {
         MobilePairingService.stopApprovalPolling();
         return;
       }
@@ -174,7 +212,10 @@ export class MobilePairingService {
       expectedHostPublicKey,
       candidateHostPublicKey: null,
       sessionToken: null,
+      sas: null,
       state: 'initiating',
+      userConfirmedSas: false,
+      pendingApprovedStatus: null,
       createdAt: Date.now(),
     };
     MobilePairingService.activeAttempt = attempt;
@@ -237,9 +278,10 @@ export class MobilePairingService {
     if (
       !attempt ||
       attempt.state !== 'initiating' ||
-      (resp.attemptId && resp.attemptId !== attempt.attemptId)
+      !resp.attemptId ||
+      resp.attemptId !== attempt.attemptId
     ) {
-      // Discard stale or unsolicited response
+      // Discard missing, stale or unsolicited response
       return;
     }
 
@@ -311,8 +353,14 @@ export class MobilePairingService {
       return;
     }
 
-    // Compute SAS locally from (hostPublicKey, clientPublicKey, pairingCode)
-    const computedSas = computeClientSas(hostPublicKeyBytes, keyPair.publicKey, attempt.code);
+    // Compute SAS locally from (hostPublicKey, clientPublicKey, pairingCode, attemptId, sessionToken)
+    const computedSas = computeClientSas(
+      hostPublicKeyBytes,
+      keyPair.publicKey,
+      attempt.code,
+      attempt.attemptId,
+      resp.sessionToken
+    );
     if (resp.sas && resp.sas !== computedSas) {
       MobilePairingService.cancelPairing();
       useTerminalStore
@@ -321,24 +369,49 @@ export class MobilePairingService {
       return;
     }
 
-    // Transition to pending_approval state
-    attempt.state = 'pending_approval';
+    // Transition to awaiting_user_confirmation state
+    attempt.state = 'awaiting_user_confirmation';
     attempt.sessionToken = resp.sessionToken;
     attempt.candidateHostPublicKey = hostPublicKeyBytes;
+    attempt.sas = computedSas;
+    attempt.userConfirmedSas = false;
 
-    useTerminalStore.getState().setPendingApproval(resp.sessionToken, computedSas);
+    useTerminalStore.getState().setAwaitingUserConfirmation(resp.sessionToken, computedSas);
     MobilePairingService.startApprovalPolling(attempt.attemptId, resp.sessionToken);
+  }
+
+  public static async confirmSasMatch(): Promise<void> {
+    const attempt = MobilePairingService.activeAttempt;
+    if (
+      !attempt ||
+      (attempt.state !== 'awaiting_user_confirmation' && attempt.state !== 'pending_approval')
+    ) {
+      return;
+    }
+
+    attempt.userConfirmedSas = true;
+
+    if (attempt.pendingApprovedStatus) {
+      const pendingStatus = attempt.pendingApprovedStatus;
+      attempt.pendingApprovedStatus = null;
+      await MobilePairingService.finalizePairing(pendingStatus);
+    } else {
+      attempt.state = 'pending_approval';
+      useTerminalStore.getState().setPendingApproval(attempt.sessionToken!, attempt.sas || '');
+    }
   }
 
   public static async handlePairStatus(status: TerminalPairStatusRespPayload): Promise<void> {
     const attempt = MobilePairingService.activeAttempt;
     if (
       !attempt ||
-      attempt.state !== 'pending_approval' ||
-      (status.attemptId && status.attemptId !== attempt.attemptId) ||
-      (status.sessionToken && status.sessionToken !== attempt.sessionToken)
+      (attempt.state !== 'awaiting_user_confirmation' && attempt.state !== 'pending_approval') ||
+      !status.attemptId ||
+      status.attemptId !== attempt.attemptId ||
+      !status.sessionToken ||
+      status.sessionToken !== attempt.sessionToken
     ) {
-      // Discard stale or unsolicited approval status
+      // Discard missing, stale or unsolicited approval status
       return;
     }
 
@@ -349,6 +422,18 @@ export class MobilePairingService {
       }
       return;
     }
+
+    if (!attempt.userConfirmedSas) {
+      attempt.pendingApprovedStatus = status;
+      return;
+    }
+
+    await MobilePairingService.finalizePairing(status);
+  }
+
+  private static async finalizePairing(status: TerminalPairStatusRespPayload): Promise<void> {
+    const attempt = MobilePairingService.activeAttempt;
+    if (!attempt) return;
 
     MobilePairingService.stopApprovalPolling();
 
@@ -376,7 +461,7 @@ export class MobilePairingService {
       return;
     }
 
-    // Verify host public key matches the candidate host key authenticated via SAS
+    // Verify host public key matches candidate host key authenticated via SAS
     if (
       attempt.candidateHostPublicKey &&
       !compareBytesConstantTime(hostPublicKeyBytes, attempt.candidateHostPublicKey)
@@ -423,7 +508,9 @@ export class MobilePairingService {
       sessionKeys.sharedRx
     );
 
-    if (status.approvalProof !== expectedProof) {
+    const statusProofBytes = fromBase64(status.approvalProof);
+    const expectedProofBytes = fromBase64(expectedProof);
+    if (!compareBytesConstantTime(statusProofBytes, expectedProofBytes)) {
       MobilePairingService.cancelPairing();
       useTerminalStore
         .getState()
@@ -457,15 +544,20 @@ export class MobilePairingService {
       return;
     }
 
-    const session = new MobileE2EESession(
-      'client',
-      sessionKeys.sharedTx,
-      sessionKeys.sharedRx,
-      attempt.sessionToken || undefined
-    );
+    // Note: Session is instantiated without an epoch; epoch is established via nonces on attach
+    const session = new MobileE2EESession('client', sessionKeys.sharedTx, sessionKeys.sharedRx);
 
     useTerminalStore.getState().setE2EESession(session, status.deviceId);
     MobilePairingService.activeAttempt = null;
+
+    // Immediately send attach with clientNonce to establish connection epoch
+    if (wsManager.isConnected()) {
+      try {
+        MobilePairingService.sendAttach('', 'observe');
+      } catch {
+        // ignore
+      }
+    }
   }
 
   public static async restoreSessionIfPaired(): Promise<boolean> {
@@ -481,12 +573,8 @@ export class MobilePairingService {
     try {
       const hostPublicKey = fromBase64(pairedHost.hostPublicKey);
       const sessionKeys = nobleKxClient(keyPair.publicKey, keyPair.privateKey, hostPublicKey);
-      const session = new MobileE2EESession(
-        'client',
-        sessionKeys.sharedTx,
-        sessionKeys.sharedRx,
-        pairedHost.deviceId
-      );
+      // Restored session has no epoch until connection/attach nonces are exchanged
+      const session = new MobileE2EESession('client', sessionKeys.sharedTx, sessionKeys.sharedRx);
       useTerminalStore.getState().setE2EESession(session, pairedHost.deviceId);
       return true;
     } catch (err) {

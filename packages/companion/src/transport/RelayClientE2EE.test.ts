@@ -18,6 +18,7 @@ import {
   TerminalPairRespPayload,
   TerminalPairStatusPayload,
   TerminalPairStatusRespPayload,
+  TerminalAttachRespPayload,
   EncryptedPacket,
 } from '@codelink/protocol';
 import {
@@ -152,6 +153,7 @@ describe('RelayClient E2EE, Pairing Handshake, and Relay Opacity', () => {
     });
 
     const pairPayload: TerminalPairPayload = {
+      attemptId: 'att-e2ee-1',
       code: challenge.code,
       clientPublicKey: clientPkB64,
       clientDeviceName: 'Pixel 8 Pro',
@@ -163,7 +165,13 @@ describe('RelayClient E2EE, Pairing Handshake, and Relay Opacity', () => {
     expect(pairResp.sessionToken).toBeDefined();
 
     // 4. Verify SAS matches on both sides
-    const mobileSas = computeClientSas(hostKeys.publicKey, clientKx.publicKey, challenge.code);
+    const mobileSas = computeClientSas(
+      hostKeys.publicKey,
+      clientKx.publicKey,
+      challenge.code,
+      pairPayload.attemptId,
+      pairResp.sessionToken
+    );
     expect(pairResp.sas).toBe(mobileSas);
 
     // 5. Host approves the pending pairing
@@ -183,7 +191,10 @@ describe('RelayClient E2EE, Pairing Handshake, and Relay Opacity', () => {
       });
     });
 
-    const statusPayload: TerminalPairStatusPayload = { sessionToken };
+    const statusPayload: TerminalPairStatusPayload = {
+      attemptId: 'att-e2ee-1',
+      sessionToken,
+    };
     lastServerWs!.send(JSON.stringify(buildTerminalEnvelope('TERM_PAIR_STATUS', statusPayload)));
 
     const statusResp = await pairStatusRespPromise;
@@ -312,12 +323,13 @@ describe('RelayClient E2EE, Pairing Handshake, and Relay Opacity', () => {
     });
     await client.connect();
 
-    // Attach to session
-    const attachPromise = new Promise<void>((resolve) => {
+    // Attach to session with fresh clientNonce
+    const clientNonce = sodium.to_hex(sodium.randombytes_buf(16));
+    const attachPromise = new Promise<TerminalAttachRespPayload>((resolve) => {
       lastServerWs!.on('message', (msg) => {
         const parsed = JSON.parse(msg.toString('utf8')) as TerminalEnvelope;
         if (parsed.type === 'TERM_ATTACH_RESP') {
-          resolve();
+          resolve(parsed.payload as TerminalAttachRespPayload);
         }
       });
     });
@@ -328,10 +340,13 @@ describe('RelayClient E2EE, Pairing Handshake, and Relay Opacity', () => {
           sessionId: 'test-sess-e2ee',
           requestedMode: 'control',
           deviceId,
+          clientNonce,
         })
       )
     );
-    await attachPromise;
+    const attachResp = await attachPromise;
+    expect(attachResp.epoch).toBeDefined();
+    mobileSession.setEpoch(attachResp.epoch!);
 
     // Track all frames traversing relay to verify opacity
     const relayTraffic: TerminalEnvelope[] = [];
@@ -422,11 +437,12 @@ describe('RelayClient E2EE, Pairing Handshake, and Relay Opacity', () => {
     });
     await client.connect();
 
-    // Attach
-    const attachPromise = new Promise<void>((resolve) => {
+    // Attach with fresh clientNonce
+    const clientNonce = sodium.to_hex(sodium.randombytes_buf(16));
+    const attachPromise = new Promise<TerminalAttachRespPayload>((resolve) => {
       lastServerWs!.on('message', (msg) => {
         const parsed = JSON.parse(msg.toString('utf8')) as TerminalEnvelope;
-        if (parsed.type === 'TERM_ATTACH_RESP') resolve();
+        if (parsed.type === 'TERM_ATTACH_RESP') resolve(parsed.payload as TerminalAttachRespPayload);
       });
     });
     lastServerWs!.send(
@@ -435,10 +451,13 @@ describe('RelayClient E2EE, Pairing Handshake, and Relay Opacity', () => {
           sessionId: 'test-sess-replay',
           requestedMode: 'control',
           deviceId,
+          clientNonce,
         })
       )
     );
-    await attachPromise;
+    const attachResp = await attachPromise;
+    expect(attachResp.epoch).toBeDefined();
+    mobileSession.setEpoch(attachResp.epoch!);
 
     // Send packet 1
     const pkt1 = mobileSession.encrypt('echo 1\n');

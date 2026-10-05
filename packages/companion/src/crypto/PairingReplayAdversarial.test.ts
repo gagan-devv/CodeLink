@@ -128,6 +128,9 @@ describe('Companion Pairing Replay & Expiry Adversarial Suite', () => {
     const establishedSession = (relayClient as any).e2eeSessions.get(deviceId);
     expect(establishedSession).toBeDefined();
 
+    const epoch = 'test-epoch-rep-1';
+    establishedSession.setEpoch(epoch);
+
     // Client derives client keys and sends encrypted input packet (seq = 1)
     const clientKeys = sodium.crypto_kx_client_session_keys(
       clientKp.publicKey,
@@ -138,7 +141,7 @@ describe('Companion Pairing Replay & Expiry Adversarial Suite', () => {
       'client',
       clientKeys.sharedTx,
       clientKeys.sharedRx,
-      initRes.sessionToken!
+      epoch
     );
     const packet1 = clientSession.encrypt('echo first\n');
     expect(packet1.seq).toBe(1);

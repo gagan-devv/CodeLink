@@ -297,6 +297,42 @@ _This hook automatically executes `npm run precommit` before every commit, enfor
 
 ---
 
+## 🖥️ Managed Interactive Terminal
+
+CodeLink includes an optional Managed Interactive Terminal providing secure, end-to-end encrypted remote PTY shell access to your Linux host.
+
+### Build & Enable
+
+```bash
+# Build the companion daemon package
+npm run build --workspace=@codelink/companion
+
+# Enable terminal service (default is OFF)
+codelink-terminal enable
+```
+
+### Systemd User Unit (Auto-start on Login)
+
+```bash
+# Install user systemd service
+codelink-terminal install-service
+
+# Reload systemd and enable daemon
+systemctl --user daemon-reload
+systemctl --user enable --now codelink-terminal
+```
+
+### Status & Socket Location
+
+- **Daemon Status:** `codelink-terminal status`
+- **Socket Path:** `~/.codelink/terminal.sock` (mode `0600`)
+- **Audit Log:** `~/.codelink/terminal-audit.log` (mode `0600`)
+
+> [!NOTE]
+> **Pairing Compatibility Requirement:** The mobile client requires `hostPublicKey` and cryptographic `approvalProof` on pairing, and establishes fresh per-connection epochs via exchanged nonces on attach. Older companion/daemon versions cannot pair or communicate with this app. Rebuild and restart the daemon together with the updated app.
+
+---
+
 ## 🚢 Production Deployment
 
 For production deployments, the modular microservices scale independently:

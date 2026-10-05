@@ -137,7 +137,7 @@ describe('Mobile Pairing Lifecycle & Error Handling (Stage A)', () => {
       hostPublicKey: toBase64(hostKp.publicKey),
     });
 
-    expect(useTerminalStore.getState().e2eeState).toBe('pending_approval');
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
 
     // Advance 5 minutes + 1 interval
     vi.advanceTimersByTime(5 * 60 * 1000 + 2000);

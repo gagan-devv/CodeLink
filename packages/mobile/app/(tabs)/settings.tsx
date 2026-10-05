@@ -34,22 +34,25 @@ export default function SettingsTab() {
 
   const isPaired = e2eeState === 'paired';
   const isPendingApproval = e2eeState === 'pending_approval';
+  const isAwaitingConfirmation = e2eeState === 'awaiting_user_confirmation';
   const isInitiating = e2eeState === 'initiating';
   const isFailed = e2eeState === 'error' || e2eeState === 'failed';
 
   const terminalStatusLabel = isPaired
     ? 'Paired'
-    : isPendingApproval
-      ? 'Pending Host Approval'
-      : isInitiating
-        ? 'Preparing / Sending...'
-        : isFailed
-          ? 'Pairing Failed'
-          : 'Not Paired';
+    : isAwaitingConfirmation
+      ? 'Confirm SAS on Phone'
+      : isPendingApproval
+        ? 'Pending Host Approval'
+        : isInitiating
+          ? 'Preparing / Sending...'
+          : isFailed
+            ? 'Pairing Failed'
+            : 'Not Paired';
 
   const terminalStatusColor = isPaired
     ? '#4ec94e'
-    : isPendingApproval || isInitiating
+    : isAwaitingConfirmation || isPendingApproval || isInitiating
       ? '#e5c07b'
       : isFailed
         ? '#f55'
@@ -61,7 +64,7 @@ export default function SettingsTab() {
       useTerminalStore.getState().setE2EEError('Pairing code must be exactly 6 digits');
       return;
     }
-    if (isPairing || isInitiating || isPendingApproval) return;
+    if (isPairing || isInitiating || isPendingApproval || isAwaitingConfirmation) return;
     setIsPairing(true);
     try {
       await MobilePairingService.initiatePairing(trimmed);
@@ -153,11 +156,31 @@ export default function SettingsTab() {
             </Row>
           )}
 
-          {isPendingApproval && sasCode && (
+          {(isAwaitingConfirmation || isPendingApproval) && sasCode && (
             <View style={s.sasBox}>
               <Text style={s.sasLabel}>SAS Verification Code:</Text>
               <Text style={s.sasText}>{sasCode}</Text>
-              <Text style={s.sasHelp}>Confirm this code matches on your laptop companion.</Text>
+              <Text style={s.sasHelp}>
+                {isAwaitingConfirmation
+                  ? 'Verify this code matches on your laptop companion before confirming.'
+                  : 'Awaiting host companion approval.'}
+              </Text>
+              {isAwaitingConfirmation && (
+                <View style={{ flexDirection: 'row', marginTop: 10, gap: 8 }}>
+                  <TouchableOpacity
+                    style={[s.pairSubmitBtn, { flex: 1, backgroundColor: '#4ec94e', marginTop: 0 }]}
+                    onPress={() => MobilePairingService.confirmSasMatch()}
+                  >
+                    <Text style={s.pairSubmitText}>Confirm SAS Match</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.cancelPairBtn, { flex: 1, marginTop: 0 }]}
+                    onPress={() => MobilePairingService.cancelPairing()}
+                  >
+                    <Text style={s.cancelPairText}>Doesn't Match</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
 
@@ -190,7 +213,9 @@ export default function SettingsTab() {
                 maxLength={6}
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!isInitiating && !isPendingApproval && !isPairing}
+                editable={
+                  !isInitiating && !isPendingApproval && !isAwaitingConfirmation && !isPairing
+                }
               />
               <TouchableOpacity
                 style={[
@@ -198,7 +223,8 @@ export default function SettingsTab() {
                   (!/^\d{6}$/.test(pairingCodeInput.trim()) ||
                     isPairing ||
                     isInitiating ||
-                    isPendingApproval) &&
+                    isPendingApproval ||
+                    isAwaitingConfirmation) &&
                     s.pairSubmitBtnDisabled,
                 ]}
                 onPress={handlePairTerminal}
@@ -206,7 +232,8 @@ export default function SettingsTab() {
                   !/^\d{6}$/.test(pairingCodeInput.trim()) ||
                   isPairing ||
                   isInitiating ||
-                  isPendingApproval
+                  isPendingApproval ||
+                  isAwaitingConfirmation
                 }
               >
                 {isPairing || isInitiating ? (
@@ -217,7 +244,7 @@ export default function SettingsTab() {
                   </Text>
                 )}
               </TouchableOpacity>
-              {(isInitiating || isPendingApproval) && (
+              {(isInitiating || isPendingApproval || isAwaitingConfirmation) && (
                 <TouchableOpacity
                   style={s.cancelPairBtn}
                   onPress={() => {

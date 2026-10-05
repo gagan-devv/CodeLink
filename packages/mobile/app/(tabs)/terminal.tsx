@@ -39,10 +39,7 @@ export default function TerminalScreen() {
   useEffect(() => {
     if (isConnected) {
       try {
-        wsManager.sendTerminal('TERM_ATTACH', {
-          sessionId: '',
-          requestedMode: 'observe',
-        });
+        MobilePairingService.sendAttach('', 'observe');
       } catch (err) {
         console.warn('[TerminalScreen] Failed to attach on connect:', err);
       }
@@ -85,10 +82,7 @@ export default function TerminalScreen() {
   const handleRequestMode = (mode: 'observe' | 'control') => {
     if (!activeSessionId) return;
     try {
-      wsManager.sendTerminal('TERM_ATTACH', {
-        sessionId: activeSessionId,
-        requestedMode: mode,
-      });
+      MobilePairingService.sendAttach(activeSessionId, mode);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       useTerminalStore.getState().setE2EEError(`Failed to change mode: ${msg}`);
@@ -137,14 +131,49 @@ export default function TerminalScreen() {
           </View>
         ) : null}
 
+        {/* E2EE Awaiting User SAS Confirmation Banner */}
+        {e2eeState === 'awaiting_user_confirmation' && sasCode ? (
+          <View style={styles.sasBanner}>
+            <Text style={styles.sasTitle}>Pairing Verification SAS</Text>
+            <Text style={styles.sasCode}>{sasCode}</Text>
+            <Text style={styles.sasInstructions}>
+              Verify this code matches on your laptop companion before confirming.
+            </Text>
+            <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => MobilePairingService.confirmSasMatch()}
+                style={{
+                  backgroundColor: '#4ec94e',
+                  padding: 8,
+                  borderRadius: 6,
+                  flex: 1,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Confirm SAS Match</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => MobilePairingService.cancelPairing()}
+                style={{
+                  backgroundColor: '#f55',
+                  padding: 8,
+                  borderRadius: 6,
+                  flex: 1,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Doesn't Match</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
         {/* E2EE Pending Approval SAS Banner */}
         {e2eeState === 'pending_approval' && sasCode ? (
           <View style={styles.sasBanner}>
             <Text style={styles.sasTitle}>Pairing Verification SAS</Text>
             <Text style={styles.sasCode}>{sasCode}</Text>
-            <Text style={styles.sasInstructions}>
-              Verify this code matches on your laptop companion and approve on host.
-            </Text>
+            <Text style={styles.sasInstructions}>Awaiting host companion approval.</Text>
             <ActivityIndicator size="small" color="#0078d4" style={{ marginTop: 8 }} />
           </View>
         ) : null}

@@ -63,7 +63,13 @@ describe('Settings Pairing Integration (Fix A)', () => {
     const hostKp = generateKeyPair();
     const clientKp = (await SecureDeviceStore.getClientKeyPair())!;
     const mockSessionToken = 'session-token-xyz-123';
-    const computedSas = computeClientSas(hostKp.publicKey, clientKp.publicKey, '654321');
+    const computedSas = computeClientSas(
+      hostKp.publicKey,
+      clientKp.publicKey,
+      '654321',
+      attempt.attemptId,
+      mockSessionToken
+    );
 
     // 3. Companion responds with pending approval, hostPublicKey and computed SAS
     await MobilePairingService.handlePairResp({
@@ -74,11 +80,15 @@ describe('Settings Pairing Integration (Fix A)', () => {
       hostPublicKey: toBase64(hostKp.publicKey),
     });
 
-    // State is pending approval with SAS displayed; Tab must still be HIDDEN
-    expect(useTerminalStore.getState().e2eeState).toBe('pending_approval');
+    // State is awaiting user confirmation with SAS displayed; Tab must still be HIDDEN
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
     expect(useTerminalStore.getState().sasCode).toBe(computedSas);
     expect(useTerminalStore.getState().sessionToken).toBe(mockSessionToken);
     expect(isTerminalTabVisible(useTerminalStore.getState().e2eeState, flagVal)).toBe(false);
+
+    // User confirms SAS match on mobile device
+    await MobilePairingService.confirmSasMatch();
+    expect(useTerminalStore.getState().e2eeState).toBe('pending_approval');
 
     // 4. Verify approval polling ticks automatically in the background
     vi.advanceTimersByTime(1600);

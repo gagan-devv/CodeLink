@@ -77,6 +77,8 @@ export interface TerminalAttachPayload {
   sessionId: string;
   requestedMode: 'observe' | 'control';
   lastOffset?: number;
+  deviceId?: string;
+  clientNonce?: string;
 }
 
 export interface TerminalAttachRespPayload {
@@ -86,6 +88,8 @@ export interface TerminalAttachRespPayload {
   rows: number;
   startOffset: number;
   hasGap: boolean;
+  hostNonce?: string;
+  epoch?: string;
 }
 
 export interface TerminalDetachPayload {

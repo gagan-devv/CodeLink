@@ -12,6 +12,7 @@ import {
   TerminalPairStatusRespPayload,
 } from '@codelink/protocol';
 import { MobilePairingService } from '../crypto/MobilePairingService';
+import { computeEpoch } from '../crypto/nobleKx';
 
 export function handleMessage(type: string, payload: unknown, id: string): void {
   console.log(`[MessageDispatcher] Received message: type=${type}`);
@@ -190,12 +191,28 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
     }
 
     case 'TERM_ATTACH_RESP': {
-      const p = payload as { sessionId: string; mode: 'observe' | 'control'; hasGap: boolean };
+      const p = payload as {
+        sessionId: string;
+        mode: 'observe' | 'control';
+        hasGap: boolean;
+        hostNonce?: string;
+        epoch?: string;
+      };
       if (p && (p.mode === 'observe' || p.mode === 'control')) {
         useTerminalStore.getState().setMode(p.mode);
         if (p.hasGap) {
           useTerminalStore.getState().setGapNotice(true);
         }
+      }
+
+      if (p && p.hostNonce && MobilePairingService.getPendingAttachClientNonce()) {
+        const clientNonce = MobilePairingService.getPendingAttachClientNonce()!;
+        const epoch = computeEpoch(clientNonce, p.hostNonce);
+        const { e2eeSession } = useTerminalStore.getState();
+        if (e2eeSession) {
+          e2eeSession.setEpoch(epoch);
+        }
+        MobilePairingService.clearPendingAttachClientNonce();
       }
       break;
     }

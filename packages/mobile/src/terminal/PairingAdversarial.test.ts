@@ -31,9 +31,13 @@ import { SecureDeviceStore } from '../crypto/SecureDeviceStore';
 import { MobileE2EESession } from '../crypto/MobileE2EESession';
 
 describe('Pairing Adversarial & Security Edge Cases', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useFakeTimers();
     mockStorage.clear();
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear();
+    }
+    await SecureDeviceStore.clearPairedHost();
     useTerminalStore.getState().reset();
     MobilePairingService.cancelPairing();
     vi.spyOn(wsManager, 'isConnected').mockReturnValue(true);
@@ -128,7 +132,13 @@ describe('Pairing Adversarial & Security Edge Cases', () => {
     const attempt = MobilePairingService.getActiveAttempt()!;
     const hostKp = generateKeyPair();
     const clientKp = (await SecureDeviceStore.getClientKeyPair())!;
-    const computedSas = computeClientSas(hostKp.publicKey, clientKp.publicKey, '123456');
+    const computedSas = computeClientSas(
+      hostKp.publicKey,
+      clientKp.publicKey,
+      '123456',
+      attempt.attemptId,
+      'token-123'
+    );
 
     await MobilePairingService.handlePairResp({
       success: true,
@@ -138,7 +148,7 @@ describe('Pairing Adversarial & Security Edge Cases', () => {
       sas: computedSas,
     });
 
-    expect(useTerminalStore.getState().e2eeState).toBe('pending_approval');
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
 
     // User cancels pairing
     MobilePairingService.cancelPairing();
@@ -168,37 +178,35 @@ describe('Pairing Adversarial & Security Edge Cases', () => {
     expect(await SecureDeviceStore.getPairedHost()).toBeNull();
   });
 
-  it('ignores older attempt reply when retry starts a newer attempt', async () => {
-    // Attempt 1
-    await MobilePairingService.initiatePairing('111111');
-    const attempt1 = MobilePairingService.getActiveAttempt()!;
-
-    // Retry: Attempt 2
-    await MobilePairingService.initiatePairing('222222');
-    const attempt2 = MobilePairingService.getActiveAttempt()!;
-    expect(attempt2.attemptId).not.toBe(attempt1.attemptId);
-
+  it('discards TERM_PAIR_RESP without attemptId', async () => {
+    await MobilePairingService.initiatePairing('123456');
+    const attempt = MobilePairingService.getActiveAttempt()!;
     const hostKp = generateKeyPair();
 
-    // Late response for Attempt 1 arrives
+    // Attacker sends TERM_PAIR_RESP without attemptId
     await MobilePairingService.handlePairResp({
       success: true,
-      attemptId: attempt1.attemptId,
-      sessionToken: 'token-1',
+      sessionToken: 'token-missing-attempt',
       hostPublicKey: toBase64(hostKp.publicKey),
     });
 
-    // Attempt 2 must still be in 'initiating' state
+    // Attempt must remain in 'initiating'
     expect(useTerminalStore.getState().e2eeState).toBe('initiating');
-    expect(MobilePairingService.getActiveAttempt()?.attemptId).toBe(attempt2.attemptId);
+    expect(MobilePairingService.getActiveAttempt()?.attemptId).toBe(attempt.attemptId);
   });
 
-  it('rejects approval when cryptographic approvalProof is forged or invalid', async () => {
+  it('discards TERM_PAIR_STATUS_RESP without attemptId or without sessionToken', async () => {
     await MobilePairingService.initiatePairing('123456');
     const attempt = MobilePairingService.getActiveAttempt()!;
     const hostKp = generateKeyPair();
     const clientKp = (await SecureDeviceStore.getClientKeyPair())!;
-    const computedSas = computeClientSas(hostKp.publicKey, clientKp.publicKey, '123456');
+    const computedSas = computeClientSas(
+      hostKp.publicKey,
+      clientKp.publicKey,
+      '123456',
+      attempt.attemptId,
+      'token-123'
+    );
 
     await MobilePairingService.handlePairResp({
       success: true,
@@ -208,6 +216,118 @@ describe('Pairing Adversarial & Security Edge Cases', () => {
       sas: computedSas,
     });
 
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
+
+    const hostKeys = nobleKxServer(hostKp.publicKey, hostKp.privateKey, clientKp.publicKey);
+    const approvalProof = computeApprovalProof(
+      attempt.attemptId,
+      'token-123',
+      hostKp.publicKey,
+      clientKp.publicKey,
+      hostKeys.sharedTx
+    );
+
+    // 1. Missing attemptId
+    await MobilePairingService.handlePairStatus({
+      approved: true,
+      sessionToken: 'token-123',
+      hostPublicKey: toBase64(hostKp.publicKey),
+      deviceId: 'dev-host-001',
+      approvalProof,
+    });
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
+
+    // 2. Missing sessionToken
+    await MobilePairingService.handlePairStatus({
+      approved: true,
+      attemptId: attempt.attemptId,
+      hostPublicKey: toBase64(hostKp.publicKey),
+      deviceId: 'dev-host-001',
+      approvalProof,
+    });
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
+  });
+
+  it('requires explicit user SAS confirmation on phone before finalizing paired state', async () => {
+    await MobilePairingService.initiatePairing('123456');
+    const attempt = MobilePairingService.getActiveAttempt()!;
+    const hostKp = generateKeyPair();
+    const clientKp = (await SecureDeviceStore.getClientKeyPair())!;
+    const computedSas = computeClientSas(
+      hostKp.publicKey,
+      clientKp.publicKey,
+      '123456',
+      attempt.attemptId,
+      'token-123'
+    );
+
+    await MobilePairingService.handlePairResp({
+      success: true,
+      attemptId: attempt.attemptId,
+      sessionToken: 'token-123',
+      hostPublicKey: toBase64(hostKp.publicKey),
+      sas: computedSas,
+    });
+
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
+    expect(useTerminalStore.getState().sasCode).toBe(computedSas);
+
+    // Host approves first on laptop
+    const hostKeys = nobleKxServer(hostKp.publicKey, hostKp.privateKey, clientKp.publicKey);
+    const approvalProof = computeApprovalProof(
+      attempt.attemptId,
+      'token-123',
+      hostKp.publicKey,
+      clientKp.publicKey,
+      hostKeys.sharedTx
+    );
+
+    await MobilePairingService.handlePairStatus({
+      approved: true,
+      attemptId: attempt.attemptId,
+      sessionToken: 'token-123',
+      hostPublicKey: toBase64(hostKp.publicKey),
+      deviceId: 'dev-host-001',
+      approvalProof,
+    });
+
+    // Mobile is STILL awaiting user confirmation (not automatically paired!)
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
+    expect(await SecureDeviceStore.getPairedHost()).toBeNull();
+
+    // Now user confirms SAS match on phone
+    await MobilePairingService.confirmSasMatch();
+
+    // Now state transitions to paired!
+    expect(useTerminalStore.getState().e2eeState).toBe('paired');
+    expect(await SecureDeviceStore.getPairedHost()).not.toBeNull();
+  });
+
+  it('rejects approval when cryptographic approvalProof is forged or invalid', async () => {
+    await MobilePairingService.initiatePairing('123456');
+    const attempt = MobilePairingService.getActiveAttempt()!;
+    const hostKp = generateKeyPair();
+    const clientKp = (await SecureDeviceStore.getClientKeyPair())!;
+    const computedSas = computeClientSas(
+      hostKp.publicKey,
+      clientKp.publicKey,
+      '123456',
+      attempt.attemptId,
+      'token-123'
+    );
+
+    await MobilePairingService.handlePairResp({
+      success: true,
+      attemptId: attempt.attemptId,
+      sessionToken: 'token-123',
+      hostPublicKey: toBase64(hostKp.publicKey),
+      sas: computedSas,
+    });
+
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
+
+    // User confirms SAS match
+    await MobilePairingService.confirmSasMatch();
     expect(useTerminalStore.getState().e2eeState).toBe('pending_approval');
 
     // Attacker sends forged approval proof

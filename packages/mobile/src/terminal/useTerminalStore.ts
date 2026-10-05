@@ -34,7 +34,14 @@ export interface TerminalStoreState {
   multilinePasteModal: MultilinePasteModalState;
 
   // E2EE state
-  e2eeState: 'unpaired' | 'initiating' | 'pending_approval' | 'paired' | 'error' | 'failed';
+  e2eeState:
+    | 'unpaired'
+    | 'initiating'
+    | 'awaiting_user_confirmation'
+    | 'pending_approval'
+    | 'paired'
+    | 'error'
+    | 'failed';
   e2eeSession: MobileE2EESession | null;
   e2eeError: string | null;
   sasCode: string | null;
@@ -61,7 +68,19 @@ export interface TerminalStoreState {
   confirmPaste: () => string;
   cancelPaste: () => void;
   setPairingState: (
-    state: 'unpaired' | 'initiating' | 'pending_approval' | 'paired' | 'error' | 'failed'
+    state:
+      | 'unpaired'
+      | 'initiating'
+      | 'awaiting_user_confirmation'
+      | 'pending_approval'
+      | 'paired'
+      | 'error'
+      | 'failed'
+  ) => void;
+  setAwaitingUserConfirmation: (
+    sessionToken: string,
+    sasCode: string,
+    infoMessage?: string
   ) => void;
   setPendingApproval: (sessionToken: string, sasCode: string) => void;
   setE2EESession: (session: MobileE2EESession, deviceId: string) => void;
@@ -138,6 +157,14 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
 
   setPairingState: (state) => set({ e2eeState: state, e2eeError: null }),
 
+  setAwaitingUserConfirmation: (sessionToken, sasCode) =>
+    set({
+      e2eeState: 'awaiting_user_confirmation',
+      sessionToken,
+      sasCode,
+      e2eeError: null,
+    }),
+
   setPendingApproval: (sessionToken, sasCode) =>
     set({
       e2eeState: 'pending_approval',
@@ -172,6 +199,13 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     const { e2eeSession, getGeneration } = get();
     if (!e2eeSession) {
       const err = 'Plaintext transmission refused: no active E2EE session exists';
+      set({ e2eeError: err, e2eeState: 'error' });
+      return { success: false, error: err };
+    }
+
+    if (!e2eeSession.getEpoch()) {
+      const err =
+        'Plaintext transmission refused: E2EE connection epoch has not been established yet. Please attach to terminal.';
       set({ e2eeError: err, e2eeState: 'error' });
       return { success: false, error: err };
     }

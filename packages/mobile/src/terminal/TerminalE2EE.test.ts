@@ -37,8 +37,8 @@ describe('Terminal E2EE and Mobile MessageDispatcher', () => {
     const clientKeys = nobleKxClient(clientKp.publicKey, clientKp.privateKey, serverKp.publicKey);
     const serverKeys = nobleKxServer(serverKp.publicKey, serverKp.privateKey, clientKp.publicKey);
 
-    clientSession = new MobileE2EESession('client', clientKeys.sharedTx, clientKeys.sharedRx);
-    serverSession = new MobileE2EESession('host', serverKeys.sharedTx, serverKeys.sharedRx);
+    clientSession = new MobileE2EESession('client', clientKeys.sharedTx, clientKeys.sharedRx, 'epoch-test-1');
+    serverSession = new MobileE2EESession('host', serverKeys.sharedTx, serverKeys.sharedRx, 'epoch-test-1');
   });
 
   it('refuses plaintext transmission when no E2EE session exists', () => {

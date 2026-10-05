@@ -25,10 +25,10 @@ describe('E2EESession (E2EE, Replay Protection, Relay Opacity)', () => {
     );
 
     // Host session sends with hostRxTx.sharedTx and receives with hostRxTx.sharedRx
-    const hostSession = new E2EESession('host', hostRxTx.sharedTx, hostRxTx.sharedRx);
+    const hostSession = new E2EESession('host', hostRxTx.sharedTx, hostRxTx.sharedRx, 'test-epoch');
     // Client session sends with clientRxTx.sharedTx (which equals hostRxTx.sharedRx)
     // and receives with clientRxTx.sharedRx (which equals hostRxTx.sharedTx)
-    const clientSession = new E2EESession('client', clientRxTx.sharedTx, clientRxTx.sharedRx);
+    const clientSession = new E2EESession('client', clientRxTx.sharedTx, clientRxTx.sharedRx, 'test-epoch');
 
     return { hostSession, clientSession, hostKeys, clientKeys };
   }

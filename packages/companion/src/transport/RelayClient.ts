@@ -21,7 +21,7 @@ import { CompanionConfig } from '../service/CompanionConfig';
 import { SessionTable, TerminalSession } from '../session/SessionTable';
 import { PairingManager, KeyPair } from '../crypto/PairingManager';
 import { PairedDeviceStore } from '../auth/PairedDeviceStore';
-import { E2EESession } from '../crypto/E2EESession';
+import { E2EESession, computeEpoch } from '../crypto/E2EESession';
 import { InputDeduplicator } from './InputDeduplicator';
 import { ReattachHandler } from './ReattachHandler';
 
@@ -93,9 +93,13 @@ export class RelayClient {
     return this.relayConnectionId;
   }
 
-  public getOrCreateE2EESession(deviceId: string): E2EESession | null {
+  public getOrCreateE2EESession(deviceId: string, epoch?: string): E2EESession | null {
     if (this.e2eeSessions.has(deviceId)) {
-      return this.e2eeSessions.get(deviceId)!;
+      const existing = this.e2eeSessions.get(deviceId)!;
+      if (epoch) {
+        existing.setEpoch(epoch);
+      }
+      return existing;
     }
 
     if (!this.deviceStore || !this.hostKeyPair) {
@@ -114,7 +118,7 @@ export class RelayClient {
         this.hostKeyPair.privateKey,
         clientPubKey
       );
-      const session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx);
+      const session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx, epoch);
       this.e2eeSessions.set(deviceId, session);
       return session;
     } catch {
@@ -268,6 +272,7 @@ export class RelayClient {
       case 'TERM_ATTACH': {
         const payload = envelope.payload as TerminalAttachPayload;
         const deviceId =
+          payload.deviceId ||
           ((payload as unknown as Record<string, unknown>).deviceId as string) ||
           this.activeDeviceId;
 
@@ -278,6 +283,20 @@ export class RelayClient {
             sessionId: payload.sessionId,
           });
           return;
+        }
+
+        let hostNonceHex: string | undefined;
+        let derivedEpoch: string | undefined;
+
+        if (deviceId && payload.clientNonce && this.hostKeyPair) {
+          const e2eeSession = this.getOrCreateE2EESession(deviceId);
+          if (e2eeSession) {
+            const hostNonceBytes = sodium.randombytes_buf(16);
+            hostNonceHex = sodium.to_hex(hostNonceBytes);
+            derivedEpoch = computeEpoch(payload.clientNonce, hostNonceHex);
+            e2eeSession.setEpoch(derivedEpoch);
+            this.activeDeviceId = deviceId;
+          }
         }
 
         let session = this.options.sessionTable.get(payload.sessionId);
@@ -306,7 +325,7 @@ export class RelayClient {
           payload.lastOffset ?? 0
         );
 
-        // Send TERM_ATTACH_RESP back
+        // Send TERM_ATTACH_RESP back with fresh hostNonce and derived connection epoch
         this.sendTerminalEnvelope('TERM_ATTACH_RESP', {
           sessionId: payload.sessionId,
           mode: attachResult.mode,
@@ -314,6 +333,8 @@ export class RelayClient {
           rows: session.pty.rows,
           startOffset: payload.lastOffset ?? 0,
           hasGap: reattachResult.hasGap,
+          hostNonce: hostNonceHex,
+          epoch: derivedEpoch,
         });
 
         if (reattachResult.hasGap && reattachResult.gapNotice) {
@@ -567,12 +588,7 @@ export class RelayClient {
                 this.hostKeyPair.privateKey,
                 status.clientPublicKey
               );
-              session = new E2EESession(
-                'host',
-                kxKeys.sharedTx,
-                kxKeys.sharedRx,
-                payload.sessionToken
-              );
+              session = new E2EESession('host', kxKeys.sharedTx, kxKeys.sharedRx);
               this.e2eeSessions.set(status.deviceId, session);
               this.activeDeviceId = status.deviceId;
             } catch {

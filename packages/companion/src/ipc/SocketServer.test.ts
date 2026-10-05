@@ -180,7 +180,7 @@ describe('SocketServer', () => {
     expect(pendingResp.ok).toBe(true);
     expect(pendingResp.data.pending.length).toBe(1);
     expect(pendingResp.data.pending[0].sessionToken).toBe(sessionToken);
-    expect(pendingResp.data.pending[0].sas).toHaveLength(6);
+    expect(pendingResp.data.pending[0].sas).toHaveLength(14);
 
     // 7. approve-pairing approves the session
     const approveResp = await sendCommand({

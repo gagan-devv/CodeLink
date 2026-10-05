@@ -43,22 +43,25 @@ describe('PairingManager', () => {
     const hostInitiate = pm.verifyAndInitiate(
       challenge.code,
       sodium.to_base64(clientKeys.publicKey),
-      'Client Phone'
+      'Client Phone',
+      'attempt-sas-test-1'
     );
     expect(hostInitiate.success).toBe(true);
 
     // Compute SAS on host side
     const hostSas = pm.computeSas(hostInitiate.sessionToken!);
 
-    // Compute SAS on client side from host public key + client public key + pairing code
+    // Compute SAS on client side from host public key + client public key + pairing code + attemptId + sessionToken
     const clientSas = PairingManager.computeClientSas(
       hostKeys.publicKey,
       clientKeys.publicKey,
-      challenge.code
+      challenge.code,
+      'attempt-sas-test-1',
+      hostInitiate.sessionToken!
     );
 
     expect(hostSas).toBe(clientSas);
-    expect(hostSas).toHaveLength(6); // 6-character comparison string
+    expect(hostSas).toHaveLength(14); // 14-character formatted SAS (XXXX-XXXX-XXXX)
   });
 
   it('requires host approval before device is registered', () => {
@@ -216,7 +219,7 @@ describe('PairingManager', () => {
       expect(pendingList.length).toBe(1);
       expect(pendingList[0].sessionToken).toBe(initRes.sessionToken);
       expect(pendingList[0].clientDeviceName).toBe('My Pixel Phone');
-      expect(pendingList[0].sas).toHaveLength(6);
+      expect(pendingList[0].sas).toHaveLength(14);
       expect(pendingList[0].fingerprint).toHaveLength(64);
 
       // Rejection

@@ -209,7 +209,9 @@ export class PairingManager {
         const sas = PairingManager.computeClientSas(
           this.hostKeyPair.publicKey,
           p.clientPublicKey,
-          p.code
+          p.code,
+          p.attemptId,
+          p.sessionToken
         );
         result.push({
           sessionToken: p.sessionToken,
@@ -243,7 +245,9 @@ export class PairingManager {
     const sas = PairingManager.computeClientSas(
       this.hostKeyPair.publicKey,
       p.clientPublicKey,
-      p.code
+      p.code,
+      p.attemptId,
+      p.sessionToken
     );
     return {
       sessionToken: p.sessionToken,
@@ -304,27 +308,27 @@ export class PairingManager {
     return PairingManager.computeClientSas(
       this.hostKeyPair.publicKey,
       pending.clientPublicKey,
-      pending.code
+      pending.code,
+      pending.attemptId,
+      pending.sessionToken
     );
   }
 
   public static computeClientSas(
     hostPublicKey: Uint8Array,
     clientPublicKey: Uint8Array,
-    code: string
+    code: string,
+    attemptId?: string,
+    sessionToken?: string
   ): string {
-    // Deterministic hash of hostPubKey + clientPubKey + pairingCode
-    const combined = new Uint8Array(
-      hostPublicKey.length + clientPublicKey.length + Buffer.byteLength(code)
-    );
-    combined.set(hostPublicKey, 0);
-    combined.set(clientPublicKey, hostPublicKey.length);
-    combined.set(Buffer.from(code, 'utf8'), hostPublicKey.length + clientPublicKey.length);
-
-    const hash = sodium.crypto_generichash(16, combined, null);
-    // Format into 6 uppercase alphanumeric chars
-    const hex = sodium.to_hex(hash);
-    return hex.slice(0, 6).toUpperCase();
+    const hostHex = sodium.to_hex(hostPublicKey);
+    const clientHex = sodium.to_hex(clientPublicKey);
+    // Transcript binds attemptId, sessionToken, host/client public keys, and numeric code
+    const transcript = `codelink-sas-v2:${attemptId || ''}:${sessionToken || ''}:${hostHex}:${clientHex}:${code}`;
+    const hash = sodium.crypto_generichash(16, sodium.from_string(transcript), null);
+    // Format into 12 uppercase hex characters in 3 groups of 4 (48 bits entropy)
+    const hex = sodium.to_hex(hash).slice(0, 12).toUpperCase();
+    return `${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}`;
   }
 
   public isPendingApproval(sessionToken: string): boolean {
@@ -356,7 +360,8 @@ export class PairingManager {
       return false;
     }
 
-    // Derive host session keys and calculate authenticated approval proof
+    // Derive host session keys and calculate authenticated approval proof.
+    // Note: approvalProof proves key possession consistency between key exchange and approval, not host identity.
     try {
       const kxKeys = sodium.crypto_kx_server_session_keys(
         this.hostKeyPair.publicKey,
