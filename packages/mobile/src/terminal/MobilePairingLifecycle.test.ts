@@ -144,7 +144,7 @@ describe('Mobile Pairing Lifecycle & Error Handling (Stage A)', () => {
 
     const state = useTerminalStore.getState();
     expect(state.e2eeState).toBe('error');
-    expect(state.e2eeError).toContain('Pairing approval timed out after 5 minutes');
+    expect(state.e2eeError).toMatch(/Pairing (approval timed out|attempt expired) after 5 minutes/);
   });
 
   it('cancelPairing clears timers and resets state', async () => {

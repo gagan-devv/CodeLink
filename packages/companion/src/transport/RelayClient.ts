@@ -40,6 +40,7 @@ export interface RelayClientOptions {
   reconnectMaxDelayMs?: number;
   reconnectBackoffFactor?: number;
   maxReconnectAttempts?: number;
+  attachCooldownMs?: number;
   onConnected?: () => void;
   onDisconnected?: (code?: number, reason?: string) => void;
   onError?: (err: Error) => void;
@@ -59,6 +60,8 @@ export class RelayClient {
   private hostKeyPair?: KeyPair;
   private requireE2EE: boolean;
   private e2eeSessions = new Map<string, E2EESession>();
+  private attachCooldownMs: number;
+  private lastAttachTimestamps = new Map<string, number>();
 
   constructor(private options: RelayClientOptions) {
     this.activeDeviceId = options.defaultDeviceId || 'remote-client';
@@ -67,6 +70,7 @@ export class RelayClient {
       options.deviceStore ||
       (this.requireE2EE ? options.pairingManager?.getDeviceStore() : undefined);
     this.hostKeyPair = options.hostKeyPair || options.pairingManager?.getHostKeyPair();
+    this.attachCooldownMs = options.attachCooldownMs ?? 2000;
   }
 
   public isConnected(): boolean {
@@ -140,8 +144,23 @@ export class RelayClient {
 
     let outputData = data;
     if (session) {
-      const packet = session.encrypt(data);
-      outputData = JSON.stringify(packet);
+      if (!session.getEpoch()) {
+        // If an E2EE session exists but has no established epoch yet,
+        // do NOT encrypt and do NOT send plaintext over the relay.
+        // Drop the chunk (it remains recorded in session.ringBuffer for re-attach replay).
+        return;
+      }
+      try {
+        const packet = session.encrypt(data);
+        outputData = JSON.stringify(packet);
+      } catch (err) {
+        // PTY callback must never throw an uncaught exception that crashes the daemon
+        console.error('[RelayClient] Failed to encrypt output packet:', err);
+        return;
+      }
+    } else if (this.requireE2EE) {
+      // E2EE is required but no E2EE session exists for device: never leak plaintext
+      return;
     }
 
     this.sendTerminalEnvelope('TERM_OUTPUT', {
@@ -276,13 +295,36 @@ export class RelayClient {
           ((payload as unknown as Record<string, unknown>).deviceId as string) ||
           this.activeDeviceId;
 
-        if (this.requireE2EE && this.deviceStore && !this.deviceStore.isApproved(deviceId)) {
-          this.sendTerminalEnvelope('TERM_ERROR', {
-            code: 'DEVICE_NOT_APPROVED',
-            message: 'Device is not approved or pairing was revoked',
-            sessionId: payload.sessionId,
-          });
-          return;
+        if (this.requireE2EE) {
+          if (!deviceId || !payload.clientNonce) {
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'ATTACH_NONCE_REQUIRED',
+              message: 'Client nonce and approved device ID are required when E2EE is enabled',
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+          if (this.deviceStore && !this.deviceStore.isApproved(deviceId)) {
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'DEVICE_NOT_APPROVED',
+              message: 'Device is not approved or pairing was revoked',
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+
+          // Rate-limit epoch resets per approved device (DoS hardening: only reset epoch if no live attach completed in cooldown window)
+          const now = Date.now();
+          const lastAttach = this.lastAttachTimestamps.get(deviceId) || 0;
+          if (this.attachCooldownMs > 0 && now - lastAttach < this.attachCooldownMs) {
+            this.sendTerminalEnvelope('TERM_ERROR', {
+              code: 'ATTACH_RATE_LIMITED',
+              message: 'Rapid re-attach rejected: connection epoch was recently established',
+              sessionId: payload.sessionId,
+            });
+            return;
+          }
+          this.lastAttachTimestamps.set(deviceId, now);
         }
 
         let hostNonceHex: string | undefined;

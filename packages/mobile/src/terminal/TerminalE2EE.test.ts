@@ -22,6 +22,7 @@ import {
   toBase64,
   toHex,
 } from '../crypto/nobleKx';
+import { MobilePairingService } from '../crypto/MobilePairingService';
 import { EncryptedPacket } from '@codelink/protocol';
 
 describe('Terminal E2EE and Mobile MessageDispatcher', () => {
@@ -118,5 +119,50 @@ describe('Terminal E2EE and Mobile MessageDispatcher', () => {
 
     expect(useTerminalStore.getState().getOutput('sess-1')).toBe('');
     expect(useTerminalStore.getState().e2eeError).toContain('Failed to decrypt terminal output');
+  });
+
+  it('queues input while attach/re-attach is in-flight and flushes under new epoch upon TERM_ATTACH_RESP', () => {
+    const sendSpy = vi.spyOn(wsManager, 'sendTerminal').mockReturnValue(true);
+    useTerminalStore.getState().setE2EESession(clientSession, 'dev-test-1');
+
+    // Simulate mode-change re-attach initiated: isAttaching is true
+    MobilePairingService.sendAttach('sess-1', 'control');
+    expect(useTerminalStore.getState().isAttaching).toBe(true);
+
+    // User types keystrokes mid-stream while awaiting attach response
+    const input1Result = useTerminalStore.getState().sendEncryptedInput('sess-1', 'ls\n');
+    const input2Result = useTerminalStore.getState().sendEncryptedInput('sess-1', 'pwd\n');
+    expect(input1Result.success).toBe(true);
+    expect(input2Result.success).toBe(true);
+
+    // Keystrokes were queued, NOT sent with mismatched/stale epoch
+    expect(useTerminalStore.getState().queuedInputs.length).toBe(2);
+    // sendTerminal was only called for TERM_ATTACH, not TERM_INPUT yet
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sendSpy.mock.calls[0][0]).toBe('TERM_ATTACH');
+
+    // TERM_ATTACH_RESP arrives from companion with hostNonce
+    const hostNonce = toHex(new Uint8Array(16));
+    handleMessage(
+      'TERM_ATTACH_RESP',
+      {
+        sessionId: 'sess-1',
+        mode: 'control',
+        hasGap: false,
+        hostNonce,
+      },
+      'msg-attach-resp'
+    );
+
+    // Attach completed: isAttaching is false, queuedInputs flushed
+    expect(useTerminalStore.getState().isAttaching).toBe(false);
+    expect(useTerminalStore.getState().queuedInputs.length).toBe(0);
+
+    // Both queued inputs are now sent as encrypted TERM_INPUT frames with new epoch
+    expect(sendSpy).toHaveBeenCalledTimes(3);
+    expect(sendSpy.mock.calls[1][0]).toBe('TERM_INPUT');
+    expect(sendSpy.mock.calls[2][0]).toBe('TERM_INPUT');
+
+    sendSpy.mockRestore();
   });
 });

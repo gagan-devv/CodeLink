@@ -86,6 +86,10 @@ export interface TerminalStoreState {
   setE2EESession: (session: MobileE2EESession, deviceId: string) => void;
   setE2EEError: (error: string | null) => void;
   clearE2EE: () => void;
+  isAttaching: boolean;
+  setIsAttaching: (isAttaching: boolean) => void;
+  queuedInputs: Array<{ sessionId: string; data: string; generation?: number }>;
+  flushQueuedInput: () => void;
   sendEncryptedInput: (
     sessionId: string,
     data: string,
@@ -193,21 +197,38 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       e2eeError: null,
       sasCode: null,
       sessionToken: null,
+      isAttaching: false,
+      queuedInputs: [],
     }),
 
+  isAttaching: false,
+  setIsAttaching: (isAttaching: boolean) => set({ isAttaching }),
+  queuedInputs: [],
+
+  flushQueuedInput: () => {
+    const queued = get().queuedInputs;
+    if (queued.length === 0) return;
+    set({ queuedInputs: [] });
+    for (const item of queued) {
+      get().sendEncryptedInput(item.sessionId, item.data, item.generation);
+    }
+  },
+
   sendEncryptedInput: (sessionId, data, generation) => {
-    const { e2eeSession, getGeneration } = get();
+    const { e2eeSession, getGeneration, isAttaching, queuedInputs } = get();
     if (!e2eeSession) {
       const err = 'Plaintext transmission refused: no active E2EE session exists';
       set({ e2eeError: err, e2eeState: 'error' });
       return { success: false, error: err };
     }
 
-    if (!e2eeSession.getEpoch()) {
-      const err =
-        'Plaintext transmission refused: E2EE connection epoch has not been established yet. Please attach to terminal.';
-      set({ e2eeError: err, e2eeState: 'error' });
-      return { success: false, error: err };
+    // If an attach/re-attach is currently in-flight or no epoch has been set yet,
+    // queue the input so it will be safely encrypted under the fresh epoch upon TERM_ATTACH_RESP.
+    if (isAttaching || !e2eeSession.getEpoch()) {
+      set({
+        queuedInputs: [...queuedInputs, { sessionId, data, generation }],
+      });
+      return { success: true };
     }
 
     const effectiveGeneration =
@@ -365,6 +386,8 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       sessionToken: null,
       deviceId: null,
       generations: {},
+      isAttaching: false,
+      queuedInputs: [],
     });
   },
 }));

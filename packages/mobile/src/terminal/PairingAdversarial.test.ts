@@ -87,25 +87,51 @@ describe('Pairing Adversarial & Security Edge Cases', () => {
     expect(MobilePairingService.getActiveAttempt()).toBeNull();
   });
 
-  it('rejects candidate host key if it does not match trusted QR-code key', async () => {
-    const trustedHostKp = generateKeyPair();
-    const attackerHostKp = generateKeyPair();
-
-    // Initiated with QR code containing trustedHostKp
-    await MobilePairingService.initiatePairing('123456', toBase64(trustedHostKp.publicKey));
+  it('expires pairing attempt and refuses stale responses after 5-minute attempt lifetime limit', async () => {
+    await MobilePairingService.initiatePairing('123456');
     const attempt = MobilePairingService.getActiveAttempt()!;
+    expect(attempt).not.toBeNull();
 
-    // Relay sends different candidate key
+    // Host responds with valid pair response before initial response timeout
+    const hostKp = generateKeyPair();
+    const clientKp = (await SecureDeviceStore.getClientKeyPair())!;
+    const computedSas = computeClientSas(
+      hostKp.publicKey,
+      clientKp.publicKey,
+      '123456',
+      attempt.attemptId,
+      'token-123'
+    );
+
     await MobilePairingService.handlePairResp({
       success: true,
       attemptId: attempt.attemptId,
-      sessionToken: 'token-abc',
-      hostPublicKey: toBase64(attackerHostKp.publicKey),
+      sessionToken: 'token-123',
+      hostPublicKey: toBase64(hostKp.publicKey),
+      sas: computedSas,
     });
+
+    expect(useTerminalStore.getState().e2eeState).toBe('awaiting_user_confirmation');
+
+    // Fast-forward past 5 minutes (300,001 ms)
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1000);
 
     const state = useTerminalStore.getState();
     expect(state.e2eeState).toBe('error');
-    expect(state.e2eeError).toContain('does not match trusted key from QR code');
+    expect(state.e2eeError).toContain('expired after 5 minutes');
+    expect(MobilePairingService.getActiveAttempt()).toBeNull();
+
+    // A late approval response arriving for expired attempt must be rejected
+    await MobilePairingService.handlePairStatus({
+      approved: true,
+      attemptId: attempt.attemptId,
+      sessionToken: 'token-123',
+      hostPublicKey: toBase64(hostKp.publicKey),
+      deviceId: 'dev-001',
+      approvalProof: 'fake-proof',
+    });
+
+    expect(useTerminalStore.getState().e2eeState).toBe('error');
     expect(MobilePairingService.getActiveAttempt()).toBeNull();
   });
 

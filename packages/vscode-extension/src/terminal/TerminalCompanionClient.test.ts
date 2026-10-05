@@ -142,7 +142,7 @@ describe('TerminalCompanionClient', () => {
                       sessionToken: 'token-abc',
                       clientDeviceName: 'Pixel 8',
                       fingerprint: 'fp-1234',
-                      sas: 'FA3B91',
+                      sas: 'ABCD-EF01-2345',
                       createdAt: Date.now(),
                       expiresAt: Date.now() + 300000,
                     },
@@ -177,7 +177,7 @@ describe('TerminalCompanionClient', () => {
 
     const pending = await client.listPendingPairings();
     expect(pending.length).toBe(1);
-    expect(pending[0].sas).toBe('FA3B91');
+    expect(pending[0].sas).toBe('ABCD-EF01-2345');
     expect(pending[0].clientDeviceName).toBe('Pixel 8');
 
     const approveRes = await client.approvePairing('token-abc');

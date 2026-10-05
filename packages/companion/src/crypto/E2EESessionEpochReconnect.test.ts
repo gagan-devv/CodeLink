@@ -69,6 +69,7 @@ describe('FIX 1: Connection Epoch Reconnect & Restore Lifecycle', () => {
       deviceStore,
       hostKeyPair,
       requireE2EE: true,
+      attachCooldownMs: 0,
     });
 
     // 1. Initial pairing

@@ -248,13 +248,16 @@ describe('Daemon-to-Relay Wiring Integration (Phase 6)', () => {
       mobileClient.on('open', () => resolve());
     });
 
-    // Send TERM_ATTACH from mobile client
+    // Send TERM_ATTACH from mobile client with approved deviceId and fresh clientNonce
+    const clientNonce = sodium.to_hex(sodium.randombytes_buf(16));
     const attachMsg = buildTerminalEnvelope('TERM_ATTACH', {
       sessionId: 'term-sess-1',
       requestedMode: 'control',
       cols: 80,
       rows: 24,
       lastOffset: 0,
+      deviceId: 'remote-client',
+      clientNonce,
     });
     mobileClient.send(JSON.stringify(attachMsg));
 
@@ -264,6 +267,8 @@ describe('Daemon-to-Relay Wiring Integration (Phase 6)', () => {
       expect(attachResp).toBeDefined();
       expect((attachResp?.payload as any)?.sessionId).toBe('term-sess-1');
       expect((attachResp?.payload as any)?.mode).toBe('control');
+      expect((attachResp?.payload as any)?.epoch).toBeDefined();
+      expect((attachResp?.payload as any)?.hostNonce).toBeDefined();
     }, { timeout: 3000, interval: 50 });
 
     mobileClient.close();

@@ -503,4 +503,159 @@ describe('RelayClient E2EE, Pairing Handshake, and Relay Opacity', () => {
     expect(errPayload.code).toBe('DECRYPTION_FAILED');
     expect(errPayload.message).toContain('Replay detected');
   });
+
+  it('rejects TERM_ATTACH without clientNonce when E2EE is required', async () => {
+    const clientKx = sodium.crypto_kx_keypair();
+    const deviceId = computeDeviceId(clientKx.publicKey);
+    deviceStore.addDevice({
+      deviceId,
+      deviceName: 'Device Missing Nonce',
+      publicKey: toBase64(clientKx.publicKey),
+    });
+
+    client = new RelayClient({
+      relayUrl: `ws://127.0.0.1:${serverPort}`,
+      token: 'test-token',
+      config,
+      sessionTable,
+      pairingManager,
+      deviceStore,
+      hostKeyPair: hostKeys,
+      requireE2EE: true,
+      defaultDeviceId: deviceId,
+    });
+    await client.connect();
+
+    const errPromise = new Promise<TerminalEnvelope>((resolve) => {
+      lastServerWs!.on('message', (msg) => {
+        const parsed = JSON.parse(msg.toString('utf8')) as TerminalEnvelope;
+        if (parsed.type === 'TERM_ERROR') {
+          resolve(parsed);
+        }
+      });
+    });
+
+    // Send TERM_ATTACH omitting clientNonce
+    lastServerWs!.send(
+      JSON.stringify(
+        buildTerminalEnvelope('TERM_ATTACH', {
+          sessionId: 'test-sess-missing-nonce',
+          requestedMode: 'control',
+          deviceId,
+          // clientNonce omitted
+        })
+      )
+    );
+
+    const errEnv = await errPromise;
+    const errPayload = errEnv.payload as { code: string; message: string };
+    expect(errPayload.code).toBe('ATTACH_NONCE_REQUIRED');
+    expect(errPayload.message).toContain('Client nonce');
+  });
+
+  it('rate-limits rapid TERM_ATTACH epoch resets within cooldown window (DoS prevention)', async () => {
+    const clientKx = sodium.crypto_kx_keypair();
+    const deviceId = computeDeviceId(clientKx.publicKey);
+    deviceStore.addDevice({
+      deviceId,
+      deviceName: 'Device Rate Limit',
+      publicKey: toBase64(clientKx.publicKey),
+    });
+
+    client = new RelayClient({
+      relayUrl: `ws://127.0.0.1:${serverPort}`,
+      token: 'test-token',
+      config,
+      sessionTable,
+      pairingManager,
+      deviceStore,
+      hostKeyPair: hostKeys,
+      requireE2EE: true,
+      defaultDeviceId: deviceId,
+      attachCooldownMs: 2000,
+    });
+    await client.connect();
+
+    // First attach succeeds
+    const nonce1 = sodium.to_hex(sodium.randombytes_buf(16));
+    const attach1Promise = new Promise<TerminalEnvelope>((resolve) => {
+      lastServerWs!.on('message', (msg) => {
+        const parsed = JSON.parse(msg.toString('utf8')) as TerminalEnvelope;
+        if (parsed.type === 'TERM_ATTACH_RESP') resolve(parsed);
+      });
+    });
+
+    lastServerWs!.send(
+      JSON.stringify(
+        buildTerminalEnvelope('TERM_ATTACH', {
+          sessionId: 'test-sess-rl',
+          requestedMode: 'control',
+          deviceId,
+          clientNonce: nonce1,
+        })
+      )
+    );
+    await attach1Promise;
+
+    // Immediately re-attach (within 2000ms cooldown) -> rejected with ATTACH_RATE_LIMITED
+    const nonce2 = sodium.to_hex(sodium.randombytes_buf(16));
+    const rateLimitPromise = new Promise<TerminalEnvelope>((resolve) => {
+      lastServerWs!.on('message', (msg) => {
+        const parsed = JSON.parse(msg.toString('utf8')) as TerminalEnvelope;
+        if (parsed.type === 'TERM_ERROR') resolve(parsed);
+      });
+    });
+
+    lastServerWs!.send(
+      JSON.stringify(
+        buildTerminalEnvelope('TERM_ATTACH', {
+          sessionId: 'test-sess-rl',
+          requestedMode: 'control',
+          deviceId,
+          clientNonce: nonce2,
+        })
+      )
+    );
+
+    const rateLimitEnv = await rateLimitPromise;
+    const rlPayload = rateLimitEnv.payload as { code: string; message: string };
+    expect(rlPayload.code).toBe('ATTACH_RATE_LIMITED');
+    expect(rlPayload.message).toContain('Rapid re-attach rejected');
+  });
+
+  it('sendOutput safely drops chunks and never throws or leaks plaintext when E2EE session has no epoch', () => {
+    const clientKx = sodium.crypto_kx_keypair();
+    const deviceId = computeDeviceId(clientKx.publicKey);
+    deviceStore.addDevice({
+      deviceId,
+      deviceName: 'Device No Epoch',
+      publicKey: toBase64(clientKx.publicKey),
+    });
+
+    client = new RelayClient({
+      relayUrl: `ws://127.0.0.1:${serverPort}`,
+      token: 'test-token',
+      config,
+      sessionTable,
+      pairingManager,
+      deviceStore,
+      hostKeyPair: hostKeys,
+      requireE2EE: true,
+      defaultDeviceId: deviceId,
+    });
+
+    // Session is created lazily without epoch
+    const session = client.getOrCreateE2EESession(deviceId);
+    expect(session).not.toBeNull();
+    expect(session!.getEpoch()).toBeUndefined();
+
+    // Calling sendOutput must NOT throw and must NOT emit TERM_OUTPUT plaintext
+    const sendSpy = vi.spyOn(client, 'sendTerminalEnvelope');
+    expect(() => {
+      client.sendOutput('test-sess-safe', 'secret shell prompt', deviceId);
+    }).not.toThrow();
+
+    expect(sendSpy).not.toHaveBeenCalledWith('TERM_OUTPUT', expect.anything());
+    sendSpy.mockRestore();
+  });
 });

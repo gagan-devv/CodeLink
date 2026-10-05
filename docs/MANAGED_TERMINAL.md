@@ -91,10 +91,10 @@ Remote access requires mutual cryptographic authorization:
    This generates a single-use 6-digit code with a 5-minute expiration and displays the host's public key fingerprint.
 
 2. **Short Authentication String (SAS) Verification**:
-   The companion daemon computes a deterministic 6-character Short Authentication String derived from `HostPubKey || ClientPubKey || Code`. The same SAS is displayed on the mobile/web client. You must visually verify that both strings match.
+   The companion daemon and client compute an identical 48-bit Short Authentication String (SAS) displayed in 3x4 format (`XXXX-XXXX-XXXX`), derived via BLAKE2b over the full exchange transcript (`codelink-sas-v2:attemptId:sessionToken:hostHex:clientHex:code`). Because challenge codes traverse the untrusted relay, host authenticity rests entirely on visual verification of matching SAS strings on host and mobile devices before approval. Pairing attempts expire after a strict 5-minute lifetime.
 
-3. **Explicit Host Approval**:
-   The device is only granted access after explicit confirmation on the laptop. Approved devices are stored with mode `0600` in `~/.codelink/paired_devices.json`.
+3. **Explicit Host Approval & Cryptographic Proof**:
+   The device is only granted access after explicit confirmation on the laptop. Upon approval, the companion transmits an `approvalProof` that verifies key possession consistency between key exchange and approval (proving the approving host possesses the negotiated private key), bound to the specific request attempt. Approved devices are stored with mode `0600` in `~/.codelink/paired_devices.json`.
 
 4. **Instant Revocation**:
    Any paired device can be immediately revoked at any time:

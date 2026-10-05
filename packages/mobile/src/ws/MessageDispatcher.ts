@@ -213,6 +213,7 @@ export function handleMessage(type: string, payload: unknown, id: string): void 
           e2eeSession.setEpoch(epoch);
         }
         MobilePairingService.clearPendingAttachClientNonce();
+        useTerminalStore.getState().flushQueuedInput();
       }
       break;
     }

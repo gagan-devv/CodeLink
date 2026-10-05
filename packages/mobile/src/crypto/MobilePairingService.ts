@@ -21,7 +21,6 @@ import { useTerminalStore } from '../terminal/useTerminalStore';
 export interface ActivePairingAttempt {
   attemptId: string;
   code: string;
-  expectedHostPublicKey: Uint8Array | null;
   candidateHostPublicKey: Uint8Array | null;
   sessionToken: string | null;
   sas: string | null;
@@ -35,10 +34,12 @@ export class MobilePairingService {
   private static activeAttempt: ActivePairingAttempt | null = null;
   private static pollTimer: NodeJS.Timeout | null = null;
   private static responseTimeoutTimer: NodeJS.Timeout | null = null;
+  private static attemptLifetimeTimer: NodeJS.Timeout | null = null;
   private static pendingAttachClientNonce: string | null = null;
 
   public static readonly INITIAL_RESPONSE_TIMEOUT_MS = 10_000;
   public static readonly APPROVAL_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+  public static readonly ATTEMPT_LIFETIME_MS = 5 * 60 * 1000;
 
   public static getActiveAttempt(): ActivePairingAttempt | null {
     return MobilePairingService.activeAttempt;
@@ -50,6 +51,7 @@ export class MobilePairingService {
 
   public static clearPendingAttachClientNonce(): void {
     MobilePairingService.pendingAttachClientNonce = null;
+    useTerminalStore.getState().setIsAttaching(false);
   }
 
   public static sendAttach(
@@ -57,6 +59,7 @@ export class MobilePairingService {
     requestedMode: 'observe' | 'control' = 'observe',
     lastOffset?: number
   ): void {
+    useTerminalStore.getState().setIsAttaching(true);
     const clientNonceBytes = secureRandomBytes(16);
     const clientNonce = toHex(clientNonceBytes);
     MobilePairingService.pendingAttachClientNonce = clientNonce;
@@ -138,6 +141,10 @@ export class MobilePairingService {
     MobilePairingService.activeAttempt = null;
     MobilePairingService.stopResponseTimeout();
     MobilePairingService.stopApprovalPolling();
+    if (MobilePairingService.attemptLifetimeTimer) {
+      clearTimeout(MobilePairingService.attemptLifetimeTimer);
+      MobilePairingService.attemptLifetimeTimer = null;
+    }
     useTerminalStore.getState().clearE2EE();
   }
 
@@ -174,11 +181,18 @@ export class MobilePairingService {
     }
   }
 
-  public static async initiatePairing(
-    code: string,
-    hostPublicKeyBase64?: string,
-    deviceName?: string
-  ): Promise<void> {
+  /**
+   * Initiates terminal pairing using a 6-digit numeric pairing code.
+   *
+   * Security Model:
+   * Host authentication and identity verification rest strictly on out-of-band Short
+   * Authentication String (SAS) comparison. The 6-digit code travels through the relay,
+   * meaning the relay observes initial handshake parameters. Comparing the 48-bit SAS
+   * (formatted as XXXX-XXXX-XXXX) on the mobile device against the companion host terminal/VS Code
+   * provides cryptographic proof that both ends established the identical Diffie-Hellman
+   * session keys without an active man-in-the-middle or relay tampering.
+   */
+  public static async initiatePairing(code: string, deviceName?: string): Promise<void> {
     const trimmedCode = code.trim();
     if (!/^\d{6}$/.test(trimmedCode)) {
       throw new Error('Pairing code must be exactly 6 digits');
@@ -191,25 +205,10 @@ export class MobilePairingService {
     // Cancel any previous attempt
     MobilePairingService.cancelPairing();
 
-    let expectedHostPublicKey: Uint8Array | null = null;
-    if (hostPublicKeyBase64) {
-      try {
-        expectedHostPublicKey = fromBase64(hostPublicKeyBase64);
-        if (expectedHostPublicKey.length !== 32) {
-          throw new Error('Expected 32-byte host public key');
-        }
-      } catch (err) {
-        throw new Error(
-          `Invalid trusted host public key: ${err instanceof Error ? err.message : String(err)}`
-        );
-      }
-    }
-
     const attemptId = toHex(secureRandomBytes(16));
     const attempt: ActivePairingAttempt = {
       attemptId,
       code: trimmedCode,
-      expectedHostPublicKey,
       candidateHostPublicKey: null,
       sessionToken: null,
       sas: null,
@@ -219,6 +218,17 @@ export class MobilePairingService {
       createdAt: Date.now(),
     };
     MobilePairingService.activeAttempt = attempt;
+
+    // Enforce 5-minute attempt lifetime limit
+    MobilePairingService.attemptLifetimeTimer = setTimeout(() => {
+      const current = MobilePairingService.activeAttempt;
+      if (current && current.attemptId === attemptId) {
+        MobilePairingService.cancelPairing();
+        useTerminalStore
+          .getState()
+          .setE2EEError('Pairing attempt expired after 5 minutes. Please try pairing again.');
+      }
+    }, MobilePairingService.ATTEMPT_LIFETIME_MS);
 
     useTerminalStore.getState().setPairingState('initiating');
 
@@ -325,17 +335,12 @@ export class MobilePairingService {
       return;
     }
 
-    // If an out-of-band host key was provided (e.g. from QR code), enforce exact match
-    if (attempt.expectedHostPublicKey) {
-      if (!compareBytesConstantTime(hostPublicKeyBytes, attempt.expectedHostPublicKey)) {
-        MobilePairingService.cancelPairing();
-        useTerminalStore
-          .getState()
-          .setE2EEError(
-            'Security warning: Candidate host public key does not match trusted key from QR code.'
-          );
-        return;
-      }
+    if (Date.now() - attempt.createdAt > MobilePairingService.ATTEMPT_LIFETIME_MS) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore
+        .getState()
+        .setE2EEError('Pairing attempt expired after 5 minutes. Please try pairing again.');
+      return;
     }
 
     const keyPair = await SecureDeviceStore.getClientKeyPair();
@@ -415,6 +420,14 @@ export class MobilePairingService {
       return;
     }
 
+    if (Date.now() - attempt.createdAt > MobilePairingService.ATTEMPT_LIFETIME_MS) {
+      MobilePairingService.cancelPairing();
+      useTerminalStore
+        .getState()
+        .setE2EEError('Pairing attempt expired after 5 minutes. Please try pairing again.');
+      return;
+    }
+
     if (!status.approved) {
       if (status.error) {
         MobilePairingService.cancelPairing();
@@ -436,6 +449,10 @@ export class MobilePairingService {
     if (!attempt) return;
 
     MobilePairingService.stopApprovalPolling();
+    if (MobilePairingService.attemptLifetimeTimer) {
+      clearTimeout(MobilePairingService.attemptLifetimeTimer);
+      MobilePairingService.attemptLifetimeTimer = null;
+    }
 
     if (!status.hostPublicKey || !status.deviceId) {
       MobilePairingService.cancelPairing();

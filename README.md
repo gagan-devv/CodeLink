@@ -329,7 +329,12 @@ systemctl --user enable --now codelink-terminal
 - **Audit Log:** `~/.codelink/terminal-audit.log` (mode `0600`)
 
 > [!NOTE]
-> **Pairing Compatibility Requirement:** The mobile client requires `hostPublicKey` and cryptographic `approvalProof` on pairing, and establishes fresh per-connection epochs via exchanged nonces on attach. Older companion/daemon versions cannot pair or communicate with this app. Rebuild and restart the daemon together with the updated app.
+> **Pairing Security & Compatibility:**
+>
+> - **Host Authentication via SAS**: The 6-digit pairing challenge code is transported via the relay (untrusted). Because an adversary on the transport could substitute keys, host authenticity and MITM resistance rest solely on the **48-bit Short Authentication String (SAS)** (`XXXX-XXXX-XXXX`). Users must visually verify and confirm matching SAS codes on both the host (CLI or VS Code) and the mobile device before approval.
+> - **Cryptographic Approval Proof**: The `approvalProof` verified upon pairing proves key possession consistency between key exchange and host approval (proving the approving host holds the private key matching `hostPublicKey`), but does not itself replace SAS verification of host identity.
+> - **Pairing Lifetime**: Pairing attempts have a strict 5-minute lifetime limit and are bound to unique per-attempt request identifiers.
+> - **Per-Connection Epochs**: Client and host exchange fresh 16-byte nonces on every (re)attach to establish ephemeral connection epochs (`BLAKE2b(clientNonce || hostNonce)`), preventing replay attacks across daemon or client restarts. Older companion/daemon versions cannot pair or communicate with this app. Rebuild and restart the daemon together with the updated app.
 
 ---
 
